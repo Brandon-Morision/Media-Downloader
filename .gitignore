@@ -1,0 +1,38 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Build outputs (keep dist/ for releases)
+build/
+*.spec
+*.msi
+*.zip
+
+# Installer / packaging temp files
+installer/
+*.log
+*.tmp
+
+# IDE/editor files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local config / secrets
+*.env
+.env*
+
+# PyInstaller / Inno Setup artifacts
+*.toc
+*.pyz
+*.manifest

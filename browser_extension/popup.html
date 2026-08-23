@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Media Downloader</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0c0c0f;
+    color: #eaeaf2;
+    width: 300px;
+    min-height: 160px;
+    padding: 16px;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #2c2c38;
+  }
+  .logo {
+    width: 28px; height: 28px;
+    background: #7c6dfa;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .app-name  { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+  .app-sub   { font-size: 11px; color: #44445a; margin-top: 1px; }
+
+  /* status dot */
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 11px;
+    border-radius: 8px;
+    background: #18181d;
+    border: 1px solid #2c2c38;
+    margin-bottom: 12px;
+    font-size: 12px;
+  }
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot.connected    { background: #3ecf8e; box-shadow: 0 0 6px #3ecf8e88; }
+  .dot.disconnected { background: #f26d6d; }
+  .dot.checking     { background: #f0a04b; animation: pulse 1.2s ease infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  .status-text { color: #8a8a9e; }
+  .status-text b { color: #eaeaf2; font-weight: 500; }
+
+  /* current page */
+  .page-section { margin-bottom: 12px; }
+  .section-lbl {
+    font-size: 10px; font-weight: 600;
+    color: #44445a;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 5px;
+  }
+  .page-url {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    color: #8a8a9e;
+    background: #18181d;
+    border: 1px solid #2c2c38;
+    border-radius: 7px;
+    padding: 7px 9px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .supported-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 5px;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 99px;
+  }
+  .supported-badge.yes { background: rgba(62,207,142,.12); color: #3ecf8e; }
+  .supported-badge.no  { background: rgba(138,138,158,.10); color: #44445a; }
+
+  /* buttons */
+  .btn-send {
+    width: 100%;
+    padding: 9px;
+    background: #7c6dfa;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: opacity .15s, transform .1s;
+    font-family: inherit;
+    letter-spacing: -.01em;
+  }
+  .btn-send:hover:not(:disabled)  { opacity: .88; transform: translateY(-1px); }
+  .btn-send:disabled { opacity: .35; cursor: not-allowed; }
+
+  .btn-send.success { background: #3ecf8e; }
+  .btn-send.error   { background: #f26d6d; }
+
+  .footer {
+    margin-top: 11px;
+    font-size: 10.5px;
+    color: #44445a;
+    text-align: center;
+    line-height: 1.5;
+  }
+  .footer a { color: #7c6dfa; text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 1v9M4 7l4 4 4-4"/>
+      <rect x="2" y="13" width="12" height="1.5" rx=".75" fill="#fff" stroke="none"/>
+    </svg>
+  </div>
+  <div>
+    <div class="app-name">Media Downloader</div>
+    <div class="app-sub">Browser Extension</div>
+  </div>
+</div>
+
+<!-- connection status -->
+<div class="status-row">
+  <div class="dot checking" id="dot"></div>
+  <span class="status-text" id="status-text">Checking app status…</span>
+</div>
+
+<!-- current page info -->
+<div class="page-section">
+  <div class="section-lbl">Current page</div>
+  <div class="page-url" id="page-url">—</div>
+  <div id="badge-wrap"></div>
+</div>
+
+<!-- send button -->
+<button class="btn-send" id="btn-send" disabled>
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 1v9M4 7l4 4 4-4"/>
+    <rect x="2" y="13" width="12" height="1.5" rx=".75" fill="white" stroke="none"/>
+  </svg>
+  <span id="btn-label">Send to Downloader</span>
+</button>
+
+<div class="footer">
+  Media Downloader must be running to receive URLs.<br>
+  Supported: YouTube, Reddit, Imgur, Pixiv + more.
+</div>
+
+<script>
+const YTDLP_HOSTS    = ["youtube.com","youtu.be","vimeo.com","tiktok.com","twitch.tv","dailymotion.com","bilibili.com"];
+const GALLERY_HOSTS  = ["reddit.com","imgur.com","twitter.com","x.com","instagram.com","pixiv.net","tumblr.com","flickr.com","deviantart.com","pinterest.com","cyberdrop.me","erome.com","e621.net","gelbooru.com"];
+
+function detectTool(url) {
+  try {
+    const h = new URL(url).hostname.replace(/^www\./,"").toLowerCase();
+    for (const s of YTDLP_HOSTS)   if (h.includes(s)) return "yt-dlp";
+    for (const s of GALLERY_HOSTS) if (h.includes(s)) return "gallery-dl";
+  } catch {}
+  return null;
+}
+
+const dot        = document.getElementById("dot");
+const statusText = document.getElementById("status-text");
+const pageUrl    = document.getElementById("page-url");
+const badgeWrap  = document.getElementById("badge-wrap");
+const btnSend    = document.getElementById("btn-send");
+const btnLabel   = document.getElementById("btn-label");
+
+let currentUrl   = "";
+let appRunning   = false;
+let toolDetected = null;
+
+async function init() {
+  // Get current tab URL
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.url) {
+    currentUrl = tab.url;
+    const display = currentUrl.replace(/^https?:\/\/(www\.)?/, "");
+    pageUrl.textContent = display.length > 40 ? display.slice(0, 40) + "…" : display;
+    toolDetected = detectTool(currentUrl);
+
+    if (toolDetected) {
+      badgeWrap.innerHTML = `<span class="supported-badge yes">✓ Supported · ${toolDetected}</span>`;
+    } else if (currentUrl.startsWith("http")) {
+      badgeWrap.innerHTML = `<span class="supported-badge no">Not a recognised site — may still work</span>`;
+    }
+  }
+
+  // Check if app is running
+  const res = await chrome.runtime.sendMessage({ type: "CHECK_APP" });
+  appRunning = res?.running ?? false;
+
+  if (appRunning) {
+    dot.className        = "dot connected";
+    statusText.innerHTML = "<b>App connected</b> — ready to receive URLs";
+    if (currentUrl.startsWith("http")) {
+      btnSend.disabled = false;
+    }
+  } else {
+    dot.className        = "dot disconnected";
+    statusText.innerHTML = "App not running — <b>open Media Downloader first</b>";
+  }
+}
+
+btnSend.addEventListener("click", async () => {
+  if (!currentUrl || !appRunning) return;
+  btnSend.disabled = true;
+  btnLabel.textContent = "Sending…";
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const res = await chrome.runtime.sendMessage({
+    type:  "SEND_URL",
+    url:   currentUrl,
+    title: tab?.title || "",
+  });
+
+  if (res?.ok) {
+    btnSend.classList.add("success");
+    btnLabel.textContent = "Sent ✓";
+    setTimeout(() => {
+      btnSend.classList.remove("success");
+      btnLabel.textContent = "Send to Downloader";
+      btnSend.disabled = false;
+    }, 2000);
+  } else {
+    btnSend.classList.add("error");
+    btnLabel.textContent = "Failed — is the app open?";
+    setTimeout(() => {
+      btnSend.classList.remove("error");
+      btnLabel.textContent = "Send to Downloader";
+      btnSend.disabled = false;
+    }, 3000);
+  }
+});
+
+init();
+</script>
+</body>
+</html>

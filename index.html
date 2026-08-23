@@ -1,0 +1,2776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Media Downloader</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────
+   TOKENS
+───────────────────────────────────────────── */
+:root {
+  --bg:          #0c0c0f;
+  --s0:          #111115;
+  --s1:          #18181d;
+  --s2:          #1f1f26;
+  --s3:          #26262f;
+  --border:      #2c2c38;
+  --border-hi:   #3a3a48;
+
+  --acc:         #7c6dfa;
+  --acc-dim:     rgba(124,109,250,0.10);
+  --acc-glow:    rgba(124,109,250,0.20);
+  --acc-border:  rgba(124,109,250,0.35);
+
+  --green:       #3ecf8e;
+  --green-dim:   rgba(62,207,142,0.10);
+  --red:         #f26d6d;
+  --red-dim:     rgba(242,109,109,0.10);
+  --amber:       #f0a04b;
+  --amber-dim:   rgba(240,160,75,0.10);
+  --amber-border:rgba(240,160,75,0.30);
+  --blue:        #60a5fa;
+  --blue-dim:    rgba(96,165,250,0.10);
+  --pink:        #f472b6;
+  --pink-dim:    rgba(244,114,182,0.10);
+
+  --t1: #eaeaf2;
+  --t2: #8a8a9e;
+  --t3: #44445a;
+
+  --r:    9px;
+  --r-lg: 13px;
+  --r-xl: 18px;
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { font-size:14px; }
+body {
+  font-family:'Inter',system-ui,sans-serif;
+  background:var(--bg);
+  color:var(--t1);
+  height:100vh;
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+button { font-family:inherit; cursor:pointer; border:none; background:none; }
+input,select { font-family:inherit; outline:none; border:none; background:none; }
+select { appearance:none; }
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:99px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.spin { animation:spin 1s linear infinite; display:inline-block; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* ─────────────────────────────────────────────
+   SHELL — single column now (no sidebar / no tabs)
+───────────────────────────────────────────── */
+.shell { display:flex; flex-direction:column; height:100vh; }
+
+.topbar {
+  display:flex; align-items:center; gap:10px;
+  padding:0 16px; height:46px; flex-shrink:0;
+  background:var(--s0); border-bottom:1px solid var(--border);
+}
+.logo {
+  width:26px; height:26px; background:var(--acc); border-radius:7px;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.app-name { font-size:13px; font-weight:600; letter-spacing:-.015em; }
+.topbar-sep { flex:1; }
+.session-stats {
+  display:flex; align-items:center; gap:14px; font-size:11px; color:var(--t3);
+  font-family:'JetBrains Mono',monospace;
+}
+.stat-val { color:var(--t2); font-weight:500; }
+
+.clip-pill {
+  display:flex; align-items:center; gap:5px; padding:3px 9px; border-radius:99px;
+  border:1px solid var(--border); background:var(--s2); color:var(--t3);
+  font-size:11px; font-weight:500; cursor:pointer; user-select:none;
+  transition:border-color .15s, color .15s, background .15s;
+}
+.clip-pill.on { border-color:var(--acc-border); background:var(--acc-dim); color:var(--acc); }
+.clip-dot { width:5px; height:5px; border-radius:50%; background:var(--t3); transition:background .15s; }
+.clip-pill.on .clip-dot { background:var(--acc); animation:pulse 2s ease infinite; }
+
+.btn-ghost {
+  display:inline-flex; align-items:center; gap:5px; padding:5px 10px;
+  border:1px solid var(--border); border-radius:var(--r); color:var(--t2); font-size:12px;
+  background:var(--s1); transition:border-color .15s, color .15s, background .15s;
+}
+.btn-ghost:hover { border-color:var(--border-hi); color:var(--t1); background:var(--s2); }
+.btn-ghost:disabled { opacity:.38; cursor:not-allowed; }
+
+/* ─────────────────────────────────────────────
+   BODY LAYOUT — content column (input + search)
+   next to a persistent Downloads sidebar, so
+   search results never push Downloads out of view,
+   and wide windows put the extra width to use.
+───────────────────────────────────────────── */
+.body-grid { flex:1; display:flex; min-height:0; overflow:hidden; }
+
+.content-col {
+  flex:1; min-width:0; overflow-y:auto;
+  padding:16px; display:flex; flex-direction:column; gap:14px;
+}
+
+.downloads-col {
+  width:400px; flex-shrink:0;
+  border-left:1px solid var(--border); background:var(--s0);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+
+@media (max-width: 860px) {
+  .body-grid { flex-direction:column; overflow-y:auto; }
+  .content-col { overflow-y:visible; }
+  .downloads-col { width:100%; border-left:none; border-top:1px solid var(--border); }
+}
+
+/* dry run / browser banners */
+.dryrun-bar {
+  display:none; align-items:center; gap:6px; padding:6px 11px; border-radius:var(--r);
+  background:var(--amber-dim); border:1px solid var(--amber-border); color:var(--amber);
+  font-size:11px; font-weight:500;
+}
+.dryrun-bar.show { display:flex; }
+
+/* ─────────────────────────────────────────────
+   INPUT CARD — the single auto-detecting box
+───────────────────────────────────────────── */
+.input-card {
+  background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg);
+  padding:14px; display:flex; flex-direction:column; gap:10px; flex-shrink:0;
+  max-width:820px; width:100%; margin:0 auto;
+}
+.input-row-wrap { position:relative; }
+.input-row {
+  display:flex; align-items:center; gap:8px; background:var(--s2);
+  border:1px solid var(--border); border-radius:var(--r); padding:8px 8px 8px 13px;
+  transition:border-color .18s, box-shadow .18s;
+}
+.input-row:focus-within { border-color:var(--acc-border); box-shadow:0 0 0 3px var(--acc-dim); }
+.input-row.mode-search { border-color:rgba(96,165,250,.35); }
+.input-row.mode-link   { border-color:rgba(124,109,250,.35); }
+#main-input {
+  flex:1; color:var(--t1); font-family:'JetBrains Mono',monospace; font-size:12.5px; min-width:0;
+}
+#main-input::placeholder { color:var(--t3); }
+.mode-badge {
+  font-size:10.5px; font-weight:600; padding:2px 8px; border-radius:99px; flex-shrink:0; white-space:nowrap;
+}
+.input-caption { font-size:10.5px; color:var(--t3); padding-left:2px; }
+
+/* search autocomplete — only ever shown in search mode, never for links */
+.autocomplete-dropdown {
+  display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:50;
+  background:var(--s2); border:1px solid var(--border-hi); border-radius:var(--r);
+  box-shadow:0 10px 30px rgba(0,0,0,.5); overflow-y:auto; max-height:220px;
+}
+.autocomplete-item {
+  padding:8px 13px; font-size:12px; color:var(--t2); cursor:pointer;
+  display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace;
+  transition:background .12s, color .12s;
+}
+.autocomplete-item svg { flex-shrink:0; opacity:.5; }
+.autocomplete-item:hover, .autocomplete-item.hl { background:var(--acc-dim); color:var(--t1); }
+.autocomplete-item.hl svg { opacity:.9; }
+
+@property --angle { syntax:'<angle>'; initial-value:0deg; inherits:false; }
+@keyframes border-spin { to { --angle: 360deg; } }
+.input-row.is-running {
+  border-color:transparent;
+  background:
+    linear-gradient(var(--s2), var(--s2)) padding-box,
+    conic-gradient(from var(--angle), var(--acc) 0%, #f472b6 30%, var(--acc) 60%, #60a5fa 80%, var(--acc) 100%) border-box;
+  animation:border-spin 3s linear infinite;
+}
+
+/* contextual row (output/limit/format — differs by mode) */
+.contextual-row { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; }
+.field { display:flex; flex-direction:column; gap:3px; }
+.lbl { font-size:10px; font-weight:600; color:var(--t3); text-transform:uppercase; letter-spacing:.06em; }
+.lbl-note { font-weight:400; text-transform:none; color:var(--t3); opacity:.7; }
+.inp {
+  background:var(--s2); border:1px solid var(--border); border-radius:var(--r); padding:6px 9px;
+  color:var(--t1); font-size:12px; font-family:'JetBrains Mono',monospace; width:100%;
+  transition:border-color .14s, box-shadow .14s;
+}
+.inp:focus { border-color:var(--acc-border); box-shadow:0 0 0 3px var(--acc-dim); }
+.inp::placeholder { color:var(--t3); }
+.inp.sel {
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M1 3l4 4 4-4' stroke='%2344445a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 9px center; padding-right:26px; cursor:pointer;
+  font-family:'Inter',sans-serif; font-size:12px;
+}
+.output-field { flex:1; min-width:180px; }
+.folder-row { display:flex; gap:5px; }
+.folder-row .inp { flex:1; }
+.limit-field, .count-field { width:90px; flex-shrink:0; }
+.format-field { width:150px; flex-shrink:0; }
+.format-auto-note {
+  font-size:11px; color:var(--t3); display:flex; align-items:center; gap:5px;
+  padding:6px 2px; flex-shrink:0;
+}
+
+/* advanced disclosure */
+.adv-toggle {
+  display:flex; align-items:center; gap:5px; color:var(--t3); font-size:11.5px; font-weight:500;
+  padding:1px 0; transition:color .14s; align-self:flex-start;
+}
+.adv-toggle:hover { color:var(--t2); }
+.adv-caret { transition:transform .25s; display:inline-flex; }
+.adv-toggle.open .adv-caret { transform:rotate(180deg); }
+.adv-body { max-height:0; overflow:hidden; opacity:0; transition:max-height .3s ease, opacity .22s; }
+.adv-body.open { max-height:640px; opacity:1; }
+.adv-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:7px; padding-top:10px; }
+.tog-row { display:flex; flex-wrap:wrap; gap:5px; padding-top:8px; }
+.tog {
+  display:flex; align-items:center; gap:5px; padding:4px 10px; border-radius:7px;
+  border:1px solid var(--border); background:var(--s2); color:var(--t2); font-size:11.5px; font-weight:500;
+  cursor:pointer; user-select:none; transition:border-color .14s, background .14s, color .14s;
+}
+.tog.on { border-color:var(--acc-border); background:var(--acc-dim); color:var(--t1); }
+.tog-dot { width:5px; height:5px; border-radius:50%; background:var(--t3); transition:background .14s; flex-shrink:0; }
+.tog.on .tog-dot { background:var(--acc); }
+.tog.dryrun.on { border-color:var(--amber-border); background:var(--amber-dim); color:var(--amber); }
+.tog.dryrun.on .tog-dot { background:var(--amber); }
+.sched-row {
+  display:flex; align-items:center; gap:8px; padding-top:10px; border-top:1px solid var(--border); margin-top:4px;
+}
+.sched-row label { font-size:11px; color:var(--t2); white-space:nowrap; }
+.sched-row .inp { width:130px; flex-shrink:0; }
+.sched-status { font-size:11px; color:var(--t3); font-family:'JetBrains Mono',monospace; }
+.sched-pill {
+  display:none; align-items:center; gap:5px; padding:3px 9px; border-radius:99px;
+  border:1px solid var(--amber-border); background:var(--amber-dim); color:var(--amber);
+  font-size:11px; font-family:'JetBrains Mono',monospace; font-weight:500;
+}
+.sched-pill.active { display:flex; }
+
+/* format chip group (used for search mode + advanced override) */
+.fmt-chips { display:flex; gap:4px; flex-wrap:wrap; }
+.fmt-chip {
+  padding:4px 10px; border-radius:6px; border:1px solid var(--border); background:var(--s2);
+  color:var(--t2); font-size:11px; font-weight:500; font-family:inherit; cursor:pointer;
+  transition:border-color .14s,background .14s,color .14s;
+}
+.fmt-chip:hover { border-color:var(--border-hi); color:var(--t1); }
+.fmt-chip.active { border-color:var(--acc-border); background:var(--acc-dim); color:var(--t1); }
+
+/* ─────────────────────────────────────────────
+   SEARCH RESULTS
+───────────────────────────────────────────── */
+.search-section { display:none; flex-direction:column; gap:10px; flex-shrink:0; }
+.search-section.show { display:flex; }
+.search-section-head { display:flex; align-items:center; gap:8px; }
+.search-section-title { font-size:12px; font-weight:600; color:var(--t2); }
+.search-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:12px; }
+.sr-card {
+  background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg); overflow:hidden;
+  cursor:pointer; transition:border-color .15s, transform .15s, box-shadow .15s; display:flex; flex-direction:column;
+}
+.sr-card:hover { border-color:var(--acc-border); transform:translateY(-2px); box-shadow:0 6px 24px rgba(0,0,0,.4); }
+.sr-card.preview-card { cursor:default; max-width:280px; }
+.sr-card.preview-card:hover { border-color:var(--border); transform:none; box-shadow:none; }
+.sr-thumb-wrap { position:relative; overflow:hidden; }
+.sr-thumb { width:100%; aspect-ratio:16/9; object-fit:cover; background:var(--s2); display:block; }
+.sr-duration {
+  position:absolute; bottom:5px; right:6px; background:rgba(0,0,0,.82); color:#fff; font-size:10px;
+  font-family:'JetBrains Mono',monospace; font-weight:600; padding:1px 5px; border-radius:4px; pointer-events:none;
+}
+.sr-info { padding:8px 10px 10px; display:flex; flex-direction:column; gap:3px; flex:1; }
+.sr-title {
+  font-size:12px; font-weight:600; color:var(--t1); line-height:1.4;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.sr-channel { font-size:10.5px; color:var(--t3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sr-meta { font-size:10px; color:var(--t3); font-family:'JetBrains Mono',monospace; margin-top:2px; }
+.sr-fmt-row { margin:0 8px 6px; }
+.sr-fmt-row .sr-fmt-select { font-size:11px; padding:5px 24px 5px 8px; }
+.sr-add-btn {
+  margin:0 8px 8px; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--s2);
+  color:var(--t2); font-size:11.5px; font-weight:600; font-family:inherit; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; gap:5px;
+  transition:border-color .14s, background .14s, color .14s;
+}
+.sr-add-btn:hover { border-color:var(--acc-border); background:var(--acc-dim); color:var(--t1); }
+.sr-add-btn.added { border-color:rgba(62,207,142,.3); background:var(--green-dim); color:var(--green); }
+.sr-skeleton { background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg); overflow:hidden; }
+.sk-thumb {
+  width:100%; aspect-ratio:16/9; background:linear-gradient(90deg, var(--s2) 25%, var(--s3) 50%, var(--s2) 75%);
+  background-size:200% 100%; animation:shimmer 1.4s ease infinite;
+}
+.sk-line {
+  height:10px; border-radius:5px; margin:8px 10px 4px;
+  background:linear-gradient(90deg, var(--s2) 25%, var(--s3) 50%, var(--s2) 75%);
+  background-size:200% 100%; animation:shimmer 1.4s ease infinite;
+}
+.sk-line.short { width:60%; }
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+.search-empty {
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+  padding:40px 20px; color:var(--t3); font-size:13px; text-align:center; line-height:1.6;
+}
+
+/* ─────────────────────────────────────────────
+   DOWNLOADS LIST  (merges the old Queue sidebar + History tab)
+───────────────────────────────────────────── */
+.downloads-section { display:flex; flex-direction:column; gap:10px; flex:1; min-height:0; padding:16px; }
+.downloads-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; flex-shrink:0; }
+.dl-list-wrap { flex:1; min-height:0; overflow-y:auto; }
+.downloads-title { font-size:12px; font-weight:600; color:var(--t2); display:flex; align-items:center; gap:6px; }
+.dl-badge {
+  background:var(--acc-dim); color:var(--acc); font-size:10px; font-weight:700;
+  font-family:'JetBrains Mono',monospace; border-radius:99px; padding:1px 6px;
+}
+.filter-chips { display:flex; gap:4px; }
+.filter-chip {
+  font-size:11px; padding:3px 10px; border-radius:99px; color:var(--t2); cursor:pointer;
+  border:1px solid transparent; transition:background .14s,color .14s;
+}
+.filter-chip:hover { color:var(--t1); }
+.filter-chip.active { background:var(--acc-dim); color:var(--acc); font-weight:500; }
+.dl-search-wrap {
+  margin-left:auto; display:flex; align-items:center; gap:5px; background:var(--s1);
+  border:1px solid var(--border); border-radius:7px; padding:4px 9px;
+}
+.dl-search-wrap input { font-size:11px; color:var(--t1); width:140px; }
+.dl-search-wrap input::placeholder { color:var(--t3); }
+
+.dl-list { display:flex; flex-direction:column; gap:6px; }
+.dl-row {
+  background:var(--s1); border:1px solid var(--border); border-radius:var(--r); padding:9px 12px;
+  display:flex; flex-direction:column; gap:6px; transition:border-color .14s;
+}
+.dl-row.state-error     { border-color:rgba(242,109,109,.25); }
+.dl-row.state-cancelled { opacity:.55; }
+.dl-row.state-running, .dl-row.state-paused {
+  border-color:rgba(124,109,250,.4);
+  background:linear-gradient(135deg, var(--s1) 0%, rgba(124,109,250,.04) 100%);
+}
+.dl-top { display:flex; align-items:flex-start; gap:8px; }
+.dl-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; margin-top:5px; }
+.dl-dot.running { background:var(--acc); animation:pulse 2s ease infinite; }
+.dl-dot.paused  { background:var(--amber); }
+.dl-dot.done    { background:var(--green); }
+.dl-dot.error   { background:var(--red); }
+.dl-dot.pending, .dl-dot.cancelled { background:var(--t3); }
+.dl-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.dl-name { font-size:12.5px; font-weight:600; color:var(--t1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dl-meta {
+  font-size:10.5px; color:var(--t3); font-family:'JetBrains Mono',monospace;
+  display:flex; gap:6px; align-items:center; overflow:hidden;
+}
+.dl-meta .sep { opacity:.4; }
+.dl-meta.err { color:var(--red); }
+.dl-tag {
+  font-size:9.5px; font-weight:600; font-family:'JetBrains Mono',monospace; padding:2px 7px;
+  border-radius:99px; flex-shrink:0; white-space:nowrap;
+}
+.dl-acts { display:flex; gap:4px; flex-shrink:0; }
+.dl-btn {
+  padding:3px 8px; border-radius:5px; font-size:10.5px; font-weight:500; border:1px solid var(--border);
+  background:var(--s2); color:var(--t2); cursor:pointer; font-family:inherit;
+  transition:color .12s, border-color .12s, background .12s;
+}
+.dl-btn:hover:not(:disabled) { color:var(--t1); border-color:var(--border-hi); }
+.dl-btn:disabled { opacity:.35; cursor:not-allowed; }
+.dl-btn.open  { color:var(--green); border-color:rgba(62,207,142,.3); }
+.dl-btn.open:hover:not(:disabled)  { background:var(--green-dim); }
+.dl-btn.retry { color:var(--amber); border-color:rgba(240,160,75,.3); }
+.dl-btn.retry:hover:not(:disabled) { background:var(--amber-dim); }
+.dl-btn.rm    { color:var(--red); border-color:rgba(242,109,109,.2); }
+.dl-btn.rm:hover:not(:disabled)    { background:var(--red-dim); }
+.dl-btn.danger { color:var(--red); border-color:rgba(242,109,109,.25); }
+
+/* expanded (active) card extras */
+.dl-progress { display:flex; flex-direction:column; gap:7px; }
+.bar-track { height:3px; background:var(--s3); border-radius:99px; overflow:hidden; }
+.bar-fill { height:100%; background:var(--acc); border-radius:99px; width:0%; transition:width .3s ease; }
+.bar-fill.ind { width:35%!important; animation:sweep 1.3s ease-in-out infinite; }
+@keyframes sweep { 0%{margin-left:-35%} 100%{margin-left:100%} }
+.dl-progress-row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.dl-file { font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--t3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.dl-progress-meta { display:flex; gap:10px; flex-shrink:0; }
+.dl-progress-meta span { font-size:10.5px; font-family:'JetBrains Mono',monospace; color:var(--t3); }
+.dl-ctrl { display:flex; align-items:center; gap:6px; }
+.btn-sm {
+  display:inline-flex; align-items:center; gap:4px; padding:4px 10px; font-size:11.5px; font-family:inherit;
+  border-radius:7px; border:1px solid var(--border); background:var(--s2); color:var(--t2);
+  transition:color .12s, border-color .12s, background .12s;
+}
+.btn-sm:hover:not(:disabled) { color:var(--t1); border-color:var(--border-hi); background:var(--s3); }
+.btn-sm:disabled { opacity:.35; cursor:not-allowed; }
+.btn-sm.danger { color:var(--red); border-color:rgba(242,109,109,.25); }
+.btn-sm.danger:hover:not(:disabled) { background:var(--red-dim); }
+.log-box {
+  background:var(--bg); border:1px solid var(--border); border-radius:7px; padding:7px 10px;
+  font-family:'JetBrains Mono',monospace; font-size:10.5px; line-height:1.75; color:var(--t3);
+  max-height:88px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;
+}
+.cmd-text {
+  background:var(--bg); border:1px solid var(--border); border-radius:7px; padding:9px 11px;
+  font-family:'JetBrains Mono',monospace; font-size:11px; line-height:1.8; color:var(--t2);
+  white-space:pre-wrap; word-break:break-all; max-height:100px; overflow-y:auto;
+}
+.t  { color:var(--acc); font-weight:600; }
+.f  { color:var(--blue); }
+.u  { color:var(--pink); }
+.disclosure-btn {
+  font-size:10.5px; color:var(--t3); display:flex; align-items:center; gap:4px; align-self:flex-start;
+}
+.disclosure-btn:hover { color:var(--t2); }
+
+.downloads-empty {
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+  padding:40px 20px; color:var(--t3); font-size:13px; text-align:center; line-height:1.6;
+}
+
+/* ─────────────────────────────────────────────
+   BROWSER-EXTENSION BANNER
+───────────────────────────────────────────── */
+.browser-banner {
+  display:none; align-items:center; gap:10px; padding:8px 12px; border-radius:var(--r);
+  background:var(--acc-dim); border:1px solid var(--acc-border); flex-shrink:0;
+}
+
+/* ─────────────────────────────────────────────
+   MEDIA PLAYER MODAL
+───────────────────────────────────────────── */
+.player-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.72); z-index:10000;
+  align-items:center; justify-content:center; padding:30px;
+}
+.player-overlay.show { display:flex; }
+.player-card {
+  background:var(--s1); border:1px solid var(--border-hi); border-radius:var(--r-xl);
+  width:min(720px, 90vw); max-height:86vh; display:flex; flex-direction:column; overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.6);
+}
+.player-head {
+  display:flex; align-items:center; gap:12px; padding:12px 16px;
+  border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.player-head-actions {
+  display:flex; align-items:center; gap:4px; margin-left:auto;
+}
+.player-title { font-size:13px; font-weight:600; color:var(--t1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.player-body { padding:14px 16px; display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
+.player-media-wrap {
+  background:#000; border-radius:var(--r); overflow:hidden;
+  display:flex; align-items:center; justify-content:center; min-height:120px;
+}
+.player-media-msg { color:var(--t3); padding:30px; font-size:12px; text-align:center; }
+.player-playlist { display:flex; flex-direction:column; gap:4px; max-height:160px; overflow-y:auto; }
+.player-playlist-btn {
+  flex-shrink:0;
+  text-align:left; padding:6px 9px; border-radius:6px; border:1px solid var(--border); background:var(--s2);
+  color:var(--t2); font-size:11.5px; cursor:pointer; font-family:inherit;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; transition:border-color .12s, color .12s, background .12s;
+}
+.player-playlist-btn:hover { color:var(--t1); border-color:var(--border-hi); }
+.player-playlist-btn.active { border-color:var(--acc-border); background:var(--acc-dim); color:var(--t1); }
+
+/* ── mini player — persists across the whole app while something plays ── */
+.mini-player {
+  display:none; position:fixed; bottom:16px; right:16px; z-index:9500;
+  align-items:center; gap:10px; padding:8px 10px 8px 8px;
+  background:var(--s1); border:1px solid var(--border-hi); border-radius:99px;
+  box-shadow:0 10px 34px rgba(0,0,0,.5); cursor:pointer;
+  max-width:320px; transition:transform .12s ease;
+}
+.mini-player.show { display:flex; }
+.mini-player:hover { transform:translateY(-2px); }
+.mini-player-art {
+  width:36px; height:36px; border-radius:50%; flex-shrink:0;
+  background:linear-gradient(135deg, var(--acc), var(--pink));
+  display:flex; align-items:center; justify-content:center; overflow:hidden;
+}
+.mini-player-art svg { width:18px; height:18px; }
+.mini-player-title {
+  font-size:11.5px; color:var(--t1); font-weight:500; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; max-width:130px; flex-shrink:1;
+}
+.mini-player-btn {
+  width:28px; height:28px; flex-shrink:0; cursor:pointer;
+}
+.mini-player-btn-secondary {
+  width:24px; height:24px; background:var(--s2); color:var(--t2); box-shadow:none;
+}
+.mini-player-btn-secondary:hover { background:var(--s3); }
+.mini-player-btn-secondary:disabled { opacity:.3; cursor:not-allowed; background:var(--s2); }
+.mini-player-btn-ghost {
+  padding:4px 7px; font-size:11px; flex-shrink:0; cursor:pointer;
+}
+
+
+/* ── custom player chrome — replaces bare browser <video>/<audio> controls ── */
+.mp-player { width:100%; display:flex; flex-direction:column; background:var(--s1); }
+.mp-video { width:100%; max-height:56vh; display:block; background:#000; }
+.mp-audio-visual {
+  width:100%; aspect-ratio:16/6.5; display:flex; align-items:center; justify-content:center;
+  background: radial-gradient(circle at 50% 38%, rgba(124,109,250,.28), transparent 62%), var(--s2);
+}
+.mp-audio-disc {
+  width:88px; height:88px; border-radius:50%; flex-shrink:0;
+  background:linear-gradient(135deg, var(--acc), var(--pink));
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 10px 34px rgba(124,109,250,.4);
+  animation:mp-spin 16s linear infinite; animation-play-state:paused;
+}
+.mp-audio-disc.playing { animation-play-state:running; }
+.mp-audio-disc.has-art { box-shadow:0 10px 34px rgba(0,0,0,.5), 0 0 0 3px rgba(255,255,255,.08) inset; }
+@keyframes mp-spin { to { transform:rotate(360deg); } }
+
+.mp-controls {
+  display:flex; align-items:center; gap:10px; padding:10px 14px;
+  background:var(--s1); border-top:1px solid var(--border); flex-wrap:nowrap;
+}
+.mp-btn {
+  width:32px; height:32px; border-radius:50%; background:var(--acc); color:#fff; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  transition:transform .1s ease, opacity .15s ease;
+}
+.mp-btn:hover { opacity:.88; transform:scale(1.06); }
+.mp-btn:active { transform:scale(.96); }
+.mp-time {
+  font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--t3); flex-shrink:0;
+  width:36px; text-align:center;
+}
+.mp-seek-track {
+  flex:1; height:5px; background:var(--s3); border-radius:99px; position:relative; cursor:pointer;
+}
+.mp-seek-fill { position:absolute; left:0; top:0; height:100%; width:0%; background:var(--acc); border-radius:99px; pointer-events:none; }
+.mp-seek-handle {
+  position:absolute; top:50%; left:0%; width:11px; height:11px; border-radius:50%;
+  background:#fff; box-shadow:0 1px 5px rgba(0,0,0,.5); transform:translate(-50%,-50%);
+  opacity:0; transition:opacity .15s ease; pointer-events:none;
+}
+.mp-seek-track:hover .mp-seek-handle, .mp-seek-track.seeking .mp-seek-handle { opacity:1; }
+.mp-vol-wrap { display:flex; align-items:center; gap:5px; flex-shrink:0; }
+.mp-vol-btn { color:var(--t2); flex-shrink:0; display:flex; }
+.mp-vol-btn:hover { color:var(--t1); }
+.mp-volume {
+  width:56px; height:4px; -webkit-appearance:none; appearance:none; background:var(--s3);
+  border-radius:99px; cursor:pointer; accent-color:var(--acc);
+}
+.mp-speed-select {
+  background:var(--s2); border:1px solid var(--border); border-radius:6px; color:var(--t2);
+  font-size:10.5px; font-family:inherit; padding:4px 6px; flex-shrink:0; cursor:pointer;
+}
+.mp-speed-select:hover { border-color:var(--border-hi); color:var(--t1); }
+
+/* ─────────────────────────────────────────────
+   GALLERY VIEW — grid of downloaded images/videos + lightbox
+───────────────────────────────────────────── */
+.gallery-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.72); z-index:10000;
+  align-items:center; justify-content:center; padding:30px;
+}
+.gallery-overlay.show { display:flex; }
+.gallery-card {
+  background:var(--s1); border:1px solid var(--border-hi); border-radius:var(--r-xl);
+  width:min(880px, 92vw); max-height:88vh; display:flex; flex-direction:column; overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.6);
+}
+.gallery-head {
+  display:flex; align-items:center; justify-content:space-between; padding:12px 16px;
+  border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.gallery-title { font-size:13px; font-weight:600; color:var(--t1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gallery-grid {
+  padding:14px 16px; overflow-y:auto;
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:8px;
+}
+.gallery-loading { grid-column:1/-1; text-align:center; color:var(--t3); font-size:12px; padding:40px; }
+.gallery-cell {
+  aspect-ratio:1; border-radius:8px; overflow:hidden; background:var(--s2); cursor:pointer;
+  border:1px solid var(--border); transition:border-color .14s, transform .14s;
+  display:flex; align-items:center; justify-content:center;
+}
+.gallery-cell:hover { border-color:var(--acc-border); transform:scale(1.03); }
+.gallery-cell img { width:100%; height:100%; object-fit:cover; display:block; }
+.gallery-cell-video { color:var(--t2); }
+.gallery-cell-fallback { color:var(--t3); font-size:20px; }
+
+.lightbox-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:10001;
+  align-items:center; justify-content:center; flex-direction:column; padding:40px;
+}
+.lightbox-overlay.show { display:flex; }
+.lightbox-content { max-width:min(900px, 86vw); max-height:76vh; display:flex; align-items:center; justify-content:center; }
+.lightbox-img { max-width:100%; max-height:76vh; border-radius:8px; object-fit:contain; display:block; }
+.lightbox-content .mp-player { width:min(900px, 86vw); border-radius:8px; overflow:hidden; }
+.lightbox-nav {
+  position:fixed; top:50%; transform:translateY(-50%); width:44px; height:44px; border-radius:50%;
+  background:var(--s1); border:1px solid var(--border-hi); color:var(--t1); font-size:22px; line-height:1;
+  display:flex; align-items:center; justify-content:center; transition:background .14s, transform .14s;
+}
+.lightbox-nav:hover { background:var(--s2); transform:translateY(-50%) scale(1.06); }
+.lightbox-nav.prev { left:24px; }
+.lightbox-nav.next { right:24px; }
+.lightbox-close {
+  position:fixed; top:24px; right:24px; width:36px; height:36px; border-radius:50%;
+  background:var(--s1); border:1px solid var(--border-hi); color:var(--t2);
+  display:flex; align-items:center; justify-content:center;
+}
+.lightbox-close:hover { color:var(--t1); background:var(--s2); }
+.lightbox-caption {
+  margin-top:14px; font-size:11.5px; color:var(--t3); font-family:'JetBrains Mono',monospace; text-align:center;
+}
+
+/* fullscreen states — the Fullscreen API stretches whichever element we
+   target to fill the screen; these rules make sure video/image/controls
+   actually make good use of that space instead of just sitting small
+   inside a huge black rectangle. */
+.mp-player:fullscreen {
+  width:100vw; height:100vh; justify-content:center; background:#000;
+}
+.mp-player:fullscreen .mp-video { flex:1; max-height:calc(100vh - 54px); width:100%; object-fit:contain; }
+.mp-player:fullscreen .mp-audio-visual { flex:1; height:100%; aspect-ratio:unset; }
+.lightbox-content:fullscreen {
+  width:100vw; height:100vh; max-width:none; max-height:none;
+  display:flex; align-items:center; justify-content:center; background:#000;
+}
+.lightbox-content:fullscreen .lightbox-img { max-width:100vw; max-height:100vh; }
+.lightbox-content:fullscreen .mp-player { width:100%; height:100%; }
+
+/* ─────────────────────────────────────────────
+   TOAST
+───────────────────────────────────────────── */
+.toast {
+  position:fixed; bottom:18px; left:50%; transform:translateX(-50%) translateY(8px);
+  background:var(--s2); border:1px solid var(--border-hi); border-radius:10px; padding:8px 15px;
+  font-size:12.5px; color:var(--t1); box-shadow:0 8px 30px rgba(0,0,0,.6); z-index:9999;
+  opacity:0; pointer-events:none; transition:opacity .2s, transform .2s;
+  display:flex; align-items:center; gap:7px; white-space:nowrap; max-width:420px;
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ═══════════════════════════════════════
+     TOPBAR
+════════════════════════════════════════ -->
+<header class="topbar">
+  <div class="logo">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 1v9M4 7l4 4 4-4"/>
+      <rect x="2" y="13" width="12" height="1.5" rx=".75" fill="#fff" stroke="none"/>
+    </svg>
+  </div>
+  <span class="app-name">Media Downloader</span>
+
+  <div class="sched-pill" id="sched-pill">
+    <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.5 3.5v4.25l3 1.75-.75 1.25-3.5-2.05V4.5h1.25z"/></svg>
+    <span id="sched-label">starts in 00:00</span>
+    <button onclick="cancelScheduler()" style="font-size:10px;opacity:.6;padding:0 2px;color:inherit">✕</button>
+  </div>
+
+  <div class="clip-pill" id="clip-pill" onclick="toggleClipMonitor()" title="Clipboard monitor — auto-fills the box when you copy a link">
+    <div class="clip-dot" id="clip-dot"></div>
+    <span id="clip-label">Clipboard</span>
+  </div>
+
+  <span class="topbar-sep"></span>
+
+  <div class="session-stats">
+    <span>session <span class="stat-val" id="stat-files">0</span> files</span>
+    <span><span class="stat-val" id="stat-done">0</span> / <span id="stat-total">0</span> jobs</span>
+  </div>
+
+  <button class="btn-ghost" onclick="resetInputs()" style="font-size:11.5px;">↺ Reset</button>
+</header>
+
+<!-- ═══════════════════════════════════════
+     MAIN
+════════════════════════════════════════ -->
+<div class="body-grid">
+<main class="content-col">
+
+  <div class="dryrun-bar" id="dryrun-bar">
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.75 10.5h-1.5v-1.5h1.5v1.5zm0-3h-1.5V4.5h1.5V8.5z"/></svg>
+    Dry run active — commands will be shown but nothing will be downloaded
+  </div>
+
+  <div class="browser-banner" id="browser-url-banner">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="var(--acc)" style="flex-shrink:0"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm5.854-2.146a.5.5 0 1 0-.708.707L7.293 8.707l-2.147 2.146a.5.5 0 0 0 .708.708L8 9.414l2.146 2.147a.5.5 0 0 0 .708-.708L8.707 8.707l2.147-2.146a.5.5 0 0 0-.708-.707L8 8l-2.146-2.146z"/></svg>
+    <div style="flex:1;min-width:0;">
+      <div id="browser-url-title" style="font-size:11.5px;font-weight:600;color:var(--acc);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+      <div id="browser-url-text" style="font-size:10.5px;font-family:'JetBrains Mono',monospace;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;"></div>
+    </div>
+    <button onclick="browserBannerAdd()" style="flex-shrink:0;padding:5px 12px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;">Add</button>
+    <button onclick="browserBannerDismiss()" style="flex-shrink:0;padding:5px 8px;background:none;border:1px solid var(--acc-border);border-radius:6px;font-size:11.5px;color:var(--acc);cursor:pointer;font-family:inherit;">✕</button>
+  </div>
+
+  <!-- ═══ INPUT CARD ═══ -->
+  <div class="input-card">
+    <div class="input-row-wrap">
+      <div class="input-row" id="input-row">
+        <span id="input-icon" style="display:flex;flex-shrink:0;color:var(--t3);"></span>
+        <input id="main-input" type="text" placeholder="Paste a link — or type to search…" spellcheck="false" autocomplete="off">
+        <span class="mode-badge" id="mode-badge" style="display:none"></span>
+        <button class="btn-primary" id="primary-btn" onclick="onPrimaryAction()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:var(--acc);color:#fff;font-size:13px;font-weight:600;border-radius:var(--r);letter-spacing:-.01em;flex-shrink:0;">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l11 6-11 6V2z"/></svg>
+          <span id="primary-btn-label">Start</span>
+        </button>
+      </div>
+      <div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
+    </div>
+    <div class="input-caption" id="input-caption">Paste a link to download, or type anything else to search YouTube.</div>
+
+    <div class="contextual-row" id="contextual-row">
+      <div class="field output-field">
+        <span class="lbl">Output folder</span>
+        <div class="folder-row">
+          <input id="output-input" type="text" class="inp" value="~/Downloads/media">
+          <button class="btn-ghost" id="browse-btn" style="display:none;padding:5px 8px;" onclick="browseFolder()" title="Browse">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44l.915.914A1.5 1.5 0 0 0 8.622 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12V3.5z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="field limit-field" id="limit-field">
+        <span class="lbl">Limit <span class="lbl-note">(0=all)</span></span>
+        <input id="limit-input" type="number" class="inp" value="0" min="0">
+      </div>
+      <div class="field count-field" id="count-field" style="display:none">
+        <span class="lbl">Results</span>
+        <select id="search-limit" class="inp sel">
+          <option value="8">8</option>
+          <option value="12" selected>12</option>
+          <option value="20">20</option>
+          <option value="30">30</option>
+        </select>
+      </div>
+      <div class="field format-field" id="format-field" style="display:none">
+        <span class="lbl">Format</span>
+        <select id="format-select" class="inp sel">
+          <option value="auto">Auto</option>
+          <option value="mp4">Video · mp4</option>
+          <option value="m4a">Audio · m4a</option>
+          <option value="mp3">Audio · mp3</option>
+          <option value="best">Best quality</option>
+        </select>
+      </div>
+      <div class="format-auto-note" id="format-auto-note" style="display:none">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" style="opacity:.6"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm1 8H7V7h2v5z"/></svg>
+        Auto — images keep their original format
+      </div>
+    </div>
+
+    <div>
+      <button class="adv-toggle" id="adv-toggle" onclick="toggleAdv()">
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0"><path d="M6 2a1 1 0 0 0-1 1v.5H2a1 1 0 0 0 0 2h3v.5a1 1 0 0 0 2 0v-3a1 1 0 0 0-1-1zm4 5a1 1 0 0 0-1 1v.5H2a1 1 0 0 0 0 2h7v.5a1 1 0 0 0 2 0v-3a1 1 0 0 0-1-1zm-4 5a1 1 0 0 0-1 1v.5H2a1 1 0 0 0 0 2h3v.5a1 1 0 0 0 2 0v-3a1 1 0 0 0-1-1z"/></svg>
+        Advanced options
+        <span class="adv-caret"><svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 3.5l3 3 3-3"/></svg></span>
+      </button>
+      <div class="adv-body" id="adv-body">
+        <div class="adv-grid">
+          <div class="field">
+            <span class="lbl">Mode override</span>
+            <select id="tool-select" class="inp sel">
+              <option value="auto">Auto-detect</option>
+              <option value="gallery-dl">Images / Gallery</option>
+              <option value="yt-dlp">Video / Audio</option>
+            </select>
+          </div>
+          <div class="field">
+            <span class="lbl">Delay (s)</span>
+            <input id="sleep-input" type="number" class="inp" value="2" min="0" step="0.5">
+          </div>
+          <div class="field">
+            <span class="lbl">Cookies</span>
+            <select id="cookies-select" class="inp sel">
+              <option value="">None</option>
+              <option value="chrome">Chrome</option>
+              <option value="firefox">Firefox</option>
+              <option value="edge">Edge</option>
+              <option value="brave">Brave</option>
+              <option value="safari">Safari</option>
+            </select>
+          </div>
+          <div class="field">
+            <span class="lbl">Username</span>
+            <input id="username-input" type="text" class="inp" placeholder="Optional" autocomplete="off">
+          </div>
+          <div class="field">
+            <span class="lbl">Password</span>
+            <input id="password-input" type="password" class="inp" placeholder="Optional" autocomplete="off">
+          </div>
+          <div class="field">
+            <span class="lbl">Filename template <span class="lbl-note">(Images/Gallery)</span></span>
+            <input id="filename-input" type="text" class="inp" placeholder="{category}_{id}.{extension}">
+          </div>
+        </div>
+
+        <div class="tog-row">
+          <div class="tog" id="tog-zip"      onclick="togClick(this)" role="switch" aria-checked="false" tabindex="0" title="Images/Gallery mode only"><span class="tog-dot"></span>ZIP archive</div>
+          <div class="tog" id="tog-metadata" onclick="togClick(this)" role="switch" aria-checked="false" tabindex="0" title="Images/Gallery mode only"><span class="tog-dot"></span>Metadata JSON</div>
+          <div class="tog" id="tog-verbose"  onclick="togClick(this)" role="switch" aria-checked="false" tabindex="0"><span class="tog-dot"></span>Verbose</div>
+          <div class="tog dryrun" id="tog-dryrun" onclick="togClick(this);syncDryrun()" role="switch" aria-checked="false" tabindex="0"><span class="tog-dot"></span>Dry run</div>
+        </div>
+
+        <div class="sched-row">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" style="color:var(--t3);flex-shrink:0"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.5 3.5v4.25l3 1.75-.75 1.25-3.5-2.05V4.5h1.25z"/></svg>
+          <label for="sched-input" style="color:var(--t3);font-size:11px;">Schedule start at</label>
+          <input id="sched-input" type="time" class="inp" style="width:120px;font-size:11.5px;">
+          <button class="btn-ghost" onclick="setScheduler()" style="font-size:11px;padding:4px 9px;">Set</button>
+          <span class="sched-status" id="sched-status"></span>
+        </div>
+
+        <p style="font-size:10.5px;color:var(--t3);padding-top:8px;line-height:1.5;">
+          🔒 Password is never passed as a CLI argument — it's staged via a temporary netrc file and removed immediately after the download.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SEARCH RESULTS ═══ -->
+  <div class="search-section" id="search-section">
+    <div class="search-section-head">
+      <span class="search-section-title" id="search-section-title">Results</span>
+      <span style="margin-left:auto;font-size:10.5px;color:var(--t3);" id="search-result-count"></span>
+      <button class="btn-ghost" onclick="clearSearchResults()" style="font-size:11px;">Clear</button>
+    </div>
+    <div id="search-results"></div>
+  </div>
+
+</main>
+
+<!-- ═══ DOWNLOADS SIDEBAR (merges what used to be Queue + History) ═══ -->
+<aside class="downloads-col">
+  <div class="downloads-section">
+    <div class="downloads-head">
+      <span class="downloads-title">Downloads <span class="dl-badge" id="dl-badge">0</span></span>
+      <div class="filter-chips">
+        <span class="filter-chip active" data-filter="all"    onclick="setFilter('all')">All</span>
+        <span class="filter-chip"        data-filter="active" onclick="setFilter('active')">Active</span>
+        <span class="filter-chip"        data-filter="done"   onclick="setFilter('done')">Done</span>
+        <span class="filter-chip"        data-filter="failed" onclick="setFilter('failed')">Failed</span>
+      </div>
+      <div class="dl-search-wrap">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="var(--t3)" stroke-width="1.7" stroke-linecap="round"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>
+        <input id="dl-search-input" type="text" placeholder="Search downloads…">
+      </div>
+      <button class="btn-ghost" onclick="clearFinished()" style="font-size:11px;">Clear finished</button>
+    </div>
+
+    <div class="dl-list-wrap">
+      <div class="dl-list" id="dl-list"></div>
+      <div class="downloads-empty" id="downloads-empty" style="display:none">
+        <svg width="30" height="30" viewBox="0 0 16 16" fill="currentColor" style="opacity:.15"><path d="M2 4h12a1 1 0 0 1 0 2H2a1 1 0 0 1 0-2zm0 4h8a1 1 0 0 1 0 2H2a1 1 0 0 1 0-2zm0 4h10a1 1 0 0 1 0 2H2a1 1 0 0 1 0-2z"/></svg>
+        Nothing here yet. Paste a link to get started.
+      </div>
+    </div>
+  </div>
+</aside>
+
+</div><!-- /body-grid -->
+</div><!-- /shell -->
+
+<!-- toast -->
+<div class="toast" id="toast">
+  <span id="toast-icon" style="font-size:13px"></span>
+  <span id="toast-msg"></span>
+</div>
+
+<!-- built-in media player -->
+<div class="player-overlay" id="player-overlay">
+  <div class="player-card">
+    <div class="player-head">
+      <span class="player-title" id="player-title">Now playing</span>
+      <div class="player-head-actions">
+        <button class="btn-ghost" onclick="minimizePlayer()" title="Minimize — keep playing" style="font-size:11.5px;padding:4px 9px;">— Minimize</button>
+        <button class="btn-ghost" onclick="closePlayer()" style="font-size:11.5px;padding:4px 9px;">✕ Close</button>
+      </div>
+    </div>
+    <div class="player-body">
+      <div class="player-media-wrap" id="player-media-wrap"></div>
+      <div class="player-playlist" id="player-playlist"></div>
+    </div>
+  </div>
+</div>
+
+<!-- mini player — stays visible while browsing the rest of the app;
+     reopening it just re-shows #player-overlay above, same media element,
+     nothing rebuilt -->
+<div class="mini-player" id="mini-player" onclick="expandPlayer()" title="Click to reopen the full player">
+  <div class="mini-player-art" id="mini-player-art">&nbsp;</div>
+  <div class="mini-player-title" id="mini-player-title">Now playing</div>
+  <button class="mp-btn mini-player-btn mini-player-btn-secondary" id="mini-player-prev" onclick="miniPlayerPrev(event)" title="Previous">&nbsp;</button>
+  <button class="mp-btn mini-player-btn" id="mini-player-playpause" onclick="miniPlayerTogglePlay(event)" title="Play/Pause"></button>
+  <button class="mp-btn mini-player-btn mini-player-btn-secondary" id="mini-player-next" onclick="miniPlayerNext(event)" title="Next">&nbsp;</button>
+  <button class="btn-ghost mini-player-btn-ghost" onclick="event.stopPropagation(); expandPlayer()" title="Reopen full player">⤢</button>
+  <button class="btn-ghost mini-player-btn-ghost" onclick="event.stopPropagation(); closePlayer()" title="Close">✕</button>
+</div>
+
+<!-- image/video gallery -->
+<div class="gallery-overlay" id="gallery-overlay">
+  <div class="gallery-card">
+    <div class="gallery-head">
+      <span class="gallery-title" id="gallery-title">Gallery</span>
+      <button class="btn-ghost" onclick="closeGallery()" style="font-size:11.5px;padding:4px 9px;">✕ Close</button>
+    </div>
+    <div class="gallery-grid" id="gallery-grid"></div>
+  </div>
+</div>
+
+<!-- lightbox — full-size view with prev/next, sits above the gallery grid -->
+<div class="lightbox-overlay" id="lightbox-overlay">
+  <button class="lightbox-nav prev" onclick="lightboxPrev()" title="Previous (←)">‹</button>
+  <div class="lightbox-content" id="lightbox-content"></div>
+  <button class="lightbox-nav next" onclick="lightboxNext()" title="Next (→)">›</button>
+  <button class="lightbox-close" id="lightbox-fullscreen-btn" onclick="toggleFullscreen($('lightbox-content'))" title="Fullscreen" style="right:68px;">⛶</button>
+  <button class="lightbox-close" onclick="closeLightbox()" title="Close (Esc)">✕</button>
+  <div class="lightbox-caption" id="lightbox-caption"></div>
+</div>
+
+<script>
+"use strict";
+
+// ─────────────────────────────────────────────
+// DETECTION — single input auto-detects link vs search
+// ─────────────────────────────────────────────
+const YTDLP_HOSTS = ["youtube.com","youtu.be","vimeo.com","tiktok.com","twitch.tv","dailymotion.com","bilibili.com"];
+
+function hostOf(url) {
+  try { return new URL(url).hostname.replace(/^www\./,"").toLowerCase(); } catch { return ""; }
+}
+function detectTool(url) {
+  const h = hostOf(url);
+  if (!h) return "gallery-dl";
+  for (const s of YTDLP_HOSTS) if (h.includes(s)) return "yt-dlp";
+  return "gallery-dl";
+}
+// User-facing label for a tool id — internal code/cfg keep the real
+// "yt-dlp" / "gallery-dl" values since the backend expects them.
+function toolLabel(tool) {
+  return tool === "yt-dlp" ? "Video" : "Images";
+}
+
+// A loose "does this look like a link" check — deliberately permissive
+// (no scheme required) since people paste bare domains all the time.
+// Anything with whitespace is definitely a search query, not a URL.
+function isLikelyUrl(text) {
+  const s = text.trim();
+  if (!s || /\s/.test(s)) return false;
+  if (/^https?:\/\//i.test(s)) return true;
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+([\/?#].*)?$/i.test(s);
+}
+function normalizeUrl(text) {
+  const s = text.trim();
+  return /^https?:\/\//i.test(s) ? s : "https://" + s;
+}
+
+// ─────────────────────────────────────────────
+// DOM HELPERS
+// ─────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function showToast(msg, ok = true, duration = 2800) {
+  const t = $("toast");
+  $("toast-icon").textContent = ok ? "✓" : "✕";
+  $("toast-icon").style.color = ok ? "var(--green)" : "var(--red)";
+  $("toast-msg").textContent  = msg;
+  t.classList.add("show");
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove("show"), duration);
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+function shellQuote(s) {
+  if (!s) return '""';
+  if (/^[A-Za-z0-9_.~:/?#@!$&'*+,;=%\-]+$/.test(s)) return s;
+  return `"${String(s).replace(/\\/g,"\\\\").replace(/"/g,'\\"')}"`;
+}
+function fmtTime(ms) {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  return m + ":" + String(s % 60).padStart(2,"0");
+}
+function fmtBytes(n) {
+  if (!n) return "—";
+  const units = ["B","KB","MB","GB","TB"];
+  let i = 0, v = n;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return v.toFixed(v < 10 && i > 0 ? 1 : 0) + " " + units[i];
+}
+function fmtDate(ts) {
+  if (!ts) return "—";
+  return new Date(ts * 1000).toLocaleString();
+}
+function fmtDuration(secs) {
+  if (!secs) return "";
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  return `${m}:${String(s).padStart(2,"0")}`;
+}
+function fmtViews(n) {
+  if (!n) return "";
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + "B views";
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M views";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "K views";
+  return n + " views";
+}
+const PLAYABLE_EXT = ["mp4","m4a","mp3","webm","mov","mkv","wav","ogg","flac","avi","m4v"];
+const AUDIO_EXT     = ["mp3","m4a","wav","ogg","flac"];
+const IMAGE_EXT     = ["jpg","jpeg","png","gif","webp","bmp","svg","tiff","heic","avif"];
+function isPlayable(name) {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  return PLAYABLE_EXT.includes(ext);
+}
+function isImage(name) {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  return IMAGE_EXT.includes(ext);
+}
+// Files worth showing in the gallery grid — images plus anything
+// video (audio-only files belong in the Play flow, not a visual gallery).
+function galleryFilesFor(item) {
+  return (item.files || []).filter(f => isImage(f.name) || (isPlayable(f.name) && !AUDIO_EXT.includes((f.name.split(".").pop() || "").toLowerCase())));
+}
+// Only show the Gallery button when it adds something Play doesn't already
+// cover: multi-file downloads of any kind, or a single image (Play has
+// nothing to offer for a lone image — there's no other way to view it in-app).
+function shouldShowGallery(item) {
+  const g = galleryFilesFor(item);
+  if (g.length > 1) return true;
+  if (g.length === 1) return isImage(g[0].name);
+  return false;
+}
+
+// ─────────────────────────────────────────────
+// FRIENDLY ERROR MESSAGES — the raw error (tool output + exit code) is
+// always kept as-is on the item/history (visible via the tooltip below,
+// "Show logs", and the persisted history file) — this only changes what's
+// shown as the primary, at-a-glance text in the Downloads list and toast.
+// ─────────────────────────────────────────────
+const ERROR_PATTERNS = [
+  { test: /age[- ]restrict|confirm your age|sign in to confirm/i, msg: "Age-restricted content" },
+  { test: /private video|this video is private/i,                msg: "This video is private" },
+  { test: /video unavailable|this video (is|has been) (not available|removed)|content isn.?t available/i, msg: "Video unavailable" },
+  { test: /copyright/i,                                           msg: "Removed due to a copyright claim" },
+  { test: /unsupported url|no .*formats? found|requested format not available|unable to extract/i, msg: "Unsupported format or page layout" },
+  { test: /network|timed? ?out|connection (reset|refused)|failed to establish|getaddrinfo|name resolution|name or service not known|nodename nor servname|network is unreachable/i, msg: "Network connection lost" },
+  { test: /429|too many requests/i,                               msg: "Rate limited by the site — try again later" },
+  { test: /403|forbidden/i,                                       msg: "Access denied by the site" },
+  { test: /404|not found/i,                                       msg: "Page not found" },
+  { test: /login|sign in|registered users|authentication/i,       msg: "Login required for this content" },
+  { test: /permission denied|access is denied/i,                  msg: "Permission denied writing the file" },
+  { test: /no space left|disk full/i,                             msg: "Not enough disk space" },
+];
+function friendlyError(raw) {
+  if (!raw) return "Download failed";
+  for (const p of ERROR_PATTERNS) {
+    if (p.test.test(raw)) return p.msg;
+  }
+  return "Download failed";
+}
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let downloads    = [];   // unified list — pending/running/paused/done/error/cancelled, session + history
+let nextLocalId  = 1;
+let isRunning    = false;
+let currentJobId = null;
+let jobPaused    = false;
+let elapsedTimer = null;
+let jobStartTime = null;
+let lastCmd      = "";
+let lastCLI      = "";
+let lastHasPwd   = false;
+let currentFilter = "all";
+
+let sessionFiles = 0;
+let sessionDone  = 0;
+let sessionTotal = 0;
+
+let clipMonitorOn = false;
+let clipMonitorId = null;
+let lastClipText  = "";
+
+let schedTimer  = null;
+let schedTarget = null;
+
+let previewReqId       = 0;
+let previewDebounceTimer = null;
+let lastPreviewedUrl   = "";
+
+let recentSearches      = [];
+let autocompleteMatches = [];
+let autocompleteIndex   = -1;
+
+function newLocalId() { return "local_" + (nextLocalId++); }
+
+// ─────────────────────────────────────────────
+// INPUT CARD — mode detection + contextual controls
+// ─────────────────────────────────────────────
+const ICON_LINK = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 9a3 3 0 0 0 4.5.5l2-2a3 3 0 0 0-4.24-4.24l-1.15 1.14"/><path d="M9 7a3 3 0 0 0-4.5-.5l-2 2a3 3 0 0 0 4.24 4.24l1.14-1.14"/></svg>';
+const ICON_SEARCH = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>';
+
+function updateInputMode() {
+  const raw = $("main-input").value;
+  const row = $("input-row");
+  const badge = $("mode-badge");
+  const isUrl = isLikelyUrl(raw);
+
+  row.classList.toggle("mode-link", isUrl && raw.trim().length > 0);
+  row.classList.toggle("mode-search", !isUrl && raw.trim().length > 0);
+
+  if (!raw.trim()) {
+    $("input-icon").innerHTML = ICON_LINK;
+    badge.style.display = "none";
+    $("input-caption").textContent = "Paste a link to download, or type anything else to search YouTube.";
+    clearTimeout(previewDebounceTimer);
+    hideLinkPreview();
+  } else if (isUrl) {
+    const tool = detectTool(normalizeUrl(raw));
+    $("input-icon").innerHTML = ICON_LINK;
+    badge.style.display    = "inline-block";
+    badge.textContent      = toolLabel(tool);
+    badge.style.background = tool === "yt-dlp" ? "var(--pink-dim)" : "var(--blue-dim)";
+    badge.style.color      = tool === "yt-dlp" ? "var(--pink)"     : "var(--blue)";
+    $("input-caption").textContent = "Recognized as a link — ready to download.";
+    schedulePreview(normalizeUrl(raw));
+  } else {
+    $("input-icon").innerHTML = ICON_SEARCH;
+    badge.style.display    = "inline-block";
+    badge.textContent      = "Search";
+    badge.style.background = "var(--blue-dim)";
+    badge.style.color      = "var(--blue)";
+    $("input-caption").textContent = "Not a link — treated as a search query.";
+    clearTimeout(previewDebounceTimer);
+    hideLinkPreview();
+  }
+
+  updatePrimaryButton();
+  updateContextualRow();
+  updateAutocomplete();
+}
+
+// ─────────────────────────────────────────────
+// LINK PREVIEW — renders into the same section as search results, so
+// pasting a link and running a search both land in one shared area
+// instead of two competing ones. Debounced so it doesn't fire on every
+// keystroke, and request-id-guarded so a slow response to an earlier
+// URL can't clobber whatever's showing now. `sectionMode` tracks which
+// of the two ("search" vs "preview") currently owns the section, so
+// clearing a stale preview never wipes out real search results.
+// ─────────────────────────────────────────────
+let sectionMode = null; // null | "search" | "preview"
+
+function schedulePreview(url) {
+  clearTimeout(previewDebounceTimer);
+  if (url === lastPreviewedUrl) return; // already showing this one
+  previewDebounceTimer = setTimeout(() => fetchLinkPreview(url), 600);
+}
+
+async function fetchLinkPreview(url) {
+  if (!window.pywebview?.api?.preview_link) return;
+  const reqId = ++previewReqId;
+  showPreviewLoading();
+  try {
+    await window.pywebview.api.preview_link(url, String(reqId));
+  } catch {
+    hideLinkPreview();
+  }
+}
+
+window.onLinkPreview = function(reqId, result) {
+  if (String(reqId) !== String(previewReqId)) return; // stale — box has moved on
+  if (!result?.ok) { hideLinkPreview(); return; }
+  lastPreviewedUrl = $("main-input").value.trim() ? normalizeUrl($("main-input").value) : "";
+  renderLinkPreview(result);
+};
+
+function showPreviewLoading() {
+  sectionMode = "preview";
+  $("search-section").classList.add("show");
+  $("search-section-title").textContent = "Preview";
+  $("search-result-count").textContent = "";
+  $("search-results").innerHTML =
+    '<div class="sr-skeleton" style="max-width:280px">' +
+      '<div class="sk-thumb"></div>' +
+      '<div class="sk-line" style="width:90%"></div>' +
+      '<div class="sk-line short"></div>' +
+    '</div>';
+}
+
+function renderLinkPreview(result) {
+  sectionMode = "preview";
+  $("search-section").classList.add("show");
+  $("search-section-title").textContent = "Preview";
+  $("search-result-count").textContent = "";
+
+  const metaParts = [];
+  if (result.channel) metaParts.push(result.channel);
+  if (result.count)   metaParts.push(result.count + " item" + (result.count === 1 ? "" : "s"));
+
+  $("search-results").innerHTML =
+    '<div class="sr-card preview-card">' +
+      '<div class="sr-thumb-wrap">' +
+        (result.thumbnail
+          ? `<img class="sr-thumb" src="${escHtml(result.thumbnail)}" alt="" onerror="this.style.display='none'">`
+          : '<div class="sr-thumb"></div>') +
+        (result.duration ? `<span class="sr-duration">${fmtDuration(result.duration)}</span>` : "") +
+      '</div>' +
+      '<div class="sr-info">' +
+        `<div class="sr-title" title="${escHtml(result.title || "")}">${escHtml(result.title || "")}</div>` +
+        (metaParts.length ? `<div class="sr-channel">${escHtml(metaParts.join(" · "))}</div>` : "") +
+      '</div>' +
+    '</div>';
+}
+
+function hideLinkPreview() {
+  if (sectionMode === "preview") {
+    $("search-section").classList.remove("show");
+    $("search-results").innerHTML = "";
+    $("search-section-title").textContent = "Results";
+    $("search-result-count").textContent = "";
+    sectionMode = null;
+  }
+  lastPreviewedUrl = "";
+}
+
+function updatePrimaryButton() {
+  const isUrl = isLikelyUrl($("main-input").value);
+  const label = $("primary-btn-label");
+  const icon  = $("primary-btn").querySelector("svg");
+  if (isUrl) {
+    label.textContent = isRunning ? "Queue" : "Start";
+    icon.innerHTML = '<path d="M3 2l11 6-11 6V2z"/>';
+  } else {
+    label.textContent = "Search";
+    icon.innerHTML = '<circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>';
+  }
+}
+
+function updateContextualRow() {
+  const raw = $("main-input").value;
+  const isUrl = isLikelyUrl(raw);
+  const isEmpty = !raw.trim();
+
+  $("limit-field").style.display  = (isUrl || isEmpty) ? "flex" : "none";
+  $("count-field").style.display  = (!isUrl && !isEmpty) ? "flex" : "none";
+
+  if (!isUrl) {
+    // search mode (or empty box) — format is now chosen per result card,
+    // not globally, so a single query can queue mixed formats
+    $("format-field").style.display     = "none";
+    $("format-auto-note").style.display = "none";
+    return;
+  }
+  const tool = detectTool(normalizeUrl(raw));
+  if (tool === "yt-dlp") {
+    $("format-field").style.display     = "flex";
+    $("format-auto-note").style.display = "none";
+  } else {
+    $("format-field").style.display     = "none";
+    $("format-auto-note").style.display = "flex";
+  }
+}
+
+$("main-input").addEventListener("input", updateInputMode);
+$("main-input").addEventListener("keydown", e => {
+  const ddVisible = $("autocomplete-dropdown").style.display === "block";
+
+  if (ddVisible && e.key === "ArrowDown") {
+    e.preventDefault();
+    autocompleteIndex = Math.min(autocompleteMatches.length - 1, autocompleteIndex + 1);
+    highlightAutocomplete(autocompleteIndex);
+    return;
+  }
+  if (ddVisible && e.key === "ArrowUp") {
+    e.preventDefault();
+    autocompleteIndex = Math.max(0, autocompleteIndex - 1);
+    highlightAutocomplete(autocompleteIndex);
+    return;
+  }
+  if (ddVisible && e.key === "Escape") {
+    hideAutocomplete();
+    return;
+  }
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (ddVisible && autocompleteIndex >= 0) selectAutocomplete(autocompleteIndex);
+    else onPrimaryAction();
+  }
+});
+
+function onPrimaryAction() {
+  const raw = $("main-input").value.trim();
+  if (!raw) { showToast("Type a link or a search query first", false); $("main-input").focus(); return; }
+  if (isLikelyUrl(raw)) {
+    addDownload(normalizeUrl(raw));
+    $("main-input").value = "";
+    updateInputMode();
+  } else {
+    doSearch(raw);
+  }
+}
+
+// ─────────────────────────────────────────────
+// READ FORM
+// ─────────────────────────────────────────────
+function readCfg() {
+  return {
+    output:   $("output-input").value.trim() || "~/Downloads/media",
+    limit:    parseInt($("limit-input").value)   || 0,
+    sleep:    parseFloat($("sleep-input").value) || 2,
+    cookies:  $("cookies-select").value,
+    username: $("username-input").value.trim(),
+    password: $("password-input").value,
+    filename: $("filename-input").value.trim(),
+    zip:      $("tog-zip").classList.contains("on"),
+    metadata: $("tog-metadata").classList.contains("on"),
+    verbose:  $("tog-verbose").classList.contains("on"),
+    dry_run:  $("tog-dryrun").classList.contains("on"),
+    format:   $("format-select").value,
+  };
+}
+function readToolOverride() {
+  const v = $("tool-select").value;
+  return v === "auto" ? "" : v;
+}
+
+// ─────────────────────────────────────────────
+// BUILD COMMAND (for the "View command" disclosure on the active item)
+// ─────────────────────────────────────────────
+function buildCmd(url, cfg, toolOverride) {
+  const tool  = toolOverride || detectTool(url);
+  const parts = [];
+  if (tool === "gallery-dl") {
+    parts.push("gallery-dl");
+    if (cfg.output)   parts.push("-d", shellQuote(cfg.output));
+    if (cfg.limit)    parts.push("--range", "1-" + cfg.limit);
+    if (cfg.filename) parts.push("-o", shellQuote("filename=" + cfg.filename));
+    if (cfg.username && cfg.password) parts.push("--netrc");
+    else if (cfg.username) parts.push("--username", shellQuote(cfg.username));
+    if (cfg.zip)      parts.push("--zip");
+    if (cfg.metadata) parts.push("--write-metadata");
+    if (cfg.verbose)  parts.push("--verbose");
+    if (cfg.cookies)  parts.push("--cookies-from-browser", cfg.cookies);
+    parts.push("-o", "sleep-request=" + (cfg.sleep || 2));
+    parts.push("-o", "retries=5");
+  } else {
+    parts.push("yt-dlp");
+    if (cfg.output) { parts.push("-P", shellQuote(cfg.output), "-o", shellQuote("%(title)s.%(ext)s")); }
+    else            { parts.push("-o", shellQuote("%(title)s.%(ext)s")); }
+    if (cfg.limit)   parts.push("--playlist-end", String(cfg.limit));
+    if (cfg.verbose) parts.push("--verbose");
+    if (cfg.cookies) parts.push("--cookies-from-browser", cfg.cookies);
+    if      (cfg.format === "m4a")  { parts.push("-f", "bestaudio[ext=m4a]/bestaudio", "--audio-quality", "0", "--embed-thumbnail", "--add-metadata"); }
+    else if (cfg.format === "mp3")  { parts.push("-x", "--audio-format", "mp3", "--embed-thumbnail", "--add-metadata"); }
+    else if (cfg.format === "best") { parts.push("-f", "bestvideo+bestaudio/best"); }
+    else                            { parts.push("--merge-output-format", "mp4"); }
+  }
+  parts.push(shellQuote(url));
+  return { tool, cmd: parts.join(" ") };
+}
+function buildCLIArgs(url, cfg, toolOverride) {
+  const parts = [shellQuote(url)];
+  if (cfg.output)   parts.push("-d", shellQuote(cfg.output));
+  if (cfg.limit)    parts.push("--limit", String(cfg.limit));
+  if (cfg.filename) parts.push("--filename", shellQuote(cfg.filename));
+  if (cfg.username) parts.push("-u", shellQuote(cfg.username));
+  if (cfg.zip)      parts.push("--zip");
+  if (cfg.metadata) parts.push("--metadata");
+  if (cfg.cookies)  parts.push("--cookies", cfg.cookies);
+  if (toolOverride) parts.push("--tool", toolOverride);
+  if (cfg.verbose)  parts.push("-v");
+  if (cfg.sleep)    parts.push("--sleep", String(cfg.sleep));
+  if (cfg.dry_run)  parts.push("--dry-run");
+  return parts.join(" ");
+}
+function highlightCmd(cmd, tool) {
+  const name = tool === "yt-dlp" ? "yt-dlp" : "gallery-dl";
+  let h = escHtml(cmd).replace(new RegExp("^" + name), '<span class="t">' + name + "</span>");
+  h = h.replace(/(--?[\w-]+)/g, '<span class="f">$1</span>');
+  h = h.replace(/(https?:\/\/[^\s"]+)/g, '<span class="u">$1</span>');
+  return h;
+}
+
+// ─────────────────────────────────────────────
+// DRY RUN / TOGGLES / ADVANCED PANEL
+// ─────────────────────────────────────────────
+function syncDryrun() {
+  $("dryrun-bar").classList.toggle("show", $("tog-dryrun").classList.contains("on"));
+}
+function togClick(el) {
+  const on = el.classList.toggle("on");
+  el.setAttribute("aria-checked", String(on));
+}
+document.querySelectorAll(".tog").forEach(el => {
+  el.addEventListener("keydown", e => {
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault(); togClick(el);
+      if (el.id === "tog-dryrun") syncDryrun();
+    }
+  });
+});
+function toggleAdv() {
+  const open = $("adv-body").classList.toggle("open");
+  $("adv-toggle").classList.toggle("open", open);
+}
+
+// ─────────────────────────────────────────────
+// FOLDER BROWSE
+// ─────────────────────────────────────────────
+async function browseFolder() {
+  if (!window.pywebview?.api?.pick_folder) return;
+  const p = await window.pywebview.api.pick_folder();
+  if (p) $("output-input").value = p;
+}
+
+// ─────────────────────────────────────────────
+// CLIPBOARD MONITOR
+// ─────────────────────────────────────────────
+function toggleClipMonitor() {
+  clipMonitorOn = !clipMonitorOn;
+  $("clip-pill").classList.toggle("on", clipMonitorOn);
+  $("clip-label").textContent = clipMonitorOn ? "Watching…" : "Clipboard";
+  if (clipMonitorOn) {
+    readClipboard().then(t => { lastClipText = t; });
+    clipMonitorId = setInterval(checkClipboard, 1500);
+    showToast("Clipboard monitor on — copy any URL to auto-fill");
+  } else {
+    clearInterval(clipMonitorId);
+    clipMonitorId = null;
+    showToast("Clipboard monitor off");
+  }
+}
+async function readClipboard() {
+  if (window.pywebview?.api?.read_clipboard) {
+    try { return await window.pywebview.api.read_clipboard(); } catch { return ""; }
+  }
+  try { return await navigator.clipboard.readText(); } catch { return ""; }
+}
+async function checkClipboard() {
+  const text = (await readClipboard()).trim();
+  if (!text || text === lastClipText) return;
+  lastClipText = text;
+  if (!isLikelyUrl(text)) return;
+  $("main-input").value = text;
+  updateInputMode();
+  $("input-row").classList.add("is-running");
+  setTimeout(() => $("input-row").classList.remove("is-running"), 600);
+  showToast("Link detected from clipboard");
+}
+
+// ─────────────────────────────────────────────
+// SCHEDULER
+// ─────────────────────────────────────────────
+function setScheduler() {
+  const val = $("sched-input").value;
+  if (!val) { showToast("Pick a time first", false); return; }
+  const now = new Date();
+  const [h, m] = val.split(":").map(Number);
+  const target = new Date(now);
+  target.setHours(h, m, 0, 0);
+  if (target <= now) target.setDate(target.getDate() + 1);
+  schedTarget = target;
+  if (schedTimer) clearInterval(schedTimer);
+  schedTimer = setInterval(tickScheduler, 1000);
+  tickScheduler();
+  showToast("Scheduled for " + val);
+}
+function tickScheduler() {
+  if (!schedTarget) return;
+  const now = new Date();
+  const diff = schedTarget - now;
+  if (diff <= 0) {
+    cancelScheduler();
+    showToast("Scheduled download starting…");
+    onPrimaryAction();
+    return;
+  }
+  const hh = String(Math.floor(diff / 3600000)).padStart(2,"0");
+  const mm = String(Math.floor((diff % 3600000) / 60000)).padStart(2,"0");
+  const ss = String(Math.floor((diff % 60000)   / 1000)).padStart(2,"0");
+  $("sched-label").textContent = "starts in " + hh + ":" + mm + ":" + ss;
+  $("sched-pill").classList.add("active");
+  $("sched-status").textContent = "→ " + hh + ":" + mm + ":" + ss + " remaining";
+}
+function cancelScheduler() {
+  if (schedTimer) clearInterval(schedTimer);
+  schedTimer = null; schedTarget = null;
+  $("sched-pill").classList.remove("active");
+  $("sched-status").textContent = "";
+}
+
+// ─────────────────────────────────────────────
+// SESSION STATS
+// ─────────────────────────────────────────────
+function updateSessionStats() {
+  $("stat-files").textContent = sessionFiles;
+  $("stat-done").textContent  = sessionDone;
+  $("stat-total").textContent = sessionTotal;
+}
+
+// ─────────────────────────────────────────────
+// DOWNLOADS MANAGEMENT (unified list)
+// ─────────────────────────────────────────────
+function addDownload(url, overrideCfg) {
+  const cfg          = overrideCfg || readCfg();
+  const toolOverride = readToolOverride();
+  const tool         = toolOverride || detectTool(url);
+
+  downloads.push({
+    id: newLocalId(), url, tool, cfg, toolOverride,
+    state: "pending", jobId: null, historyId: null,
+    outputDir: cfg.output, itemsDone: 0, limit: cfg.limit, files: [],
+    filename: "", sizeBytes: 0, error: "", startedAt: null, finishedAt: null,
+  });
+  sessionTotal++;
+  updateSessionStats();
+  renderDownloads();
+  showToast(isRunning ? "Queued" : "Starting…");
+  if (!isRunning) runNext();
+}
+
+function removeDownload(id) {
+  const item = downloads.find(i => i.id === id);
+  if (!item) return;
+  if (item.state === "running" || item.state === "paused") { showToast("Cancel it first", false); return; }
+  if (item.state === "pending") sessionTotal--;
+  downloads = downloads.filter(i => i.id !== id);
+  updateSessionStats();
+  renderDownloads();
+}
+
+async function deleteDownload(id) {
+  const item = downloads.find(i => i.id === id);
+  if (!item) return;
+  if (item.historyId && window.pywebview?.api?.delete_history_entry) {
+    try { await window.pywebview.api.delete_history_entry(item.historyId); } catch {}
+  }
+  downloads = downloads.filter(i => i.id !== id);
+  renderDownloads();
+  showToast("Removed");
+}
+
+function retryDownload(id) {
+  const item = downloads.find(i => i.id === id);
+  if (!item) return;
+  // item.cfg is complete for anything downloaded this session, but for
+  // items loaded from persisted history it's only ever {output} (that's
+  // all download_history.json stores) — merging over the current form's
+  // defaults means a history redownload gets sensible current settings
+  // for whatever it's missing, rather than silently losing them.
+  const cfg = { ...readCfg(), ...(item.cfg || {}) };
+  addDownload(item.url, cfg);
+}
+
+async function clearFinished() {
+  const finishedIds = downloads.filter(i => ["done","error","cancelled"].includes(i.state)).map(i => i.historyId).filter(Boolean);
+  downloads = downloads.filter(i => !["done","error","cancelled"].includes(i.state));
+  if (finishedIds.length && window.pywebview?.api?.clear_history) {
+    try { await window.pywebview.api.clear_history(); } catch {}
+  }
+  renderDownloads();
+  showToast("Cleared finished downloads");
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll(".filter-chip").forEach(el => el.classList.toggle("active", el.dataset.filter === f));
+  renderDownloads();
+}
+$("dl-search-input").addEventListener("input", renderDownloads);
+
+async function openFolder(id) {
+  const item = downloads.find(i => i.id === id);
+  if (!item || !window.pywebview?.api) return;
+  try { await window.pywebview.api.open_output_folder(item.outputDir || (item.cfg && item.cfg.output)); }
+  catch { showToast("Couldn't open folder", false); }
+}
+function playDownloadItem(id) {
+  const item = downloads.find(i => i.id === id);
+  if (!item) return;
+  const playable = (item.files || []).filter(f => isPlayable(f.name));
+  if (!playable.length) { showToast("No playable file found for this download", false); return; }
+  openPlayer(playable, item.filename || item.url.replace(/^https?:\/\/(www\.)?/, ""));
+}
+
+// ─────────────────────────────────────────────
+// RENDER DOWNLOADS LIST
+// ─────────────────────────────────────────────
+function updateQueuePositionLabel() {
+  const total = downloads.length;
+  const el = $("dl-progress-queue");
+  if (!el) return;
+  if (!total) { el.textContent = ""; return; }
+  const finished = downloads.filter(i => ["done","error","cancelled"].includes(i.state)).length;
+  const position = downloads.some(i => i.state === "running") ? finished + 1 : finished;
+  el.textContent = position + " / " + total;
+}
+
+function matchesFilter(item, filter) {
+  if (filter === "all") return true;
+  if (filter === "active") return ["pending","running","paused"].includes(item.state);
+  if (filter === "done") return item.state === "done";
+  if (filter === "failed") return item.state === "error" || item.state === "cancelled";
+  return true;
+}
+
+function renderDownloads() {
+  $("dl-badge").textContent = downloads.length;
+  const q = ($("dl-search-input").value || "").trim().toLowerCase();
+
+  const filtered = downloads.filter(i => {
+    if (!matchesFilter(i, currentFilter)) return false;
+    if (!q) return true;
+    return (i.filename || "").toLowerCase().includes(q) || (i.url || "").toLowerCase().includes(q);
+  });
+
+  const active   = filtered.filter(i => ["running","paused","pending"].includes(i.state));
+  const finished = filtered.filter(i => ["done","error","cancelled"].includes(i.state))
+    .sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
+  const ordered = [...active, ...finished];
+
+  $("downloads-empty").style.display = downloads.length === 0 ? "flex" : "none";
+  const list = $("dl-list");
+  list.innerHTML = "";
+
+  if (downloads.length > 0 && ordered.length === 0) {
+    const div = document.createElement("div");
+    div.className = "downloads-empty";
+    div.textContent = "No downloads match this filter.";
+    list.appendChild(div);
+    return;
+  }
+
+  ordered.forEach(item => list.appendChild(renderRow(item)));
+  updateQueuePositionLabel();
+}
+
+function renderRow(item) {
+  const el = document.createElement("div");
+  el.className = "dl-row state-" + item.state;
+  el.dataset.id = item.id;
+
+  const tagBg    = item.tool === "yt-dlp" ? "var(--pink-dim)" : "var(--blue-dim)";
+  const tagColor = item.tool === "yt-dlp" ? "var(--pink)"     : "var(--blue)";
+  const shortUrl = (item.url || "").replace(/^https?:\/\/(www\.)?/, "");
+  const displayName = item.filename || shortUrl;
+  const playable = (item.files || []).filter(f => isPlayable(f.name));
+
+  let host = item.url;
+  try { host = new URL(item.url).hostname.replace(/^www\./, ""); } catch {}
+
+  let metaHtml = "";
+  if (item.state === "pending") {
+    metaHtml = '<div class="dl-meta"><span>Waiting</span></div>';
+  } else if (item.state === "done") {
+    metaHtml = '<div class="dl-meta"><span>' + fmtDate(item.finishedAt) + '</span><span class="sep">·</span><span>' + fmtBytes(item.sizeBytes) + '</span><span class="sep">·</span><span title="' + escHtml(item.url) + '">' + escHtml(host) + '</span></div>';
+  } else if (item.state === "error") {
+    metaHtml = '<div class="dl-meta err" title="' + escHtml(item.error || "") + '">' + escHtml(friendlyError(item.error)) + '</div>';
+  } else if (item.state === "cancelled") {
+    metaHtml = '<div class="dl-meta"><span>Cancelled</span></div>';
+  }
+
+  const top = document.createElement("div");
+  top.className = "dl-top";
+  top.innerHTML =
+    '<div class="dl-dot ' + item.state + '"></div>' +
+    '<div class="dl-info"><div class="dl-name" title="' + escHtml(item.url) + '">' + escHtml(displayName) + '</div>' + metaHtml + '</div>' +
+    '<div class="dl-tag" style="background:' + tagBg + ';color:' + tagColor + '">' + toolLabel(item.tool) + '</div>';
+  el.appendChild(top);
+
+  // actions row (compact rows only — the active row gets its own controls below)
+  if (item.state !== "running" && item.state !== "paused") {
+    const acts = document.createElement("div");
+    acts.style.cssText = "display:flex;justify-content:flex-end;flex-wrap:wrap;gap:4px;";
+
+    if (playable.length) {
+      const b = document.createElement("button");
+      b.className = "dl-btn open"; b.textContent = "▶ Play";
+      b.onclick = () => playDownloadItem(item.id);
+      acts.appendChild(b);
+    }
+    if (shouldShowGallery(item)) {
+      const b = document.createElement("button");
+      b.className = "dl-btn open"; b.textContent = "🖼 Gallery";
+      b.onclick = () => openGallery(item.id);
+      acts.appendChild(b);
+    }
+    if (item.state === "done" && item.outputDir && window.pywebview?.api) {
+      const b = document.createElement("button");
+      b.className = "dl-btn"; b.textContent = "Folder";
+      b.onclick = () => openFolder(item.id);
+      acts.appendChild(b);
+    }
+    if (item.state === "done") {
+      const b = document.createElement("button");
+      b.className = "dl-btn retry"; b.textContent = "⟳ Redownload";
+      b.title = "Download this link again";
+      b.onclick = () => retryDownload(item.id);
+      acts.appendChild(b);
+    }
+    if (item.state === "error" || item.state === "cancelled") {
+      const b = document.createElement("button");
+      b.className = "dl-btn retry"; b.textContent = "Retry";
+      b.onclick = () => retryDownload(item.id);
+      acts.appendChild(b);
+    }
+    const rm = document.createElement("button");
+    rm.className = "dl-btn rm"; rm.textContent = "✕";
+    rm.onclick = () => item.state === "pending" ? removeDownload(item.id) : deleteDownload(item.id);
+    acts.appendChild(rm);
+
+    if (acts.children.length) el.appendChild(acts);
+    return el;
+  }
+
+  // ── expanded active card (running / paused) ──
+  const prog = document.createElement("div");
+  prog.className = "dl-progress";
+  prog.innerHTML =
+    '<div class="bar-track"><div class="bar-fill" id="active-bar-fill"></div></div>' +
+    '<div class="dl-progress-row">' +
+      '<span class="dl-file" id="active-prog-file"></span>' +
+      '<div class="dl-progress-meta">' +
+        '<span id="active-prog-cnt"></span>' +
+        '<span id="active-prog-speed"></span>' +
+        '<span id="active-prog-eta"></span>' +
+        '<span id="dl-progress-queue"></span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="dl-ctrl">' +
+      '<button class="btn-sm" id="btn-pause" onclick="onPauseClick()">⏸ Pause</button>' +
+      '<button class="btn-sm danger" id="btn-cancel" onclick="onCancelClick()">⏹ Cancel</button>' +
+      '<button class="btn-sm disclosure-btn" id="btn-toggle-logs" onclick="toggleLogs()" style="margin-left:auto;">Show logs</button>' +
+      '<button class="btn-sm disclosure-btn" id="btn-toggle-cmd" onclick="toggleCmd()">View command</button>' +
+    '</div>' +
+    '<div class="cmd-text" id="active-cmd-text" style="display:none"></div>' +
+    '<div class="log-box" id="active-log-box" style="display:none"></div>';
+  el.appendChild(prog);
+  return el;
+}
+
+let showLogsOn = false;
+let showCmdOn  = false;
+function toggleLogs() {
+  showLogsOn = !showLogsOn;
+  const box = $("active-log-box");
+  if (box) box.style.display = showLogsOn ? "block" : "none";
+  const btn = $("btn-toggle-logs");
+  if (btn) btn.textContent = showLogsOn ? "Hide logs" : "Show logs";
+}
+function toggleCmd() {
+  showCmdOn = !showCmdOn;
+  const box = $("active-cmd-text");
+  if (box) box.style.display = showCmdOn ? "block" : "none";
+  const btn = $("btn-toggle-cmd");
+  if (btn) btn.textContent = showCmdOn ? "Hide command" : "View command";
+}
+
+// ─────────────────────────────────────────────
+// API READINESS
+// ─────────────────────────────────────────────
+function waitForApi(ms = 3000) {
+  if (window.pywebview?.api?.start_download_async) return Promise.resolve(window.pywebview.api);
+  return new Promise(resolve => {
+    const t0 = Date.now();
+    const id = setInterval(() => {
+      if (window.pywebview?.api?.start_download_async) { clearInterval(id); resolve(window.pywebview.api); }
+      else if (Date.now() - t0 > ms)                  { clearInterval(id); resolve(null); }
+    }, 50);
+  });
+}
+
+// ─────────────────────────────────────────────
+// RUN
+// ─────────────────────────────────────────────
+async function runNext() {
+  if (isRunning) return;
+  const item = downloads.find(i => i.state === "pending");
+  if (!item) return;
+
+  const api = await waitForApi(3000);
+  if (!api) { showToast("No download backend — copy the command to run manually", false); return; }
+
+  isRunning      = true;
+  item.state     = "running";
+  item.startedAt = Date.now();
+  updatePrimaryButton();
+  renderDownloads();
+
+  const { tool, cmd } = buildCmd(item.url, item.cfg, item.toolOverride);
+  lastCmd = cmd;
+  lastCLI = buildCLIArgs(item.url, item.cfg, item.toolOverride);
+  lastHasPwd = !!item.cfg.password;
+  const cmdBox = $("active-cmd-text");
+  if (cmdBox) cmdBox.innerHTML = highlightCmd(cmd, tool);
+
+  jobPaused    = false;
+  jobStartTime = Date.now();
+  clearInterval(elapsedTimer);
+  elapsedTimer = setInterval(updateElapsed, 1000);
+
+  try {
+    const res = await api.start_download_async(item.url, item.cfg, item.toolOverride || "");
+    if (!res?.ok) { finishItem(item, false, res?.error || "Failed to start"); return; }
+    item.jobId   = res.job_id;
+    currentJobId = res.job_id;
+  } catch (e) {
+    finishItem(item, false, String(e));
+  }
+}
+
+function finishItem(item, ok, error, historyId) {
+  isRunning       = false;
+  currentJobId    = null;
+  item.finishedAt = Date.now();
+  item.historyId  = historyId || item.historyId;
+  clearInterval(elapsedTimer);
+  updatePrimaryButton();
+
+  if (ok) {
+    item.state = "done";
+    sessionDone++;
+    sessionFiles += item.itemsDone;
+    if (!item.filename) {
+      item.filename = item.files.length === 1 ? item.files[0].name
+        : item.files.length > 1 ? item.files.length + " files" : "";
+    }
+    item.sizeBytes = (item.files || []).reduce((sum, f) => sum + (f.size || 0), 0);
+    showToast("Done · saved to " + (item.outputDir || "output folder"));
+    if (window.pywebview?.api?.notify) {
+      window.pywebview.api.notify("Download complete", item.url.replace(/^https?:\/\//,"").slice(0,60));
+    }
+  } else if (error === "Cancelled by user.") {
+    item.state = "cancelled";
+    showToast("Cancelled");
+  } else {
+    item.state = "error";
+    item.error = error || "Unknown error";
+    showToast(friendlyError(item.error), false);
+  }
+
+  updateSessionStats();
+  renderDownloads();
+
+  if (downloads.some(i => i.state === "pending")) {
+    setTimeout(runNext, 600);
+  } else {
+    const done   = downloads.filter(i => i.state === "done").length;
+    const failed = downloads.filter(i => i.state === "error").length;
+    if (done + failed > 1 && window.pywebview?.api?.notify) {
+      window.pywebview.api.notify("Queue finished", done + " done" + (failed ? ", " + failed + " failed" : ""));
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
+// PROGRESS CALLBACKS  (called from Python)
+// ─────────────────────────────────────────────
+window.onDownloadLine = function(jobId, line) {
+  if (jobId !== currentJobId) return;
+  const lb = $("active-log-box");
+  if (!lb) return;
+  lb.textContent += line + "\n";
+  lb.scrollTop = lb.scrollHeight;
+};
+
+window.onDownloadProgress = function(jobId, itemsDone, limit, currentFile, percent, speed, eta) {
+  if (jobId !== currentJobId) return;
+  const item = downloads.find(i => i.jobId === jobId);
+  if (item) { item.itemsDone = itemsDone; item.limit = limit; }
+
+  const fill = $("active-bar-fill");
+  if (!fill) return; // active card not in the DOM this tick (filtered out) — state still tracked on the item
+  if (percent > 0) {
+    fill.style.width = Math.min(100, percent) + "%";
+    fill.classList.remove("ind");
+    $("active-prog-cnt").textContent = limit > 0 ? itemsDone + " / " + limit : Math.round(percent) + "%";
+  } else if (limit > 0) {
+    fill.style.width = Math.min(100, Math.round(itemsDone / limit * 100)) + "%";
+    fill.classList.remove("ind");
+    $("active-prog-cnt").textContent = itemsDone + " / " + limit;
+  } else {
+    fill.classList.add("ind");
+    $("active-prog-cnt").textContent = itemsDone > 0 ? itemsDone + " files" : "";
+  }
+  if (currentFile) $("active-prog-file").textContent = currentFile;
+  $("active-prog-speed").textContent = speed ? "↓ " + speed : "";
+  $("active-prog-eta").textContent   = eta   ? "ETA " + eta  : "";
+  updateQueuePositionLabel();
+};
+
+window.onDownloadDone = function(jobId, ok, error, outputDir, files, historyId) {
+  if (jobId !== currentJobId) return;
+  const item = downloads.find(i => i.jobId === jobId);
+  if (item) { item.outputDir = outputDir || item.outputDir; item.files = files || []; }
+  finishItem(item, ok, error, historyId);
+};
+
+function updateElapsed() {
+  // reserved for a future "elapsed" readout; kept as a no-op hook so
+  // enabling it later doesn't require touching the run()/finishItem() wiring
+}
+
+// ─────────────────────────────────────────────
+// PAUSE / CANCEL
+// ─────────────────────────────────────────────
+async function onPauseClick() {
+  if (!currentJobId || !window.pywebview?.api) return;
+  const action = jobPaused ? "resume_download" : "pause_download";
+  const res = await window.pywebview.api[action](currentJobId);
+  if (!res?.ok) { showToast(res?.error || "Action failed", false); return; }
+  jobPaused = !jobPaused;
+  const btn = $("btn-pause");
+  if (btn) btn.innerHTML = jobPaused ? "▶ Resume" : "⏸ Pause";
+  const item = downloads.find(i => i.jobId === currentJobId);
+  if (item) { item.state = jobPaused ? "paused" : "running"; renderDownloads(); }
+}
+async function onCancelClick() {
+  if (!currentJobId || !window.pywebview?.api) return;
+  const res = await window.pywebview.api.cancel_download(currentJobId);
+  if (!res?.ok) showToast(res?.error || "Cancel failed", false);
+  jobPaused = false;
+}
+
+// ─────────────────────────────────────────────
+// RESET (input card only — does not touch the downloads list)
+// ─────────────────────────────────────────────
+function resetInputs() {
+  $("main-input").value      = "";
+  $("output-input").value    = "~/Downloads/media";
+  $("limit-input").value     = "0";
+  $("format-select").value   = "auto";
+  $("tool-select").value     = "auto";
+  $("sleep-input").value     = "2";
+  $("cookies-select").value  = "";
+  $("username-input").value  = "";
+  $("password-input").value  = "";
+  $("filename-input").value  = "";
+  $("sched-input").value     = "";
+  document.querySelectorAll(".tog.on").forEach(el => { el.classList.remove("on"); el.setAttribute("aria-checked","false"); });
+  $("dryrun-bar").classList.remove("show");
+  cancelScheduler();
+  updateInputMode();
+  showToast("Reset");
+}
+
+// ─────────────────────────────────────────────
+// SEARCH
+// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// SEARCH AUTOCOMPLETE — suggestions drawn from the user's own past
+// searches (persisted server-side), never shown for link input. Disabled
+// entirely in link mode via the isLikelyUrl() check in updateAutocomplete().
+// ─────────────────────────────────────────────
+async function loadRecentSearches() {
+  if (!window.pywebview?.api?.get_recent_searches) return;
+  try {
+    const res = await window.pywebview.api.get_recent_searches();
+    if (res?.ok) recentSearches = res.queries || [];
+  } catch {}
+}
+
+// Optimistic local update so a just-run search shows up as a suggestion
+// immediately, without waiting on a round trip back to Python (the
+// backend records it independently too, for next launch's autocomplete).
+function rememberSearch(query) {
+  query = (query || "").trim();
+  if (!query) return;
+  recentSearches = [query, ...recentSearches.filter(s => s.toLowerCase() !== query.toLowerCase())].slice(0, 30);
+}
+
+function updateAutocomplete() {
+  const raw = $("main-input").value;
+  const dd = $("autocomplete-dropdown");
+
+  // Disabled entirely for URLs/empty input — only ever shown for search queries.
+  if (!raw.trim() || isLikelyUrl(raw)) { hideAutocomplete(); return; }
+
+  const q = raw.trim().toLowerCase();
+  const startsWith = recentSearches.filter(s => s.toLowerCase() !== q && s.toLowerCase().startsWith(q));
+  const contains   = recentSearches.filter(s => s.toLowerCase() !== q && !s.toLowerCase().startsWith(q) && s.toLowerCase().includes(q));
+  autocompleteMatches = [...startsWith, ...contains].slice(0, 8);
+  autocompleteIndex = -1;
+
+  if (!autocompleteMatches.length) { hideAutocomplete(); return; }
+
+  dd.innerHTML = autocompleteMatches.map((s, i) =>
+    '<div class="autocomplete-item" data-idx="' + i + '">' +
+      '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>' +
+      '<span>' + escHtml(s) + '</span>' +
+    '</div>'
+  ).join("");
+  dd.querySelectorAll(".autocomplete-item").forEach(el => {
+    el.addEventListener("mousedown", e => e.preventDefault()); // don't steal input focus on click
+    el.addEventListener("click", () => selectAutocomplete(parseInt(el.dataset.idx)));
+  });
+  dd.style.display = "block";
+}
+
+function hideAutocomplete() {
+  $("autocomplete-dropdown").style.display = "none";
+  $("autocomplete-dropdown").innerHTML = "";
+  autocompleteMatches = [];
+  autocompleteIndex = -1;
+}
+
+function highlightAutocomplete(idx) {
+  const items = document.querySelectorAll("#autocomplete-dropdown .autocomplete-item");
+  items.forEach(el => el.classList.remove("hl"));
+  if (idx >= 0 && items[idx]) { items[idx].classList.add("hl"); items[idx].scrollIntoView({ block: "nearest" }); }
+}
+
+function selectAutocomplete(idx) {
+  const val = autocompleteMatches[idx];
+  if (val === undefined) return;
+  $("main-input").value = val;
+  hideAutocomplete();
+  updateInputMode();
+  doSearch(val);
+}
+
+document.addEventListener("click", e => {
+  if (!e.target.closest(".input-row-wrap")) hideAutocomplete();
+});
+
+async function doSearch(query) {
+  hideAutocomplete();
+  rememberSearch(query);
+  const limit = parseInt($("search-limit").value) || 12;
+  sectionMode = "search";
+  $("search-section").classList.add("show");
+  $("search-section-title").textContent = 'Results for "' + query + '"';
+  $("search-result-count").textContent = "";
+  showSkeletons(limit);
+
+  if (!window.pywebview?.api?.search) {
+    showSearchError("Media Downloader app must be running to search");
+    return;
+  }
+  try {
+    await window.pywebview.api.search(query, limit);
+  } catch (e) {
+    showSearchError("Search failed: " + e);
+  }
+}
+
+function clearSearchResults() {
+  $("search-section").classList.remove("show");
+  $("search-results").innerHTML = "";
+  $("search-section-title").textContent = "Results";
+  $("search-result-count").textContent = "";
+  sectionMode = null;
+}
+
+window.onSearchResults = function(results, query) {
+  if (!results || results.length === 0) {
+    showSearchError(`No results found for "${query}"`);
+    return;
+  }
+  $("search-result-count").textContent = results.length + " results";
+  renderSearchResults(results);
+};
+window.onSearchError = function(msg) { showSearchError(msg); };
+
+function showSkeletons(count) {
+  const grid = document.createElement("div");
+  grid.className = "search-grid";
+  for (let i = 0; i < count; i++) {
+    grid.innerHTML += `
+      <div class="sr-skeleton">
+        <div class="sk-thumb"></div>
+        <div class="sk-line" style="width:90%"></div>
+        <div class="sk-line short"></div>
+        <div class="sk-line" style="width:40%;margin-bottom:10px"></div>
+      </div>`;
+  }
+  const container = $("search-results");
+  container.innerHTML = "";
+  container.appendChild(grid);
+}
+function showSearchError(msg) {
+  sectionMode = "search";
+  $("search-results").innerHTML = `
+    <div class="search-empty">
+      <svg width="40" height="40" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/>
+      </svg>
+      ${escHtml(msg)}
+    </div>`;
+}
+function renderSearchResults(results) {
+  sectionMode = "search";
+  const grid = document.createElement("div");
+  grid.className = "search-grid";
+  results.forEach(r => {
+    const card = document.createElement("div");
+    card.className = "sr-card";
+    card.innerHTML = `
+      <div class="sr-thumb-wrap">
+        <img class="sr-thumb" src="${escHtml(r.thumbnail)}" alt="" loading="lazy" onerror="this.style.background='var(--s3)'">
+        ${r.duration ? `<span class="sr-duration">${fmtDuration(r.duration)}</span>` : ""}
+      </div>
+      <div class="sr-info">
+        <div class="sr-title" title="${escHtml(r.title)}">${escHtml(r.title)}</div>
+        <div class="sr-channel">${escHtml(r.channel)}</div>
+        ${r.views ? `<div class="sr-meta">${fmtViews(r.views)}</div>` : ""}
+      </div>
+      <div class="sr-fmt-row">
+        <select class="inp sel sr-fmt-select">
+          <option value="mp4" selected>Video · mp4</option>
+          <option value="m4a">Audio · m4a</option>
+          <option value="mp3">Audio · mp3</option>
+          <option value="best">Best quality</option>
+        </select>
+      </div>
+      <button class="sr-add-btn" data-url="${escHtml(r.url)}" data-title="${escHtml(r.title)}">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a1 1 0 0 1 1 1v4h4a1 1 0 1 1 0 2H9v4a1 1 0 1 1-2 0V9H3a1 1 0 1 1 0-2h4V3a1 1 0 0 1 1-1z"/></svg>
+        Add
+      </button>`;
+
+    // Selecting a format shouldn't bubble up and trigger the whole-card
+    // click-to-add handler below.
+    const fmtSelect = card.querySelector(".sr-fmt-select");
+    fmtSelect.addEventListener("click", e => e.stopPropagation());
+    fmtSelect.addEventListener("mousedown", e => e.stopPropagation());
+
+    card.querySelector(".sr-add-btn").addEventListener("click", function(e) {
+      e.stopPropagation();
+      queueSearchResult(this.dataset.url, this.dataset.title, this, fmtSelect.value);
+    });
+    card.addEventListener("click", function() {
+      const btn = this.querySelector(".sr-add-btn");
+      queueSearchResult(btn.dataset.url, btn.dataset.title, btn, fmtSelect.value);
+    });
+    grid.appendChild(card);
+  });
+  const container = $("search-results");
+  container.innerHTML = "";
+  container.appendChild(grid);
+}
+function queueSearchResult(url, title, btn, format) {
+  if (btn.classList.contains("added")) return;
+  const cfg = readCfg();
+  cfg.format = format || cfg.format;
+  addDownload(url, cfg);
+  btn.classList.add("added");
+  btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M13.7 4.3a1 1 0 0 0-1.4 0L6 10.6 3.7 8.3a1 1 0 0 0-1.4 1.4l3 3a1 1 0 0 0 1.4 0l7-7a1 1 0 0 0 0-1.4z"/></svg> Added`;
+}
+
+// ─────────────────────────────────────────────
+// DOWNLOAD HISTORY  (seed the unified list once at startup)
+// ─────────────────────────────────────────────
+let historyLoaded = false;
+async function loadInitialHistory() {
+  if (historyLoaded || !window.pywebview?.api?.list_history) return;
+  historyLoaded = true;
+  try {
+    const res = await window.pywebview.api.list_history();
+    if (!res?.ok) return;
+    const seeded = (res.entries || []).map(entry => ({
+      id: entry.id, historyId: entry.id,
+      url: entry.url, tool: entry.tool || "gallery-dl",
+      cfg: { output: entry.output_dir }, toolOverride: null,
+      state: entry.status === "done" ? "done" : entry.status === "cancelled" ? "cancelled" : "error",
+      jobId: null, outputDir: entry.output_dir, itemsDone: (entry.files || []).length,
+      limit: 0, files: entry.files || [], filename: entry.filename || "",
+      sizeBytes: entry.size_bytes || 0, error: entry.error || "",
+      startedAt: (entry.started_at || 0) * 1000, finishedAt: (entry.finished_at || 0) * 1000,
+    }));
+    downloads = [...downloads, ...seeded];
+    renderDownloads();
+  } catch {}
+}
+
+// ─────────────────────────────────────────────
+// BUILT-IN MEDIA PLAYER
+// ─────────────────────────────────────────────
+const MP_ICON_PLAY  = '<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l11 6-11 6V2z"/></svg>';
+const MP_ICON_PAUSE  = '<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="2" width="4" height="12" rx="1"/><rect x="9" y="2" width="4" height="12" rx="1"/></svg>';
+const MP_ICON_PREV = '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="2" width="2" height="12" rx="1"/><path d="M13 3v10L5 8l8-5z"/></svg>';
+const MP_ICON_NEXT = '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><rect x="11" y="2" width="2" height="12" rx="1"/><path d="M3 3v10l8-5-8-5z"/></svg>';
+const MP_ICON_VOL   = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h2.5L9 2.5v11L4.5 10H2V6z" fill="currentColor" stroke="none"/><path d="M11.3 5.5a3.3 3.3 0 0 1 0 5"/></svg>';
+const MP_ICON_MUTE  = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h2.5L9 2.5v11L4.5 10H2V6z" fill="currentColor" stroke="none"/><path d="M11.5 6.2l3 3M14.5 6.2l-3 3"/></svg>';
+const MP_ICON_NOTE  = '<svg width="34" height="34" viewBox="0 0 16 16" fill="#fff"><path d="M6 3v7.17A2.5 2.5 0 1 0 7 12V5.7l5-1.1V9.2a2.5 2.5 0 1 0 1 2V2L6 3z"/></svg>';
+const MP_ICON_FULLSCREEN      = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+const MP_ICON_FULLSCREEN_EXIT = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v4H2M10 6h4V2M10 10h4v4M6 10H2v4"/></svg>';
+
+// Generic fullscreen toggle — used by both the player's control bar and
+// the lightbox chrome. Targets a whole container (not just the bare
+// <video>) so our own custom controls stay visible/usable in fullscreen,
+// instead of being replaced by the browser's native video fullscreen UI.
+function toggleFullscreen(el) {
+  if (!el) return;
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+  }
+}
+// The currently-active media element for audio/video, whichever surface
+// it's playing on (the standalone player or a lightbox video) — this is
+// what the global keyboard shortcuts (Space/seek/volume) act on.
+let mpCurrentMediaEl = null;
+let mpCurrentFile    = null; // {name, path} of whatever mpCurrentMediaEl is playing — used by the mini player
+let mpCoverArtUrl    = null; // extracted embedded cover art for the current audio track, if any
+
+function mpFmtTime(t) {
+  if (!isFinite(t) || t < 0) return "0:00";
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return m + ":" + String(s).padStart(2, "0");
+}
+
+// Single shared seek-drag state for whichever control bar is currently
+// being dragged, with ONE set of window-level listeners set up once below
+// — rather than each buildPlayerControls() call adding its own that would
+// otherwise outlive that particular control bar and leak across track switches.
+let mpActiveSeek = null; // {track, fill, handle, mediaEl, curEl}
+function mpSeekTo(seek, clientX) {
+  if (!seek.mediaEl.duration) return;
+  const rect = seek.track.getBoundingClientRect();
+  const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+  seek.mediaEl.currentTime = pct * seek.mediaEl.duration;
+  seek.fill.style.width = (pct * 100) + "%";
+  seek.handle.style.left = (pct * 100) + "%";
+  seek.curEl.textContent = mpFmtTime(seek.mediaEl.currentTime);
+}
+window.addEventListener("mousemove", e => { if (mpActiveSeek) mpSeekTo(mpActiveSeek, e.clientX); });
+window.addEventListener("mouseup", () => {
+  if (mpActiveSeek) mpActiveSeek.track.classList.remove("seeking");
+  mpActiveSeek = null;
+});
+
+// Builds the custom control bar for a given <audio>/<video> element and
+// wires it up. Kept separate from the video/audio element itself so both
+// share identical-looking controls regardless of media type.
+//
+// onFatalError(msg), if given, is called when the media element itself
+// reports a real playback error (bad codec, corrupt file, lost network
+// mid-stream, etc) — previously nothing surfaced this at all, so a failed
+// load just looked like a frozen, silently-broken player.
+function buildPlayerControls(mediaEl, onFatalError, onEnded, onPrev, onNext) {
+  const bar = document.createElement("div");
+  bar.className = "mp-controls";
+  bar.innerHTML =
+    '<button class="mp-btn mp-prev" title="Previous">' + MP_ICON_PREV + '</button>' +
+    '<button class="mp-btn mp-playpause" title="Play/Pause (Space)">' + MP_ICON_PLAY + '</button>' +
+    '<button class="mp-btn mp-next" title="Next">' + MP_ICON_NEXT + '</button>' +
+    '<span class="mp-time mp-time-current">0:00</span>' +
+    '<div class="mp-seek-track"><div class="mp-seek-fill"></div><div class="mp-seek-handle"></div></div>' +
+    '<span class="mp-time mp-time-duration">0:00</span>' +
+    '<div class="mp-vol-wrap">' +
+      '<button class="mp-vol-btn" title="Mute">' + MP_ICON_VOL + '</button>' +
+      '<input type="range" class="mp-volume" min="0" max="1" step="0.01" value="1">' +
+    '</div>' +
+    '<select class="mp-speed-select" title="Playback speed">' +
+      '<option value="0.5">0.5x</option><option value="1" selected>1x</option>' +
+      '<option value="1.5">1.5x</option><option value="2">2x</option>' +
+    '</select>' +
+    '<button class="mp-btn mp-fullscreen-btn" title="Fullscreen" style="width:28px;height:28px;background:var(--s2);color:var(--t2);">' + MP_ICON_FULLSCREEN + '</button>';
+
+  const prevBtn  = bar.querySelector(".mp-prev");
+  const playBtn  = bar.querySelector(".mp-playpause");
+  const nextBtn  = bar.querySelector(".mp-next");
+  const curEl    = bar.querySelector(".mp-time-current");
+  const durEl    = bar.querySelector(".mp-time-duration");
+  const track    = bar.querySelector(".mp-seek-track");
+  const fill     = bar.querySelector(".mp-seek-fill");
+  const handle   = bar.querySelector(".mp-seek-handle");
+  const volBtn   = bar.querySelector(".mp-vol-btn");
+  const volIn    = bar.querySelector(".mp-volume");
+  const speedEl  = bar.querySelector(".mp-speed-select");
+  const fsBtn    = bar.querySelector(".mp-fullscreen-btn");
+
+  function updateProgress() {
+    if (!mediaEl.duration) return;
+    const pct = Math.min(100, (mediaEl.currentTime / mediaEl.duration) * 100);
+    fill.style.width = pct + "%";
+    handle.style.left = pct + "%";
+    curEl.textContent = mpFmtTime(mediaEl.currentTime);
+  }
+  mediaEl.addEventListener("timeupdate", updateProgress);
+  mediaEl.addEventListener("loadedmetadata", () => { durEl.textContent = mpFmtTime(mediaEl.duration); updateProgress(); });
+  mediaEl.addEventListener("play",  () => { playBtn.innerHTML = MP_ICON_PAUSE; bar.dispatchEvent(new CustomEvent("mp-play")); });
+  mediaEl.addEventListener("pause", () => { playBtn.innerHTML = MP_ICON_PLAY; bar.dispatchEvent(new CustomEvent("mp-pause")); });
+  mediaEl.addEventListener("ended", () => { playBtn.innerHTML = MP_ICON_PLAY; bar.dispatchEvent(new CustomEvent("mp-pause")); onEnded?.(); });
+
+  // Real playback failures (bad codec, corrupt file, network drop mid-stream)
+  // — surfaced clearly instead of failing silently.
+  mediaEl.addEventListener("error", () => {
+    const codeNames = { 1: "cancelled", 2: "a network error", 3: "a decode error", 4: "an unsupported format" };
+    const code = mediaEl.error ? mediaEl.error.code : 0;
+    onFatalError?.("Couldn't play this file" + (codeNames[code] ? ` (${codeNames[code]})` : ""));
+  });
+
+  function safePlay() {
+    mediaEl.play()?.catch(err => {
+      // NotAllowedError = autoplay was blocked (needs a user gesture) —
+      // totally normal, not a failure; just leave it paused, the visible
+      // Play button still works fine. AbortError = a newer load()
+      // interrupted this one (e.g. switching tracks quickly) — also
+      // harmless. Anything else is a real problem worth surfacing.
+      if (err && err.name !== "NotAllowedError" && err.name !== "AbortError") {
+        onFatalError?.("Couldn't start playback");
+      }
+    });
+  }
+  playBtn.addEventListener("click", () => { mediaEl.paused ? safePlay() : mediaEl.pause(); });
+  prevBtn.addEventListener("click", () => onPrev?.());
+  nextBtn.addEventListener("click", () => onNext?.());
+  prevBtn.disabled = !onPrev || mpPlaylistIndex <= 0;
+  nextBtn.disabled = !onNext || mpPlaylistIndex < 0 || mpPlaylistIndex >= playerFiles.length - 1;
+
+  const seekState = { track, fill, handle, mediaEl, curEl };
+  track.addEventListener("mousedown", e => {
+    mpActiveSeek = seekState;
+    track.classList.add("seeking");
+    mpSeekTo(seekState, e.clientX);
+  });
+
+  // Volume UI is driven entirely by the media element's own 'volumechange'
+  // event rather than duplicated bookkeeping in each control's handler —
+  // that way slider drags, the mute button, AND keyboard shortcuts (↑/↓)
+  // all stay in sync automatically regardless of which one changed it.
+  mediaEl.addEventListener("volumechange", () => {
+    mpVolumeLevel = mediaEl.muted ? 0 : parseFloat(mediaEl.volume || 0);
+    mpVolumeMuted = mediaEl.muted;
+    volIn.value = mediaEl.muted ? 0 : mediaEl.volume;
+    volBtn.innerHTML = (mediaEl.muted || mediaEl.volume === 0) ? MP_ICON_MUTE : MP_ICON_VOL;
+  });
+  volBtn.addEventListener("click", () => {
+    mediaEl.muted = !mediaEl.muted;
+    mpVolumeLevel = mediaEl.muted ? 0 : parseFloat(mediaEl.volume || mpVolumeLevel);
+    mpVolumeMuted = mediaEl.muted;
+  });
+  volIn.addEventListener("input", () => {
+    const nextVolume = parseFloat(volIn.value);
+    mediaEl.muted = false;
+    mediaEl.volume = nextVolume;
+    mpVolumeLevel = nextVolume;
+    mpVolumeMuted = false;
+  });
+
+  speedEl.addEventListener("change", () => { mediaEl.playbackRate = parseFloat(speedEl.value); });
+
+  fsBtn.addEventListener("click", () => toggleFullscreen(bar.closest(".mp-player")));
+  document.addEventListener("fullscreenchange", () => {
+    const active = document.fullscreenElement && bar.closest(".mp-player") === document.fullscreenElement;
+    fsBtn.innerHTML = active ? MP_ICON_FULLSCREEN_EXIT : MP_ICON_FULLSCREEN;
+  });
+
+  safePlay();
+  return bar;
+}
+
+let playerFiles = [];
+let mpPlaylistIndex = -1; // which entry in playerFiles is currently active — shared by the full player's playlist and the mini player's Prev/Next
+let mpVolumeLevel = 1;
+let mpVolumeMuted = false;
+
+async function openPlayer(files, title) {
+  hideMiniPlayer();
+  playerFiles = files;
+  $("player-title").textContent = title || "Now playing";
+  $("player-overlay").classList.add("show");
+  renderPlaylist();
+  if (files.length) await playPlaylistIndex(0);
+}
+function renderPlaylist() {
+  const wrap = $("player-playlist");
+  wrap.innerHTML = "";
+  if (playerFiles.length <= 1) return;
+  playerFiles.forEach((f, i) => {
+    const btn = document.createElement("button");
+    btn.className = "player-playlist-btn" + (i === 0 ? " active" : "");
+    btn.textContent = f.name;
+    btn.onclick = () => playPlaylistIndex(i);
+    wrap.appendChild(btn);
+  });
+}
+// Single entry point for switching tracks — used by the full player's
+// playlist buttons AND the mini player's Previous/Next, so both surfaces
+// always agree on which track is active regardless of which one you use.
+async function playPlaylistIndex(i) {
+  if (i < 0 || i >= playerFiles.length) return;
+  mpPlaylistIndex = i;
+  $("player-playlist").querySelectorAll(".player-playlist-btn").forEach((b, idx) => b.classList.toggle("active", idx === i));
+  await playMediaFile(playerFiles[i]);
+  updateMiniPlayer();
+}
+function miniPlayerPrev(e) { e.stopPropagation(); playPlaylistIndex(mpPlaylistIndex - 1); }
+function miniPlayerNext(e) { e.stopPropagation(); playPlaylistIndex(mpPlaylistIndex + 1); }
+async function playMediaFile(file) {
+  const wrap = $("player-media-wrap");
+  if (!window.pywebview?.api?.get_media_url) {
+    wrap.innerHTML = '<div class="player-media-msg">The desktop app must be running to play files.</div>';
+    return;
+  }
+  wrap.innerHTML = '<div class="player-media-msg">Loading…</div>';
+  const res = await window.pywebview.api.get_media_url(file.path);
+  if (!res?.ok) {
+    wrap.innerHTML = '<div class="player-media-msg" style="color:var(--red)">' + escHtml(res?.error || "Couldn't load this file") + '</div>';
+    return;
+  }
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  const isAudio = AUDIO_EXT.includes(ext);
+
+  wrap.innerHTML = "";
+  mpActiveSeek = null;
+  const player = document.createElement("div");
+  player.className = "mp-player";
+
+  const mediaEl = document.createElement(isAudio ? "audio" : "video");
+  mediaEl.controls = false;   // custom controls replace the native ones
+  mediaEl.src = res.url;
+  mediaEl.volume = mpVolumeLevel;
+  mediaEl.muted = mpVolumeMuted;
+  mpCurrentMediaEl = mediaEl;
+  mpCurrentFile = file;
+  mpCoverArtUrl = null;
+
+  const onFatalError = msg => {
+    wrap.innerHTML = '<div class="player-media-msg" style="color:var(--red)">' + escHtml(msg) + '</div>';
+    if (mpCurrentMediaEl === mediaEl) mpCurrentMediaEl = null;
+  };
+
+  // Auto-advance to the next track in the same album/download batch —
+  // playerFiles/mpPlaylistIndex already preserve download order (files
+  // are recorded in the order the backend reports them completing, which
+  // matches yt-dlp's own sequential playlist processing), so this just
+  // needs to walk that same order forward. No-ops on the last track
+  // (plays through and stops normally) or a single-file download.
+  const onEnded = () => {
+    if (mpCurrentMediaEl !== mediaEl) return; // stale — a different track already took over
+    if (mpPlaylistIndex >= 0 && mpPlaylistIndex < playerFiles.length - 1) {
+      playPlaylistIndex(mpPlaylistIndex + 1);
+    }
+  };
+
+  const onPrev = () => {
+    if (mpPlaylistIndex > 0) playPlaylistIndex(mpPlaylistIndex - 1);
+  };
+  const onNext = () => {
+    if (mpPlaylistIndex >= 0 && mpPlaylistIndex < playerFiles.length - 1) playPlaylistIndex(mpPlaylistIndex + 1);
+  };
+
+  if (isAudio) {
+    const visual = document.createElement("div");
+    visual.className = "mp-audio-visual";
+    const disc = document.createElement("div");
+    disc.className = "mp-audio-disc";
+    disc.innerHTML = MP_ICON_NOTE;
+    visual.appendChild(disc);
+    mediaEl.style.display = "none"; // no visual surface of its own — the disc above is it
+    player.appendChild(visual);
+    player.appendChild(mediaEl);
+    wrap.appendChild(player); // in the DOM before buildPlayerControls calls safePlay()/wires fullscreen
+
+    const controls = buildPlayerControls(mediaEl, onFatalError, onEnded, onPrev, onNext);
+    controls.addEventListener("mp-play",  () => { disc.classList.add("playing"); updateMiniPlayer(); });
+    controls.addEventListener("mp-pause", () => { disc.classList.remove("playing"); updateMiniPlayer(); });
+    player.appendChild(controls);
+
+    // Real embedded cover art (mp3 ID3 APIC / m4a covr atom), extracted
+    // via the already-bundled ffmpeg — falls back to the generic note
+    // icon above when there's genuinely none, which is the common case
+    // for anything that wasn't downloaded as mp3/m4a with thumbnail embedding.
+    if (window.pywebview?.api?.get_cover_art_url) {
+      window.pywebview.api.get_cover_art_url(file.path).then(artRes => {
+        if (mpCurrentMediaEl !== mediaEl) return; // track changed while this was in flight
+        if (artRes?.ok && artRes.url) {
+          mpCoverArtUrl = artRes.url;
+          disc.style.background = `center/cover no-repeat url("${artRes.url}")`;
+          disc.innerHTML = "";
+          disc.classList.add("has-art");
+          updateMiniPlayer();
+        }
+      }).catch(() => {});
+    }
+  } else {
+    mediaEl.className = "mp-video";
+    player.appendChild(mediaEl);
+    wrap.appendChild(player);
+    player.appendChild(buildPlayerControls(mediaEl, onFatalError, onEnded, onPrev, onNext));
+  }
+
+  updateMiniPlayer();
+}
+function closePlayer() {
+  $("player-overlay").classList.remove("show");
+  $("player-media-wrap").innerHTML = "";
+  playerFiles = [];
+  mpPlaylistIndex = -1;
+  mpActiveSeek = null;
+  mpCurrentMediaEl = null;
+  mpCurrentFile = null;
+  mpCoverArtUrl = null;
+  hideMiniPlayer();
+}
+
+// ─────────────────────────────────────────────
+// MINI PLAYER — lets playback continue while browsing the rest of the
+// app. Deliberately does NOT touch mpCurrentMediaEl, #player-media-wrap,
+// or anything the full player already owns: minimizing just hides
+// #player-overlay (display:none doesn't stop audio/video playback) and
+// shows this small persistent bar instead: same media element, same
+// state, same buildPlayerControls wiring — nothing is torn down or
+// rebuilt, so there's no separate/parallel player implementation here.
+// ─────────────────────────────────────────────
+function minimizePlayer() {
+  if (!mpCurrentMediaEl) return;
+  $("player-overlay").classList.remove("show");
+  showMiniPlayer();
+}
+function expandPlayer() {
+  if (!mpCurrentMediaEl) return;
+  hideMiniPlayer();
+  $("player-overlay").classList.add("show");
+}
+function showMiniPlayer() {
+  if (!mpCurrentMediaEl) return;
+  updateMiniPlayer();
+  $("mini-player").classList.add("show");
+}
+function hideMiniPlayer() {
+  $("mini-player").classList.remove("show");
+}
+function updateMiniPlayer() {
+  if (!mpCurrentMediaEl) return;
+  const art = $("mini-player-art");
+  if (mpCoverArtUrl) {
+    art.style.background = `center/cover no-repeat url("${mpCoverArtUrl}")`;
+    art.innerHTML = "";
+  } else {
+    art.style.background = "";
+    art.innerHTML = MP_ICON_NOTE;
+  }
+  $("mini-player-title").textContent = (mpCurrentFile && mpCurrentFile.name) || $("player-title").textContent || "Now playing";
+  $("mini-player-playpause").innerHTML = (mpCurrentMediaEl && !mpCurrentMediaEl.paused) ? MP_ICON_PAUSE : MP_ICON_PLAY;
+
+  const prevBtn = $("mini-player-prev");
+  const nextBtn = $("mini-player-next");
+  prevBtn.innerHTML = MP_ICON_PREV;
+  nextBtn.innerHTML = MP_ICON_NEXT;
+  prevBtn.disabled = mpPlaylistIndex <= 0;
+  nextBtn.disabled = mpPlaylistIndex < 0 || mpPlaylistIndex >= playerFiles.length - 1;
+}
+function miniPlayerTogglePlay(e) {
+  e.stopPropagation();
+  if (!mpCurrentMediaEl) return;
+  mpCurrentMediaEl.paused ? mpCurrentMediaEl.play()?.catch(() => {}) : mpCurrentMediaEl.pause();
+}
+
+// ─────────────────────────────────────────────
+// GALLERY VIEW — grid of a download's images/videos, with a lightbox
+// for full-size viewing and prev/next navigation. Thumbnails are
+// resolved through the same local media server as the player (one
+// batched call via get_media_urls rather than one round trip per image).
+// ─────────────────────────────────────────────
+let galleryFiles = [];
+let galleryUrls  = {};
+let lightboxIndex = -1;
+
+function galleryImgError(imgEl) {
+  const cell = imgEl.closest(".gallery-cell");
+  if (cell) cell.innerHTML = '<div class="gallery-cell-fallback">?</div>';
+}
+
+async function openGallery(id) {
+  const item = downloads.find(i => i.id === id);
+  if (!item) return;
+  const files = galleryFilesFor(item);
+  if (!files.length) { showToast("No images or videos found for this download", false); return; }
+
+  galleryFiles = files;
+  const label = item.filename || item.url.replace(/^https?:\/\/(www\.)?/, "");
+  $("gallery-title").textContent = label + " · " + files.length + " item" + (files.length === 1 ? "" : "s");
+  $("gallery-overlay").classList.add("show");
+  $("gallery-grid").innerHTML = '<div class="gallery-loading">Loading thumbnails…</div>';
+
+  if (!window.pywebview?.api?.get_media_urls) {
+    $("gallery-grid").innerHTML = '<div class="gallery-loading">The desktop app must be running to browse files.</div>';
+    return;
+  }
+  try {
+    const res = await window.pywebview.api.get_media_urls(files.map(f => f.path));
+    galleryUrls = (res && res.ok) ? res.urls : {};
+  } catch {
+    galleryUrls = {};
+  }
+  renderGalleryGrid();
+}
+
+function renderGalleryGrid() {
+  const grid = $("gallery-grid");
+  grid.innerHTML = "";
+  galleryFiles.forEach((f, i) => {
+    const url = galleryUrls[f.path];
+    const cell = document.createElement("div");
+    cell.className = "gallery-cell";
+    cell.title = f.name;
+    if (isImage(f.name)) {
+      cell.innerHTML = url
+        ? `<img src="${escHtml(url)}" alt="" loading="lazy" onerror="galleryImgError(this)">`
+        : '<div class="gallery-cell-fallback">?</div>';
+    } else {
+      // Video thumbnail extraction would need an actual decode/frame-grab
+      // step, which isn't worth the cost here — a play-badge tile is a
+      // reasonable stand-in, and the file still opens full-size on click.
+      cell.innerHTML = '<div class="gallery-cell-video"><svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l11 6-11 6V2z"/></svg></div>';
+    }
+    cell.addEventListener("click", () => openLightbox(i));
+    grid.appendChild(cell);
+  });
+}
+
+function openLightbox(index) {
+  lightboxIndex = index;
+  renderLightbox();
+  $("lightbox-overlay").classList.add("show");
+}
+
+function renderLightbox() {
+  const f = galleryFiles[lightboxIndex];
+  const url = galleryUrls[f.path];
+  const content = $("lightbox-content");
+  content.innerHTML = "";
+  mpActiveSeek = null; // in case a video in the previous slide was mid-drag
+  mpCurrentMediaEl = null;
+
+  if (isImage(f.name)) {
+    const img = document.createElement("img");
+    img.className = "lightbox-img";
+    img.src = url || "";
+    img.alt = f.name;
+    content.appendChild(img);
+  } else {
+    const mediaEl = document.createElement("video");
+    mediaEl.className = "mp-video";
+    mediaEl.controls = false;
+    mediaEl.src = url || "";
+    mpCurrentMediaEl = mediaEl;
+
+    const player = document.createElement("div");
+    player.className = "mp-player";
+    player.appendChild(mediaEl);
+    content.appendChild(player); // attached before buildPlayerControls calls safePlay()
+
+    const onFatalError = msg => {
+      content.innerHTML = '<div class="player-media-msg" style="color:var(--red)">' + escHtml(msg) + '</div>';
+      if (mpCurrentMediaEl === mediaEl) mpCurrentMediaEl = null;
+    };
+    player.appendChild(buildPlayerControls(mediaEl, onFatalError));
+  }
+  $("lightbox-caption").textContent = f.name + "   ·   " + (lightboxIndex + 1) + " / " + galleryFiles.length;
+}
+
+function lightboxPrev() { if (lightboxIndex > 0) { lightboxIndex--; renderLightbox(); } }
+function lightboxNext() { if (lightboxIndex < galleryFiles.length - 1) { lightboxIndex++; renderLightbox(); } }
+
+function closeLightbox() {
+  $("lightbox-overlay").classList.remove("show");
+  $("lightbox-content").innerHTML = "";
+  mpActiveSeek = null;
+  mpCurrentMediaEl = null;
+  lightboxIndex = -1;
+}
+
+function closeGallery() {
+  $("gallery-overlay").classList.remove("show");
+  $("gallery-grid").innerHTML = "";
+  closeLightbox();
+  galleryFiles = [];
+  galleryUrls = {};
+}
+
+const MP_SEEK_STEP   = 5;    // seconds
+const MP_VOLUME_STEP = 0.1;
+
+function isMediaModalOpen() {
+  return $("player-overlay").classList.contains("show") || $("lightbox-overlay").classList.contains("show");
+}
+function lightboxShowingImage() {
+  if (!$("lightbox-overlay").classList.contains("show")) return false;
+  const f = galleryFiles[lightboxIndex];
+  return !!f && isImage(f.name);
+}
+
+window.addEventListener("keydown", e => {
+  if (!isMediaModalOpen()) return;
+  // Defensive — shouldn't normally have text-input focus while a modal's
+  // open, but don't hijack typing if it somehow does.
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+  if (e.key === " " || e.code === "Space") {
+    if (mpCurrentMediaEl) {
+      e.preventDefault();
+      mpCurrentMediaEl.paused ? mpCurrentMediaEl.play()?.catch(() => {}) : mpCurrentMediaEl.pause();
+    }
+  } else if (e.key === "ArrowLeft") {
+    e.preventDefault();
+    if (lightboxShowingImage()) lightboxPrev();
+    else if (mpCurrentMediaEl) mpCurrentMediaEl.currentTime = Math.max(0, mpCurrentMediaEl.currentTime - MP_SEEK_STEP);
+  } else if (e.key === "ArrowRight") {
+    e.preventDefault();
+    if (lightboxShowingImage()) lightboxNext();
+    else if (mpCurrentMediaEl) mpCurrentMediaEl.currentTime = Math.min(mpCurrentMediaEl.duration || Infinity, mpCurrentMediaEl.currentTime + MP_SEEK_STEP);
+  } else if (e.key === "ArrowUp") {
+    if (mpCurrentMediaEl) { e.preventDefault(); mpCurrentMediaEl.volume = Math.min(1, mpCurrentMediaEl.volume + MP_VOLUME_STEP); }
+  } else if (e.key === "ArrowDown") {
+    if (mpCurrentMediaEl) { e.preventDefault(); mpCurrentMediaEl.volume = Math.max(0, mpCurrentMediaEl.volume - MP_VOLUME_STEP); }
+  } else if (e.key === "Escape") {
+    if ($("lightbox-overlay").classList.contains("show")) closeLightbox();
+    else if ($("player-overlay").classList.contains("show")) closePlayer();
+  }
+});
+
+// ─────────────────────────────────────────────
+// BROWSER EXTENSION INTEGRATION
+// ─────────────────────────────────────────────
+window.onBrowserUrl = function(url, title) {
+  $("main-input").value = url;
+  updateInputMode();
+  $("input-row").classList.add("is-running");
+  setTimeout(() => $("input-row").classList.remove("is-running"), 600);
+
+  const banner = $("browser-url-banner");
+  $("browser-url-title").textContent = title || "Page detected from browser";
+  $("browser-url-text").textContent  = url.replace(/^https?:\/\/(www\.)?/, "").slice(0, 60) + (url.length > 70 ? "…" : "");
+  banner.style.display = "flex";
+  banner._pendingUrl = url;
+  showToast("Link received from browser extension");
+};
+function browserBannerAdd() {
+  addDownload(normalizeUrl($("main-input").value.trim()));
+  $("main-input").value = "";
+  updateInputMode();
+  $("browser-url-banner").style.display = "none";
+}
+function browserBannerDismiss() {
+  $("browser-url-banner").style.display = "none";
+  $("main-input").value = "";
+  updateInputMode();
+}
+
+// ─────────────────────────────────────────────
+// PYWEBVIEW WIRING / INIT
+// ─────────────────────────────────────────────
+window.addEventListener("pywebviewready", () => {
+  if (window.pywebview?.api?.pick_folder) $("browse-btn").style.display = "flex";
+  loadInitialHistory();
+  loadRecentSearches();
+});
+
+updateSessionStats();
+updateInputMode();
+renderDownloads();
+// in case pywebviewready already fired before this script ran
+waitForApi(1500).then(api => { if (api) { loadInitialHistory(); loadRecentSearches(); } });
+</script>
+</body>
+</html>

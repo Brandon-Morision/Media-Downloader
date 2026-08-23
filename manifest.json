@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Media Downloader",
+  "version": "0.2.3",
+  "description": "Send any supported media page or sniffed stream to the Media Downloader desktop app.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:6789/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1lvZPtgetQowViWOcXceOARPiCrzpuMsLAvyn9+vVFesbtoDTzC/TPUhpiKS0F6QiRxcmeWdlE/JYItdKbrTPRfnuRkmGsLLZjgc/4EP812LRELhKYZKCwWEUzvOKg0lX/DpG8cT2UujHPiqZKsGyYdxtVNOK/jdCXIlYe3rncriF4JmZOiD6srmNweKFncLELMuXoluuky2ChRKRxTmPF03CsPqLHmoadEBbZhTW6dVFU1w8sbDf/USDiOzrPLqoEvtMFHiY6vM6M9B6pf9Nn3ATL70WflUkm/VU5BdAtH2AhKWdvsub/CUJ1vElsW+CX7uIJjdI2Krj2U+O6iBVQIDAQAB"
+}

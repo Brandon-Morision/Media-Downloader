@@ -1,0 +1,19 @@
+# Core dependencies for Media Downloader
+# Install with: pip install -r requirements.txt
+
+# Desktop UI framework
+pywebview>=4.0.0
+
+# Process management (pause/resume downloads)
+psutil>=5.9.0
+
+# Image processing for icon handling
+Pillow>=9.0.0
+
+# Build dependencies (for creating Windows executable)
+PyInstaller>=6.0.0
+
+# Optional: for development
+# pytest>=7.0.0
+# black>=22.0.0
+# flake8>=4.0.0
