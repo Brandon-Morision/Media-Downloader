@@ -14,12 +14,10 @@ build/
 dist/
 *.spec
 *.msi
-*.zip
 
-# Installer / packaging temp files
-installer/
-*.log
-*.tmp
+# Installer outputs (keep the folder but ignore temp files)
+installer/*.log
+installer/*.tmp
 
 # IDE/editor files
 .vscode/
