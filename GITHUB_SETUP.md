@@ -1,6 +1,6 @@
 # GitHub Setup and Release Guide
 
-This guide will help you set up GitHub for your Media Downloader project and create a release with the executable for distribution.
+This guide will help you set up GitHub for your Media Downloader project and create a release with the installer for distribution.
 
 ## Step 1: Create GitHub Repository
 
@@ -31,16 +31,28 @@ git push -u origin main
 
 **Note**: Replace `Brandon-Morision` with your actual GitHub username in the URL above.
 
-## Step 3: Package the Executable for Release
+## Step 3: Build the Installer
 
-The executable is already built in `dist/MediaDownloader/`. Let's create a compressed archive for easy distribution:
+The project uses Inno Setup to create a proper Windows installer. The installer provides:
+- Start Menu shortcuts
+- Uninstaller entry in "Apps & Features"
+- Proper installation to Program Files
+- Automatic browser extension registration
+- WebView2 Runtime check
+
+If you need to rebuild the installer:
 
 ```bash
-# Create a zip file of the distribution
-Compress-Archive -Path dist\MediaDownloader -DestinationPath MediaDownloader-v0.2.3.zip
+# First build the application
+python build_windows.py
+
+# Then compile the installer using Inno Setup
+# Open installer.iss in Inno Setup and compile it
+# Or use the command line if Inno Setup is in your PATH
+iscc installer.iss
 ```
 
-This will create `MediaDownloader-v0.2.3.zip` in your project directory.
+The installer will be created in the `installer/` folder as `MediaDownloader Setup.exe`.
 
 ## Step 4: Create GitHub Release
 
@@ -67,13 +79,14 @@ This will create `MediaDownloader-v0.2.3.zip` in your project directory.
      - Batch downloads for galleries and playlists
      
      ### Installation
-     1. Download `MediaDownloader-v0.2.3.zip`
-     2. Extract to a folder on your computer
-     3. Run `MediaDownloader.exe`
+     1. Download `MediaDownloader Setup.exe`
+     2. Run the installer
+     3. Follow the installation wizard
+     4. Launch from Start Menu or desktop shortcut
      
      ### Requirements
      - Windows 10 or later
-     - Microsoft Edge WebView2 Runtime (usually pre-installed)
+     - Microsoft Edge WebView2 Runtime (installer will check and prompt if needed)
      
      ### Recent Improvements
      - Centralized dependency management
@@ -81,10 +94,11 @@ This will create `MediaDownloader-v0.2.3.zip` in your project directory.
      - Comprehensive logging framework
      - Robust input validation
      - Automated version synchronization
+     - Proper Windows installer with Inno Setup
      ```
-5. Attach the zip file:
+5. Attach the installer:
    - Click "Attach binaries"
-   - Select `MediaDownloader-v0.2.3.zip`
+   - Select `installer/MediaDownloader Setup.exe`
 6. Click "Publish release"
 
 ### Option B: Using GitHub CLI (If Installed)
@@ -101,12 +115,12 @@ gh auth login
 gh release create v0.2.3 \
   --title "Media Downloader v0.2.3" \
   --notes "Media Downloader v0.2.3 - Complete Windows desktop application for downloading media" \
-  MediaDownloader-v0.2.3.zip
+  installer/MediaDownloader\ Setup.exe
 ```
 
 ## Step 5: Update Browser Extension (Optional)
 
-If you want to distribute the browser extension separately:
+The installer automatically includes and registers the browser extension for Chrome and Edge. However, if you want to distribute the extension separately for manual installation:
 
 1. Create a zip of the extension folder:
    ```bash
@@ -115,15 +129,17 @@ If you want to distribute the browser extension separately:
 
 2. Upload this as an additional asset in your GitHub release
 
+Note: Manual extension installation requires enabling Developer Mode in Chrome/Edge settings.
+
 ## Step 6: Test the Release
 
-1. Download the zip file from your GitHub release
-2. Extract it to a test location
-3. Run `MediaDownloader.exe`
-4. Test the basic functionality:
-   - Application launches correctly
+1. Download `MediaDownloader Setup.exe` from your GitHub release
+2. Run the installer on a clean test machine (or temporary location)
+3. Test the basic functionality:
+   - Application launches correctly from Start Menu
    - Can paste a URL and generate a command
-   - Browser extension can connect (if installed)
+   - Browser extension is automatically registered (if selected during install)
+   - Application appears in "Apps & Features" for proper uninstallation
 
 ## Step 7: Share Your Release
 
@@ -146,9 +162,11 @@ When you want to release a new version:
    python build_windows.py
    ```
 
-3. Create a new zip file:
+3. Rebuild the installer:
    ```bash
-   Compress-Archive -Path dist\MediaDownloader -DestinationPath MediaDownloader-v0.3.0.zip
+   # Open installer.iss in Inno Setup and compile
+   # Or use command line:
+   iscc installer.iss
    ```
 
 4. Commit and push changes:
@@ -158,7 +176,9 @@ When you want to release a new version:
    git push
    ```
 
-5. Create a new GitHub release with the new zip file
+5. Create a new GitHub release with the new installer:
+   - Upload `installer/MediaDownloader Setup.exe`
+   - Update version tag to `v0.3.0`
 
 ## Troubleshooting
 
@@ -194,8 +214,8 @@ Some users may not have WebView2 installed. Consider:
 # Rebuild application
 python build_windows.py
 
-# Create distribution zip
-Compress-Archive -Path dist\MediaDownloader -DestinationPath MediaDownloader-v0.2.3.zip
+# Rebuild installer (requires Inno Setup)
+iscc installer.iss
 
 # Update version
 python update_version.py 0.3.0

@@ -48,9 +48,11 @@ See [README_BUILD.md](README_BUILD.md) for detailed build instructions.
 # Build the Windows executable
 python build_windows.py
 
-# Optionally create an installer with Inno Setup
-# Open installer.iss in Inno Setup and compile
+# Create the Windows installer (requires Inno Setup)
+iscc installer.iss
 ```
+
+The installer will be created in the `installer/` folder as `MediaDownloader Setup.exe`.
 
 ## Project Structure
 
