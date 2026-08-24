@@ -9,8 +9,9 @@ venv/
 ENV/
 env/
 
-# Build outputs (keep dist/ for releases)
+# Build outputs
 build/
+dist/
 *.spec
 *.msi
 *.zip
