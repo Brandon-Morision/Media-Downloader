@@ -587,6 +587,7 @@ select { appearance:none; }
   flex:1;
   min-height:0;
   max-width:100%;
+  align-content: start;
 }
 
 @media (max-width: 640px) {
@@ -626,6 +627,43 @@ select { appearance:none; }
 }
 .gallery-cell:hover { border-color:var(--acc-border); transform:scale(1.05); box-shadow:0 8px 24px rgba(0,0,0,.2); }
 .gallery-cell img { width:100%; height:100%; object-fit:cover; display:block; border-radius:10px; max-width:100%; max-height:100%; }
+.gallery-pagination-container {
+  padding:16px 24px;
+  border-top:1px solid var(--border);
+  background:var(--s1);
+  flex-shrink:0;
+}
+.gallery-pagination {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:16px;
+}
+.gallery-page-btn {
+  padding:8px 16px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  background:var(--s2);
+  color:var(--t2);
+  font-size:12px;
+  font-weight:600;
+  cursor:pointer;
+  transition:border-color .14s, background .14s, color .14s;
+}
+.gallery-page-btn:hover:not(:disabled) {
+  border-color:var(--acc-border);
+  background:var(--acc-dim);
+  color:var(--t1);
+}
+.gallery-page-btn:disabled {
+  opacity:0.4;
+  cursor:not-allowed;
+}
+.gallery-page-info {
+  font-size:12px;
+  color:var(--t3);
+  font-weight:500;
+}
 .gallery-cell-video { color:var(--t2); }
 .gallery-cell-fallback { color:var(--t3); font-size:20px; }
 
@@ -950,6 +988,7 @@ select { appearance:none; }
       <button class="btn-ghost" onclick="closeGallery()" style="font-size:11.5px;padding:4px 9px;">✕ Close</button>
     </div>
     <div class="gallery-grid" id="gallery-grid"></div>
+    <div class="gallery-pagination-container" id="gallery-pagination" style="display:none;"></div>
   </div>
 </div>
 
@@ -2607,6 +2646,8 @@ function miniPlayerTogglePlay(e) {
 let galleryFiles = [];
 let galleryUrls  = {};
 let lightboxIndex = -1;
+let galleryPage = 0;
+const GALLERY_PAGE_SIZE = 50;
 
 function galleryImgError(imgEl) {
   const cell = imgEl.closest(".gallery-cell");
@@ -2620,6 +2661,7 @@ async function openGallery(id) {
   if (!files.length) { showToast("No images or videos found for this download", false); return; }
 
   galleryFiles = files;
+  galleryPage = 0; // Reset to first page
   const label = item.filename || item.url.replace(/^https?:\/\/(www\.)?/, "");
   $("gallery-title").textContent = label + " · " + files.length + " item" + (files.length === 1 ? "" : "s");
   $("gallery-overlay").classList.add("show");
@@ -2641,7 +2683,14 @@ async function openGallery(id) {
 function renderGalleryGrid() {
   const grid = $("gallery-grid");
   grid.innerHTML = "";
-  galleryFiles.forEach((f, i) => {
+
+  const totalPages = Math.ceil(galleryFiles.length / GALLERY_PAGE_SIZE);
+  const startIndex = galleryPage * GALLERY_PAGE_SIZE;
+  const endIndex = Math.min(startIndex + GALLERY_PAGE_SIZE, galleryFiles.length);
+  const pageFiles = galleryFiles.slice(startIndex, endIndex);
+
+  pageFiles.forEach((f, i) => {
+    const actualIndex = startIndex + i;
     const url = galleryUrls[f.path];
     const cell = document.createElement("div");
     cell.className = "gallery-cell";
@@ -2656,10 +2705,60 @@ function renderGalleryGrid() {
       // reasonable stand-in, and the file still opens full-size on click.
       cell.innerHTML = '<div class="gallery-cell-video"><svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l11 6-11 6V2z"/></svg></div>';
     }
-    cell.addEventListener("click", () => openLightbox(i));
+    cell.addEventListener("click", () => openLightbox(actualIndex));
     grid.appendChild(cell);
   });
+
+  // Add pagination controls if needed
+  const paginationContainer = $("gallery-pagination");
+  if (totalPages > 1) {
+    paginationContainer.style.display = "block";
+    paginationContainer.innerHTML = "";
+
+    const pagination = document.createElement("div");
+    pagination.className = "gallery-pagination";
+
+    const prevBtn = document.createElement("button");
+    prevBtn.className = "gallery-page-btn";
+    prevBtn.textContent = "← Previous";
+    prevBtn.disabled = galleryPage === 0;
+    prevBtn.onclick = window.galleryPagePrev;
+
+    const pageInfo = document.createElement("span");
+    pageInfo.className = "gallery-page-info";
+    pageInfo.textContent = `Page ${galleryPage + 1} of ${totalPages} (${galleryFiles.length} items)`;
+
+    const nextBtn = document.createElement("button");
+    nextBtn.className = "gallery-page-btn";
+    nextBtn.textContent = "Next →";
+    nextBtn.disabled = galleryPage === totalPages - 1;
+    nextBtn.onclick = window.galleryPageNext;
+
+    pagination.appendChild(prevBtn);
+    pagination.appendChild(pageInfo);
+    pagination.appendChild(nextBtn);
+    paginationContainer.appendChild(pagination);
+  } else {
+    paginationContainer.style.display = "none";
+  }
 }
+
+window.galleryPagePrev = function() {
+  if (galleryPage > 0) {
+    galleryPage--;
+    renderGalleryGrid();
+    $("gallery-grid").scrollTop = 0;
+  }
+};
+
+window.galleryPageNext = function() {
+  const totalPages = Math.ceil(galleryFiles.length / GALLERY_PAGE_SIZE);
+  if (galleryPage < totalPages - 1) {
+    galleryPage++;
+    renderGalleryGrid();
+    $("gallery-grid").scrollTop = 0;
+  }
+};
 
 function openLightbox(index) {
   lightboxIndex = index;
@@ -2716,8 +2815,11 @@ function closeLightbox() {
 function closeGallery() {
   $("gallery-overlay").classList.remove("show");
   $("gallery-grid").innerHTML = "";
+  $("gallery-pagination").innerHTML = "";
+  $("gallery-pagination").style.display = "none";
   closeLightbox();
   galleryFiles = [];
+  galleryPage = 0;
   galleryUrls = {};
 }
 
