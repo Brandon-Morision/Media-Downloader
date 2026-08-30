@@ -583,7 +583,9 @@ select { appearance:none; }
 .gallery-title { font-size:14px; font-weight:600; color:var(--t1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .gallery-grid {
   padding:20px 24px; overflow-y:auto;
-  display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:20px;
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr));
+  grid-auto-rows:min-content;
+  gap:20px;
   flex:1;
   min-height:0;
   max-width:100%;
@@ -615,9 +617,7 @@ select { appearance:none; }
   box-shadow:0 2px 8px rgba(0,0,0,.12);
   position:relative;
   width:100%;
-  height:100%;
   min-width:0;
-  min-height:0;
 }
 
 .gallery-cell::before {
@@ -672,23 +672,50 @@ select { appearance:none; }
   align-items:center; justify-content:center; flex-direction:column; padding:40px;
 }
 .lightbox-overlay.show { display:flex; }
-.lightbox-content { max-width:min(900px, 86vw); max-height:76vh; display:flex; align-items:center; justify-content:center; }
-.lightbox-img { max-width:100%; max-height:76vh; border-radius:8px; object-fit:contain; display:block; }
-.lightbox-content .mp-player { width:min(900px, 86vw); border-radius:8px; overflow:hidden; }
+.lightbox-content { max-width:min(900px, 86vw); max-height:76vh; display:flex; align-items:center; justify-content:center; position:relative; }
+.lightbox-img {
+  max-width:100%; max-height:76vh; border-radius:8px; object-fit:contain; display:block;
+  box-shadow:0 20px 60px rgba(0,0,0,.55);
+  opacity:0; transition:opacity .22s ease;
+}
+.lightbox-img.mp-loaded { opacity:1; }
+.lightbox-content .mp-player {
+  width:min(900px, 86vw); border-radius:8px; overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,.55);
+  opacity:0; transition:opacity .22s ease;
+}
+.lightbox-content .mp-player.mp-loaded { opacity:1; }
+/* the standalone Player modal budgets vertical space for a title bar,
+   playlist, etc., but the lightbox is just media + a slim control bar —
+   let the video actually use the space the lightbox gives it instead of
+   sitting undersized inside a much taller frame. */
+.lightbox-content .mp-video { max-height:calc(76vh - 54px); }
+.lightbox-loading {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  color:var(--t3); font-size:12px; pointer-events:none;
+}
+.lightbox-loading::before {
+  content:""; width:26px; height:26px; border-radius:50%;
+  border:2.5px solid var(--border-hi); border-top-color:var(--acc);
+  animation:lightbox-spin .7s linear infinite;
+}
+@keyframes lightbox-spin { to { transform:rotate(360deg); } }
 .lightbox-nav {
   position:fixed; top:50%; transform:translateY(-50%); width:44px; height:44px; border-radius:50%;
   background:var(--s1); border:1px solid var(--border-hi); color:var(--t1); font-size:22px; line-height:1;
-  display:flex; align-items:center; justify-content:center; transition:background .14s, transform .14s;
+  display:flex; align-items:center; justify-content:center; transition:background .14s, transform .14s, box-shadow .14s;
+  box-shadow:0 6px 20px rgba(0,0,0,.4);
 }
-.lightbox-nav:hover { background:var(--s2); transform:translateY(-50%) scale(1.06); }
+.lightbox-nav:hover { background:var(--s2); transform:translateY(-50%) scale(1.06); box-shadow:0 8px 26px rgba(0,0,0,.5); }
 .lightbox-nav.prev { left:24px; }
 .lightbox-nav.next { right:24px; }
 .lightbox-close {
   position:fixed; top:24px; right:24px; width:36px; height:36px; border-radius:50%;
   background:var(--s1); border:1px solid var(--border-hi); color:var(--t2);
   display:flex; align-items:center; justify-content:center;
+  box-shadow:0 6px 20px rgba(0,0,0,.4); transition:background .14s, color .14s, box-shadow .14s;
 }
-.lightbox-close:hover { color:var(--t1); background:var(--s2); }
+.lightbox-close:hover { color:var(--t1); background:var(--s2); box-shadow:0 8px 26px rgba(0,0,0,.5); }
 .lightbox-caption {
   margin-top:14px; font-size:11.5px; color:var(--t3); font-family:'JetBrains Mono',monospace; text-align:center;
 }
@@ -2774,11 +2801,21 @@ function renderLightbox() {
   mpActiveSeek = null; // in case a video in the previous slide was mid-drag
   mpCurrentMediaEl = null;
 
+  const spinner = document.createElement("div");
+  spinner.className = "lightbox-loading";
+  content.appendChild(spinner);
+  const clearSpinner = () => spinner.remove();
+
   if (isImage(f.name)) {
     const img = document.createElement("img");
     img.className = "lightbox-img";
-    img.src = url || "";
     img.alt = f.name;
+    img.onload = () => { img.classList.add("mp-loaded"); clearSpinner(); };
+    img.onerror = () => {
+      clearSpinner();
+      content.innerHTML = '<div class="player-media-msg" style="color:var(--red)">Couldn\'t load this image</div>';
+    };
+    img.src = url || "";
     content.appendChild(img);
   } else {
     const mediaEl = document.createElement("video");
@@ -2791,6 +2828,8 @@ function renderLightbox() {
     player.className = "mp-player";
     player.appendChild(mediaEl);
     content.appendChild(player); // attached before buildPlayerControls calls safePlay()
+
+    mediaEl.addEventListener("loadeddata", () => { player.classList.add("mp-loaded"); clearSpinner(); }, { once:true });
 
     const onFatalError = msg => {
       content.innerHTML = '<div class="player-media-msg" style="color:var(--red)">' + escHtml(msg) + '</div>';
