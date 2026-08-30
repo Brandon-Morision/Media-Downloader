@@ -1,9 +1,10 @@
 /**
- * content.js — Media Downloader content script (v1.1)
+ * content.js — Media Downloader content script (v1.2)
  *
  * - Early injection (document_start)
  * - Hooks fetch + XMLHttpRequest
  * - Scans <video>/<audio>/<source> and Performance entries
+ * - Enhanced 1flex.org support with specialized m3u8 extraction
  * - Shows an expandable floating panel with:
  *     • "Send page URL" (original behaviour)
  *     • List of sniffed media streams (m3u8, mp4, webm, etc.)
@@ -14,6 +15,7 @@
   const MAX_STREAMS = 12;
   const MEDIA_EXT = /\.(m3u8|mpd|mp4|webm|m4v|m4a|mp3|ts|m4s|mov|mkv|flac|wav)(\?|$)/i;
   const MEDIA_MIME = /^(video\/|audio\/|application\/vnd\.apple\.mpegurl|application\/dash\+xml|application\/x-mpegURL)/i;
+  const ONEFLEX_DOMAIN = /1flex\.org/i;
 
   // ─── state ───────────────────────────────────────────────────────────────
   const streams = new Map(); // url → { url, type, size, label, ts }
@@ -32,6 +34,8 @@
     // common CDN / streaming patterns
     if (/\/(playlist|manifest|master|index|chunklist|seg-|segment).*\.(m3u8|mpd)/i.test(url)) return true;
     if (/\/video\/|\/media\/|\/stream\/|\/hls\/|\/dash\//i.test(url) && MEDIA_EXT.test(url)) return true;
+    // 1flex.org specific: be more aggressive with CDN patterns
+    if (ONEFLEX_DOMAIN.test(url) && (url.includes("stream") || url.includes("cdn") || url.includes("hls"))) return true;
     return false;
   }
 
@@ -39,7 +43,13 @@
     try {
       const u = new URL(url);
       const path = u.pathname.toLowerCase();
-      if (path.endsWith(".m3u8") || contentType.includes("mpegurl")) return "HLS";
+      if (path.endsWith(".m3u8") || contentType.includes("mpegurl")) {
+        // Check if it's a 1flex.org stream
+        if (ONEFLEX_DOMAIN.test(url) || url.includes("cdn") || url.includes("stream")) {
+          return "1flex Stream";
+        }
+        return "HLS";
+      }
       if (path.endsWith(".mpd") || contentType.includes("dash")) return "DASH";
       if (path.endsWith(".mp4")) return "MP4";
       if (path.endsWith(".webm")) return "WebM";
@@ -77,11 +87,28 @@
     // fetch
     const origFetch = window.fetch;
     window.fetch = async function (...args) {
+      const url = typeof args[0] === "string" ? args[0] : args[0]?.url;
       const res = await origFetch.apply(this, args);
       try {
-        const url = typeof args[0] === "string" ? args[0] : args[0]?.url;
         const ct = res.headers?.get?.("content-type") || "";
         addStream(url, ct);
+        // 1flex.org specific: check response body for m3u8 URLs (only for text responses)
+        if (ONEFLEX_DOMAIN.test(url) || ONEFLEX_DOMAIN.test(location.href)) {
+          if (ct && (ct.includes("text/") || ct.includes("json") || ct.includes("javascript"))) {
+            try {
+              const clone = res.clone();
+              const text = await clone.text();
+              const m3u8Matches = text.match(/https?:\/\/[^\s"']+\.m3u8[^\s"']*/gi);
+              if (m3u8Matches) {
+                m3u8Matches.forEach(m3u8Url => {
+                  addStream(m3u8Url, "application/x-mpegURL");
+                });
+              }
+            } catch (e) {
+              // Response cloning failed, ignore
+            }
+          }
+        }
       } catch {}
       return res;
     };
@@ -100,6 +127,22 @@
         try {
           const ct = this.getResponseHeader("content-type") || "";
           addStream(this._mdl_url, ct);
+          // 1flex.org specific: check response body for m3u8 URLs
+          if (ONEFLEX_DOMAIN.test(this._mdl_url) || ONEFLEX_DOMAIN.test(location.href)) {
+            try {
+              const responseText = this.responseText;
+              if (responseText) {
+                const m3u8Matches = responseText.match(/https?:\/\/[^\s"']+\.m3u8[^\s"']*/gi);
+                if (m3u8Matches) {
+                  m3u8Matches.forEach(m3u8Url => {
+                    addStream(m3u8Url, "application/x-mpegURL");
+                  });
+                }
+              }
+            } catch (e) {
+              // Response might not be accessible, ignore errors
+            }
+          }
         } catch {}
       });
       return origSend.apply(this, args);
@@ -119,6 +162,55 @@
         addStream(e.name, e.initiatorType === "video" ? "video/" : "");
       });
     } catch {}
+
+    // 1flex.org specific: scan page source for m3u8 URLs
+    if (ONEFLEX_DOMAIN.test(location.href)) {
+      scanOneFlexPage();
+    }
+  }
+
+  // Specialized scanner for 1flex.org to extract m3u8 manifest URLs
+  function scanOneFlexPage() {
+    try {
+      // Scan all script tags for m3u8 URLs
+      document.querySelectorAll("script").forEach(script => {
+        const content = script.textContent || script.innerHTML;
+        if (content) {
+          const m3u8Matches = content.match(/https?:\/\/[^\s"']+\.m3u8[^\s"']*/gi);
+          if (m3u8Matches) {
+            m3u8Matches.forEach(url => {
+              addStream(url, "application/x-mpegURL");
+            });
+          }
+        }
+      });
+
+      // Scan inline scripts and data attributes
+      const pageSource = document.documentElement.outerHTML;
+      const sourceMatches = pageSource.match(/https?:\/\/[^\s"']+\.m3u8[^\s"']*/gi);
+      if (sourceMatches) {
+        sourceMatches.forEach(url => {
+          addStream(url, "application/x-mpegURL");
+        });
+      }
+
+      // Look for common 1flex.org patterns in URLs
+      const patterns = [
+        /https?:\/\/[^\/\s"']+\/stream\d+\/[^\/\s"']+\/[^\/\s"']+\/\d+\/index\.m3u8/gi,
+        /https?:\/\/[^\/\s"']+\/hls\/[^\/\s"']+\/index\.m3u8/gi,
+      ];
+
+      patterns.forEach(pattern => {
+        const matches = pageSource.match(pattern);
+        if (matches) {
+          matches.forEach(url => {
+            addStream(url, "application/x-mpegURL");
+          });
+        }
+      });
+    } catch (e) {
+      console.error("1flex.org scan error:", e);
+    }
   }
 
   // keep watching for dynamically added media elements
