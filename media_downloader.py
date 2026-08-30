@@ -34,6 +34,7 @@ YTDLP_SITES = [
     "youtube.com", "youtu.be", "vimeo.com", "tiktok.com",
     "twitch.tv", "pornhub.com", "xvideos.com", "xhamster.com",
     "xnxx.com", "spankbang.com", "dailymotion.com", "bilibili.com",
+    "1flex.org",  # HLS streaming (requires direct m3u8 URL)
 ]
 
 SITE_NOTES = {
@@ -58,6 +59,7 @@ SITE_NOTES = {
     "tiktok.com":     "yt-dlp      |  videos and user pages",
     "twitch.tv":      "yt-dlp      |  VODs and clips",
     "pornhub.com":    "yt-dlp      |  videos and playlists",
+    "1flex.org":      "yt-dlp      |  HLS streaming (use direct m3u8 URL, not play page)",
 }
 
 SEP  = "=" * 58
@@ -393,6 +395,24 @@ def build_ytdlp_cmd(url: str, cfg: dict) -> list:
         cmd += ["-P", out, "-o", "%(title)s.%(ext)s"]
     else:
         cmd += ["-o", "%(title)s.%(ext)s"]
+
+    # Custom headers for 1flex.org (HLS streaming site)
+    if "1flex.org" in url:
+        cmd += [
+            "--add-header", "Referer: https://www.1flex.org/",
+            "--add-header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        ]
+        logger.info("Added custom headers for 1flex.org")
+
+    # HLS-specific flags for streaming sites
+    if "1flex.org" in url or any(site in url for site in ["youtube.com", "twitch.tv"]):
+        cmd += [
+            "--hls-use-mpegts",  # Force MPEG-TS merging for HLS
+            "--concurrent-fragments", "8",  # Download 8 segments at once
+            "--retries", "10",  # Retry failed segments
+        ]
+        logger.debug("Added HLS streaming flags")
+
     if cfg.get("limit"):
         cmd += ["--playlist-end", str(cfg["limit"])]
     if cfg.get("verbose"):
@@ -513,7 +533,6 @@ def run_download(url: str, tool: str, cfg: dict, dry_run: bool = False):
 # It never calls sys.exit() — that would kill the whole desktop app.
 
 import re
-import time
 import uuid
 import threading
 
