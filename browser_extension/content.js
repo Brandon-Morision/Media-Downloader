@@ -94,12 +94,14 @@
         addStream(url, ct);
         // 1flex.org specific: check response body for m3u8 URLs (only for text responses)
         if (ONEFLEX_DOMAIN.test(url) || ONEFLEX_DOMAIN.test(location.href)) {
+          console.log("[Media Downloader] Fetch request to:", url, "Content-Type:", ct);
           if (ct && (ct.includes("text/") || ct.includes("json") || ct.includes("javascript"))) {
             try {
               const clone = res.clone();
               const text = await clone.text();
               const m3u8Matches = text.match(/https?:\/\/[^\s"']+\.m3u8[^\s"']*/gi);
               if (m3u8Matches) {
+                console.log("[Media Downloader] Found m3u8 URLs in fetch response:", m3u8Matches);
                 m3u8Matches.forEach(m3u8Url => {
                   addStream(m3u8Url, "application/x-mpegURL");
                 });
@@ -119,6 +121,9 @@
 
     XMLHttpRequest.prototype.open = function (method, url, ...rest) {
       this._mdl_url = url;
+      if (ONEFLEX_DOMAIN.test(url) || ONEFLEX_DOMAIN.test(location.href)) {
+        console.log("[Media Downloader] XHR request to:", url);
+      }
       return origOpen.call(this, method, url, ...rest);
     };
 
@@ -134,6 +139,7 @@
               if (responseText) {
                 const m3u8Matches = responseText.match(/https?:\/\/[^\s"']+\.m3u8[^\s"']*/gi);
                 if (m3u8Matches) {
+                  console.log("[Media Downloader] Found m3u8 URLs in XHR response:", m3u8Matches);
                   m3u8Matches.forEach(m3u8Url => {
                     addStream(m3u8Url, "application/x-mpegURL");
                   });
@@ -172,12 +178,15 @@
   // Specialized scanner for 1flex.org to extract m3u8 manifest URLs
   function scanOneFlexPage() {
     try {
+      console.log("[Media Downloader] Scanning 1flex.org page for m3u8 URLs...");
+
       // Scan all script tags for m3u8 URLs
       document.querySelectorAll("script").forEach(script => {
         const content = script.textContent || script.innerHTML;
         if (content) {
           const m3u8Matches = content.match(/https?:\/\/[^\s"']+\.m3u8[^\s"']*/gi);
           if (m3u8Matches) {
+            console.log("[Media Downloader] Found m3u8 URLs in script tags:", m3u8Matches);
             m3u8Matches.forEach(url => {
               addStream(url, "application/x-mpegURL");
             });
@@ -189,9 +198,12 @@
       const pageSource = document.documentElement.outerHTML;
       const sourceMatches = pageSource.match(/https?:\/\/[^\s"']+\.m3u8[^\s"']*/gi);
       if (sourceMatches) {
+        console.log("[Media Downloader] Found m3u8 URLs in page source:", sourceMatches);
         sourceMatches.forEach(url => {
           addStream(url, "application/x-mpegURL");
         });
+      } else {
+        console.log("[Media Downloader] No m3u8 URLs found in page source");
       }
 
       // Look for common 1flex.org patterns in URLs
@@ -203,13 +215,25 @@
       patterns.forEach(pattern => {
         const matches = pageSource.match(pattern);
         if (matches) {
+          console.log("[Media Downloader] Found pattern matches:", matches);
           matches.forEach(url => {
             addStream(url, "application/x-mpegURL");
           });
         }
       });
+
+      // Additional: Look for video elements and their src attributes
+      document.querySelectorAll("video").forEach(video => {
+        const src = video.src || video.currentSrc;
+        if (src) {
+          console.log("[Media Downloader] Found video element with src:", src);
+          addStream(src, "video/mp4");
+        }
+      });
+
+      console.log("[Media Downloader] Total streams detected:", streams.size);
     } catch (e) {
-      console.error("1flex.org scan error:", e);
+      console.error("[Media Downloader] 1flex.org scan error:", e);
     }
   }
 
