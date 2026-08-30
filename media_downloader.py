@@ -21,6 +21,7 @@ import argparse
 import tempfile
 import shutil
 import hashlib
+import time
 from urllib.parse import urlparse
 
 from logger import get_logger
