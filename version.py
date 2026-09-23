@@ -18,10 +18,11 @@ Usage:
     print(f"Media Downloader {get_version_string()}")
 """
 
-__version__ = "0.2.3"
+__version__ = "0.2.6"
 __app_name__ = "Media Downloader"
 __author__ = "Brandon"
 __copyright__ = "2024"
+__github_repo__ = "Brandon-Morision/Media-Downloader"
 
 # Version components
 MAJOR, MINOR, PATCH = __version__.split('.')
@@ -40,6 +41,11 @@ def get_version_tuple() -> tuple:
     return (MAJOR, MINOR, PATCH)
 
 
+def get_github_repo() -> str:
+    """Get the GitHub repository (owner/repo)."""
+    return __github_repo__
+
+
 def get_app_info() -> dict:
     """Get complete application information."""
     return {
@@ -47,6 +53,7 @@ def get_app_info() -> dict:
         "version": __version__,
         "author": __author__,
         "copyright": __copyright__,
+        "github_repo": __github_repo__,
         "major": MAJOR,
         "minor": MINOR,
         "patch": PATCH,

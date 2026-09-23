@@ -30,7 +30,12 @@ logger = get_logger(__name__)
 # Regex patterns for validation
 URL_PATTERN = re.compile(
     r'^https?://'  # http:// or https://
-    r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain
+    # domain — TLD length capped at 63 (the DNS label length limit) rather
+    # than 6, so long modern TLDs (.technology, .photography,
+    # .international, punycode .xn--... labels, etc.) validate the same
+    # way the frontend's isLikelyUrl() already treats them, instead of
+    # being accepted client-side and then rejected here.
+    r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,63}\.?|'  # domain
     r'localhost|'  # localhost
     r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # IP address
     r'(?::\d+)?'  # optional port
@@ -243,6 +248,23 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
         except (ValueError, TypeError):
             raise ValidationError(f"Invalid limit value: {limit}")
     
+    # Validate filename template (gallery-dl's -o filename=... value, e.g.
+    # "{category}_{id}.{extension}"). This is a gallery-dl format-string
+    # template, not a filesystem path, so validate_path()'s traversal
+    # checks don't apply — just bound the length and reject characters
+    # that are illegal in Windows filenames (aside from the braces used
+    # for template fields, which are intentional here).
+    if 'filename' in config:
+        filename = config['filename']
+        if filename:
+            if not validate_string(filename, max_length=256):
+                raise ValidationError(f"Invalid filename template: {filename}")
+            if re.search(r'[<>:"/\\|?*]', filename):
+                raise ValidationError(
+                    f"Filename template contains illegal characters: {filename}"
+                )
+        validated['filename'] = filename
+
     # Validate format
     if 'format' in config:
         format_val = config['format']

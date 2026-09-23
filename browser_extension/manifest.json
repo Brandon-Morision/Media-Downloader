@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Media Downloader",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Send any supported media page or sniffed stream to the Media Downloader desktop app.",
   "permissions": [
     "activeTab",
@@ -31,8 +31,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_start",
       "all_frames": false
     }

@@ -26,13 +26,28 @@ from pathlib import Path
 # Add current directory to path to import version module
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# File paths that need version updates
+# File paths that need version updates.
+#
+# NOTE: the extension used to live under browser_extension/, but its
+# files (manifest.json, popup.html, content.js, background.js) now sit
+# at the project root alongside the desktop app — manifest.json below
+# covers both. installer.iss is optional (not every checkout builds an
+# installer), so it's marked accordingly rather than being a hard
+# requirement — see REQUIRED_FILES below.
 FILES_TO_UPDATE = {
     'version.py': None,  # Handled specially
-    'browser_extension/manifest.json': 'version',
     'manifest.json': 'version',
     'installer.iss': 'AppVersion',
 }
+
+# Files that MUST exist and update successfully for the run to be
+# considered successful. Anything not in this set is best-effort: a
+# missing/failed update is reported but does not abort the whole sync
+# (previously ANY single failure — including a stale path that could
+# never exist — caused an immediate sys.exit(1) before later files were
+# even attempted, which is exactly how version.py/manifest.json drifted
+# out of sync with README.md/CHANGES.md in the first place).
+REQUIRED_FILES = {'version.py', 'manifest.json'}
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -149,25 +164,57 @@ def main():
     
     print(f"Updating version to {new_version}...")
     print("=" * 50)
-    
-    # Update version.py first (source of truth)
+
+    failed_required = []
+    skipped_optional = []
+
+    # Update version.py first (source of truth) — always required.
     if not update_version_py(new_version):
         sys.exit(1)
-    
-    # Update JSON files
+
+    # Update the remaining files. Optional files (not in REQUIRED_FILES)
+    # that don't exist on disk are skipped with a note rather than
+    # treated as failures — e.g. installer.iss isn't present in every
+    # checkout. Required files that are missing or fail to write are
+    # collected and reported, but we still attempt every remaining file
+    # before exiting, instead of bailing on the first problem.
     for file_path, key in FILES_TO_UPDATE.items():
         if file_path == 'version.py':
             continue
-        
+
+        full_path = os.path.join(HERE, file_path)
+        is_required = file_path in REQUIRED_FILES
+
+        if not os.path.isfile(full_path):
+            if is_required:
+                print(f"✗ Required file not found: {file_path}")
+                failed_required.append(file_path)
+            else:
+                print(f"… Skipping optional file (not found): {file_path}")
+                skipped_optional.append(file_path)
+            continue
+
         if file_path.endswith('.json'):
-            if not update_json_file(file_path, new_version):
-                sys.exit(1)
+            ok = update_json_file(file_path, new_version)
         elif file_path.endswith('.iss'):
-            if not update_iss_file(file_path, new_version):
-                sys.exit(1)
-    
+            ok = update_iss_file(file_path, new_version)
+        else:
+            print(f"✗ Don't know how to update {file_path}")
+            ok = False
+
+        if not ok and is_required:
+            failed_required.append(file_path)
+
     print("=" * 50)
+    if failed_required:
+        print(f"✗ Version update to {new_version} completed with failures in required files:")
+        for f in failed_required:
+            print(f"    - {f}")
+        sys.exit(1)
+
     print(f"✓ Successfully updated version to {new_version}")
+    if skipped_optional:
+        print(f"  (skipped optional, not-present files: {', '.join(skipped_optional)})")
     print("\nNext steps:")
     print("1. Review the changes")
     print("2. Commit the changes with a version bump message")

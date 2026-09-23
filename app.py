@@ -22,12 +22,15 @@ import os
 import re
 import secrets
 import threading
+import time
 import urllib.parse
 import uuid
 import webview
+from collections import OrderedDict
 
 from logger import get_logger
 from version import get_version_string, get_app_info
+import updater
 
 # pywebview renamed webview.FOLDER_DIALOG -> webview.FileDialog.FOLDER and
 # deprecated the old constant. Prefer the new one but fall back for older
@@ -46,6 +49,7 @@ from media_downloader import (
     download_from_ui,
     detect_tool,
     site_hint,
+    auth_hint,
     pause_job,
     resume_job,
     cancel_job,
@@ -75,6 +79,62 @@ from validators import (
 BRIDGE_PORT  = 6789
 BRIDGE_TOKEN = secrets.token_hex(16)   # new token every launch
 _bridge_api_ref = None                  # set to the Api instance once created
+
+# ── known-media-path registry ─────────────────────────────────────────────
+#
+# get_media_url()/get_media_urls() previously handed out a working /media
+# URL for ANY file the process could read, gated only by the per-launch
+# bridge token — validate_path() only checked that the path existed and
+# was a file, not that it had anything to do with this app. A leaked or
+# guessed token (or a bug in the extension-origin CORS check) would then
+# mean arbitrary local file disclosure, not just "read your downloads".
+#
+# This registry tracks paths the app has itself produced — completed
+# download files and persisted history entries — and _serve_media()
+# requires a match here (or containment in the art-cache dir, which is
+# entirely app-generated) before streaming anything, independent of the
+# token check. Bounded with a simple FIFO eviction so a very long-running
+# session can't grow this unboundedly.
+_KNOWN_MEDIA_PATHS = OrderedDict()   # normalized path -> None; dict used as an ordered set
+_KNOWN_MEDIA_LOCK = threading.Lock()
+_KNOWN_MEDIA_MAX = 20000
+
+
+def _normalize_media_path(path: str) -> str:
+    return os.path.normpath(os.path.abspath(os.path.expanduser(path or "")))
+
+
+def _register_known_media_path(path: str) -> None:
+    if not path:
+        return
+    normalized = _normalize_media_path(path)
+    with _KNOWN_MEDIA_LOCK:
+        _KNOWN_MEDIA_PATHS.pop(normalized, None)  # re-insert at the end (most-recent)
+        _KNOWN_MEDIA_PATHS[normalized] = None
+        while len(_KNOWN_MEDIA_PATHS) > _KNOWN_MEDIA_MAX:
+            _KNOWN_MEDIA_PATHS.popitem(last=False)
+
+
+def _is_known_media_path(path: str) -> bool:
+    normalized = _normalize_media_path(path)
+    with _KNOWN_MEDIA_LOCK:
+        if normalized in _KNOWN_MEDIA_PATHS:
+            return True
+    # Anything inside the app's own generated-cache directories (audio
+    # cover art, video-frame thumbnails) is safe to serve unconditionally
+    # — these are entirely app-produced files, never user-supplied paths.
+    try:
+        from media_downloader import _art_cache_dir, _thumb_cache_dir
+        for cache_dir_fn in (_art_cache_dir, _thumb_cache_dir):
+            cache_dir = _normalize_media_path(cache_dir_fn())
+            try:
+                if os.path.commonpath([normalized, cache_dir]) == cache_dir:
+                    return True
+            except ValueError:
+                continue  # different drives on Windows, etc — definitely not contained
+    except Exception:
+        pass
+    return False
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -139,6 +199,13 @@ class _BridgeHandler(BaseHTTPRequestHandler):
 
         path = os.path.expanduser((qs.get("path") or [""])[0])
         if not path or not os.path.isfile(path):
+            self.send_response(404); self.end_headers(); return
+
+        if not _is_known_media_path(path):
+            # Valid token, but a path the app never actually produced —
+            # don't serve it. 404 rather than 403 so this doesn't act as
+            # an existence oracle for arbitrary filesystem paths.
+            logger.warning(f"Rejected /media request for unregistered path: {path}")
             self.send_response(404); self.end_headers(); return
 
         file_size = os.path.getsize(path)
@@ -267,14 +334,83 @@ class Api:
         """Return application version and metadata."""
         return get_app_info()
 
+    def get_system_versions(self) -> dict:
+        """Return versions of app and installed tools."""
+        return updater.get_all_installed_versions()
+
+    # ── update checks & operations ──
+    def check_updates_async(self) -> dict:
+        """Check for updates for app and tools in background thread."""
+        def run():
+            try:
+                tools_info = updater.check_tool_updates()
+                app_info = updater.check_app_update()
+                payload = {
+                    "ok": True,
+                    "app": app_info,
+                    "tools": tools_info.get("tools", {}),
+                    "any_update": bool(app_info.get("update_available") or tools_info.get("any_update")),
+                }
+                self._push_js(f"window.onUpdateCheckComplete?.({_js(payload)})")
+            except Exception as e:
+                logger.error(f"Error checking updates: {e}")
+                self._push_js(f"window.onUpdateCheckComplete?.({_js({'ok': False, 'error': str(e)})})")
+
+        threading.Thread(target=run, daemon=True).start()
+        return {"ok": True, "checking": True}
+
+    def update_engine_async(self, tool_name: str) -> dict:
+        """Update an extractor tool (yt-dlp or gallery-dl) in background thread."""
+        with self._jobs_lock:
+            if self._active_job_ids:
+                return {
+                    "ok": False,
+                    "error": "Cannot update tools while a download is running. Please finish or cancel active downloads.",
+                }
+
+        def on_prog(snapshot: dict):
+            self._push_js(f"window.onUpdateProgress?.({_js({'type': 'tool', 'tool': tool_name, **snapshot})})")
+
+        def run():
+            result = updater.update_engine_tool(tool_name, on_progress=on_prog)
+            self._push_js(f"window.onEngineUpdateComplete?.({_js(result)})")
+
+        threading.Thread(target=run, daemon=True).start()
+        return {"ok": True, "updating": True, "tool": tool_name}
+
+    def download_app_update_async(self, asset_url: str, asset_name: str = "") -> dict:
+        """Download desktop app installer in background thread."""
+        def on_prog(snapshot: dict):
+            self._push_js(f"window.onUpdateProgress?.({_js({'type': 'app', **snapshot})})")
+
+        def run():
+            result = updater.download_app_installer(asset_url, asset_name, on_progress=on_prog)
+            self._push_js(f"window.onAppInstallerReady?.({_js(result)})")
+
+        threading.Thread(target=run, daemon=True).start()
+        return {"ok": True, "downloading": True}
+
+    def apply_app_update(self, installer_path: str, silent: bool = False) -> dict:
+        """Launch downloaded installer and exit the application."""
+        self.cancel_all_active()
+        success = updater.run_installer_and_exit(installer_path, silent=silent)
+        if success:
+            if self._window:
+                try:
+                    self._window.destroy()
+                except Exception:
+                    pass
+            os._exit(0)
+        return {"ok": False, "error": "Failed to launch installer."}
+
     # ── detection (used for the live "auto tool" badge) ──
     def detect(self, url: str) -> dict:
         if not url or not url.startswith("http"):
-            return {"tool": "", "hint": ""}
-        return {"tool": detect_tool(url), "hint": site_hint(url)}
+            return {"tool": "", "hint": "", "auth_hint": ""}
+        return {"tool": detect_tool(url), "hint": site_hint(url), "auth_hint": auth_hint(url)}
 
     # ── start a download in the background, return its job_id immediately ──
-    def start_download_async(self, url: str, cfg: dict, tool_override: str = "") -> dict:
+    def start_download_async(self, url: str, cfg: dict, tool_override: str = "", client_job_id: str = "") -> dict:
         # Validate URL
         if not validate_url(url):
             logger.warning(f"Invalid URL provided: {url}")
@@ -287,7 +423,19 @@ class Api:
             logger.warning(f"Invalid download configuration: {e}")
             return {"ok": False, "error": f"Invalid configuration: {str(e)}"}
 
-        job_id = str(uuid.uuid4())
+        # Prefer a client-supplied job id. The frontend generates this
+        # synchronously and sets its own currentJobId BEFORE awaiting this
+        # call, so on_line/on_progress callbacks that fire while this
+        # (async, IPC round-trip) call is still in flight land against an
+        # id the UI is already watching. Previously the id was generated
+        # here and only reached the frontend once the returned promise
+        # resolved — callbacks that arrived first were silently dropped by
+        # the frontend's `if (jobId !== currentJobId) return;` guard,
+        # losing the earliest progress line(s)/percent on every download.
+        if client_job_id and validate_job_id(client_job_id):
+            job_id = client_job_id
+        else:
+            job_id = str(uuid.uuid4())
         with self._jobs_lock:
             self._active_job_ids.add(job_id)
         
@@ -297,15 +445,21 @@ class Api:
             self._push_js(f"window.onDownloadLine?.({_js(job_id)}, {_js(line)})")
 
         def on_progress(snapshot: dict):
-            self._push_js(
-                f"window.onDownloadProgress?.({_js(job_id)}, "
-                f"{_js(snapshot.get('items_done', 0))}, "
-                f"{_js(snapshot.get('limit', 0))}, "
-                f"{_js(snapshot.get('current_file') or '')}, "
-                f"{_js(snapshot.get('percent', 0))}, "
-                f"{_js(snapshot.get('speed') or '')}, "
-                f"{_js(snapshot.get('eta') or '')})"
-            )
+            # Passed as a single object rather than a long positional
+            # argument list — adding new fields (like downloaded_bytes/
+            # total_bytes below) doesn't require touching this call or
+            # remembering an argument order on the JS side.
+            payload = {
+                "items_done": snapshot.get("items_done", 0),
+                "limit": snapshot.get("limit", 0),
+                "current_file": snapshot.get("current_file") or "",
+                "percent": snapshot.get("percent", 0),
+                "speed": snapshot.get("speed") or "",
+                "eta": snapshot.get("eta") or "",
+                "downloaded_bytes": snapshot.get("downloaded_bytes"),
+                "total_bytes": snapshot.get("total_bytes"),
+            }
+            self._push_js(f"window.onDownloadProgress?.({_js(job_id)}, {_js(payload)})")
 
         def run():
             try:
@@ -319,6 +473,8 @@ class Api:
 
             status = job_status(job_id)
             files = status.get("files", []) if status.get("ok") else []
+            for f in files:
+                _register_known_media_path(f.get("path") if isinstance(f, dict) else None)
             history_id = ""
 
             # Record history (skip dry-runs — nothing was actually downloaded).
@@ -426,21 +582,67 @@ class Api:
 
     # ── show a Windows toast notification (queue finished, etc.) ──
     def notify(self, title: str, message: str) -> dict:
-        """Fire a Windows balloon/toast notification from the system tray."""
+        """
+        Fire a Windows balloon/toast notification from the system tray.
+
+        SECURITY: title/message can originate from untrusted data (e.g. a
+        download's source URL, which in turn can come from the clipboard
+        monitor or the browser extension's /add-url endpoint). Previously
+        these were spliced directly into a PowerShell -Command string —
+        a URL containing a single quote + semicolon could break out of the
+        quoted literal and execute arbitrary PowerShell. Fixed two ways,
+        belt-and-suspenders:
+          1. Escape embedded single quotes ('' is the literal-quote escape
+             inside a PowerShell single-quoted string).
+          2. Ship the whole script via -EncodedCommand (base64 UTF-16LE)
+             instead of -Command, so even a successful escape of the
+             quoting can't inject additional shell-level tokens — the
+             encoded blob is parsed as one opaque script body.
+        """
         try:
             import subprocess as _sp
+            import base64
+
+            def _ps_single_quote_escape(s: str) -> str:
+                return (s or "").replace("'", "''")
+
+            safe_title   = _ps_single_quote_escape(title)[:200]
+            safe_message = _ps_single_quote_escape(message)[:500]
+
+            # Use the app's own icon (same file used for the window
+            # titlebar/taskbar — see _find_icon_file()/_apply_window_icon)
+            # instead of a generic Windows system icon, so the balloon
+            # notification is actually recognizable as coming from this
+            # app rather than looking like a stock OS alert. Falls back
+            # to the generic icon if the file can't be found for any
+            # reason — same graceful-degradation pattern used elsewhere.
+            icon_path = _find_icon_file()
+            safe_icon_path = _ps_single_quote_escape(icon_path)
+            if safe_icon_path:
+                icon_setup = (
+                    f"if (Test-Path '{safe_icon_path}') {{"
+                    f"$n.Icon = New-Object System.Drawing.Icon('{safe_icon_path}')"
+                    "} else {"
+                    "$n.Icon = [System.Drawing.SystemIcons]::Information"
+                    "};"
+                )
+            else:
+                icon_setup = "$n.Icon = [System.Drawing.SystemIcons]::Information;"
+
             script = (
                 "Add-Type -AssemblyName System.Windows.Forms;"
+                "Add-Type -AssemblyName System.Drawing;"
                 "$n=New-Object System.Windows.Forms.NotifyIcon;"
-                "$n.Icon=[System.Drawing.SystemIcons]::Information;"
+                f"{icon_setup}"
                 "$n.Visible=$true;"
-                f"$n.ShowBalloonTip(4000,'{title}','{message}',"
+                f"$n.ShowBalloonTip(4000,'{safe_title}','{safe_message}',"
                 "[System.Windows.Forms.ToolTipIcon]::None);"
                 "Start-Sleep -Seconds 5;"
                 "$n.Dispose()"
             )
+            encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
             _sp.Popen(
-                ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", script],
+                ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", encoded],
                 creationflags=0x08000000
             )
             logger.info(f"Notification shown: {title}")
@@ -472,6 +674,9 @@ class Api:
     def list_history(self) -> dict:
         try:
             entries = download_history.list_entries()
+            for e in entries:
+                for f in (e.get("files") or []):
+                    _register_known_media_path(f.get("path") if isinstance(f, dict) else None)
             logger.debug(f"Retrieved {len(entries)} history entries")
             return {"ok": True, "entries": entries}
         except Exception as e:
@@ -522,9 +727,12 @@ class Api:
         if not validate_path(path, must_exist=True, must_be_file=True):
             logger.warning(f"Invalid path for media URL: {path}")
             return {"ok": False, "error": "File not found or invalid path."}
-        
+
         try:
             expanded = os.path.expanduser(path)
+            if not _is_known_media_path(expanded):
+                logger.warning(f"Media URL requested for unregistered path: {expanded}")
+                return {"ok": False, "error": "This file isn't recognized by the app."}
             query = urllib.parse.urlencode({"token": BRIDGE_TOKEN, "path": expanded})
             return {"ok": True, "url": f"http://127.0.0.1:{BRIDGE_PORT}/media?{query}"}
         except Exception as e:
@@ -542,6 +750,9 @@ class Api:
             try:
                 if validate_path(path, must_exist=True, must_be_file=True):
                     expanded = os.path.expanduser(path)
+                    if not _is_known_media_path(expanded):
+                        logger.warning(f"Media URL requested for unregistered path: {expanded}")
+                        continue
                     query = urllib.parse.urlencode({"token": BRIDGE_TOKEN, "path": expanded})
                     urls[path] = f"http://127.0.0.1:{BRIDGE_PORT}/media?{query}"
             except Exception as e:
@@ -570,6 +781,30 @@ class Api:
             logger.error(f"Failed to extract cover art from {path}: {e}")
             return {"ok": False, "error": str(e)}
 
+    # ── video-frame thumbnail for the gallery grid ──
+    def get_video_thumbnail_url(self, path: str) -> dict:
+        """Extract a representative frame from a video file (via the
+        bundled ffmpeg — see extract_video_thumbnail) and serve it
+        through the same local media-server URL mechanism as everything
+        else. Mirrors get_cover_art_url's contract: any failure returns
+        ok:False without an error message — "no thumbnail" isn't
+        something to alarm the user about, the gallery just falls back
+        to its generic video-tile icon."""
+        if not validate_path(path, must_exist=True, must_be_file=True):
+            logger.warning(f"Invalid path for video thumbnail extraction: {path}")
+            return {"ok": False}
+
+        try:
+            from media_downloader import extract_video_thumbnail
+            expanded = os.path.expanduser(path)
+            thumb_path = extract_video_thumbnail(expanded)
+            if not thumb_path:
+                return {"ok": False}
+            return self.get_media_url(thumb_path)
+        except Exception as e:
+            logger.error(f"Failed to extract video thumbnail from {path}: {e}")
+            return {"ok": False, "error": str(e)}
+
     # ── open a single file with the OS default app (non-playable files) ──
     def open_file(self, path: str) -> dict:
         if not validate_path(path, must_exist=True, must_be_file=True):
@@ -583,6 +818,27 @@ class Api:
             return {"ok": True}
         except Exception as e:
             logger.error(f"Failed to open file {path}: {e}")
+            return {"ok": False, "error": str(e)}
+
+    # ── open a download's source URL in the default OS browser ──
+    def open_url_external(self, url: str) -> dict:
+        """Hand a URL off to the user's default browser — the "open link
+        in browser" action next to a finished download's name. Mirrors
+        open_file()'s use of os.startfile, which on Windows routes a URL
+        through ShellExecute to whatever's registered as the default
+        browser. Restricted to validate_url() (http/https only, same
+        check used everywhere else a URL enters this app) so this can't
+        be used to hand ShellExecute an arbitrary scheme or local path."""
+        if not validate_url(url):
+            logger.warning(f"Invalid URL for open_url_external: {url}")
+            return {"ok": False, "error": "Invalid URL."}
+
+        try:
+            os.startfile(url)  # Windows-only, matches this app's target platform
+            logger.info(f"Opened URL in default browser: {url}")
+            return {"ok": True}
+        except Exception as e:
+            logger.error(f"Failed to open URL {url}: {e}")
             return {"ok": False, "error": str(e)}
 
     # ── media search (YouTube via yt-dlp ytsearch prefix) ──
@@ -681,7 +937,7 @@ class Api:
             return {"ok": False, "error": "Invalid URL"}
 
         def run():
-            from media_downloader import resolve_tool_path, CREATE_NO_WINDOW
+            from media_downloader import resolve_tool_path, CREATE_NO_WINDOW, _ytdlp_extra_headers
             import subprocess, json as _json
             import urllib.parse as _urlparse
 
@@ -690,9 +946,17 @@ class Api:
             try:
                 if tool == "yt-dlp":
                     ytdlp = resolve_tool_path("yt-dlp")
+                    # Same extra headers the real download uses (see
+                    # _ytdlp_extra_headers) — without these, a site that
+                    # needs them just to be reachable would fail this
+                    # metadata-only probe even though the actual download
+                    # works fine, making preview look broken for exactly
+                    # the sites that need it least to look that way.
+                    cmd = [ytdlp, "--dump-single-json", "--no-warnings", "--no-playlist"]
+                    cmd += _ytdlp_extra_headers(url)
+                    cmd.append(url)
                     proc = subprocess.run(
-                        [ytdlp, "--dump-single-json", "--no-warnings", "--no-playlist", url],
-                        capture_output=True, text=True, timeout=15, creationflags=CREATE_NO_WINDOW,
+                        cmd, capture_output=True, text=True, timeout=20, creationflags=CREATE_NO_WINDOW,
                     )
                     info = _json.loads(proc.stdout)
                     if info.get("_type") == "playlist" and info.get("entries"):
@@ -716,15 +980,26 @@ class Api:
                     gallerydl = resolve_tool_path("gallery-dl")
                     proc = subprocess.run(
                         [gallerydl, "-j", "--no-input", url],
-                        capture_output=True, text=True, timeout=15, creationflags=CREATE_NO_WINDOW,
+                        capture_output=True, text=True, timeout=20, creationflags=CREATE_NO_WINDOW,
                     )
                     data = _json.loads(proc.stdout)
                     thumb, count = _extract_gallery_preview(data)
                     host = _urlparse.urlparse(url).hostname or url
-                    if thumb:
-                        result = {"ok": True, "tool": "gallery-dl", "title": host, "thumbnail": thumb, "count": count}
+                    # Previously gated on `if thumb:` alone, which threw
+                    # away a perfectly good "found 47 items" result
+                    # whenever _extract_gallery_preview's best-effort JSON
+                    # walk couldn't pin down a thumbnail URL specifically
+                    # (which varies a lot by extractor — see that
+                    # function's docstring). A text-only preview (no
+                    # image, just a count) is still far better than no
+                    # preview at all, and the frontend already handles a
+                    # missing thumbnail gracefully.
+                    if thumb or count:
+                        result = {"ok": True, "tool": "gallery-dl", "title": host, "thumbnail": thumb or "", "count": count}
+            except subprocess.TimeoutExpired:
+                result = {"ok": False, "reason": "timeout"}
             except Exception as e:
-                result = {"ok": False, "error": str(e)}
+                result = {"ok": False, "reason": "error", "error": str(e)}
 
             self._push_js(f"window.onLinkPreview?.({_js(request_id)}, {_js(result)})")
 
@@ -761,7 +1036,8 @@ def _extract_gallery_preview(data):
     find something reasonable for a live preview; if it comes up empty,
     the caller simply shows no thumbnail rather than treating it as an error.
     """
-    IMG_EXT = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm")
+    from media_downloader import _SCANNABLE_EXTENSIONS
+    IMG_EXT = tuple(_SCANNABLE_EXTENSIONS)  # broader than a hand-rolled list — stays in sync with the gallery scanner's own definition
     found = {"url": None, "count": 0}
 
     def walk(node):
@@ -851,6 +1127,26 @@ def _apply_window_icon():
         pass
 
 
+def _startup_update_check(api):
+    """Background check on startup to illuminate the update indicator if needed."""
+    time.sleep(4)
+    try:
+        tools_info = updater.check_tool_updates()
+        app_info = updater.check_app_update()
+        any_update = bool(app_info.get("update_available") or tools_info.get("any_update"))
+        if any_update:
+            payload = {
+                "any_update": True,
+                "app_update": app_info.get("update_available", False),
+                "app_version": app_info.get("latest_version"),
+                "tools_update": tools_info.get("any_update", False),
+                "tools": tools_info.get("tools", {}),
+            }
+            api._push_js(f"window.onUpdateAvailable?.({_js(payload)})")
+    except Exception as e:
+        logger.debug(f"Startup update check failed: {e}")
+
+
 def main():
     _start_bridge_server()
     api = Api()
@@ -866,6 +1162,7 @@ def main():
     api.set_window(window)
     window.events.closing += api.cancel_all_active
     window.events.loaded += _apply_window_icon
+    threading.Thread(target=_startup_update_check, args=(api,), daemon=True).start()
     webview.start(debug=False)
 
 

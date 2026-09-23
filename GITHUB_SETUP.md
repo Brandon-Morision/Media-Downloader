@@ -33,14 +33,34 @@ git push -u origin main
 
 ## Step 3: Build the Installer
 
-The project uses Inno Setup to create a proper Windows installer. The installer provides:
+The project uses Inno Setup to create a proper Windows installer (if you
+add an `installer.iss` — one isn't included in this repo yet, so treat
+the steps below as a template to fill in rather than an existing,
+working script). A working installer can provide:
 - Start Menu shortcuts
 - Uninstaller entry in "Apps & Features"
 - Proper installation to Program Files
-- Automatic browser extension registration
-- WebView2 Runtime check
 
-If you need to rebuild the installer:
+**Note on the browser extension:** an installer CANNOT silently register
+or install the Chrome/Edge extension for the user. Chrome and Edge both
+require either the Chrome Web Store / Edge Add-ons flow, or an
+enterprise Group Policy "force-install" registry key set with admin
+rights — there's no user-mode API an installer can call to sideload an
+unpacked extension automatically. Extension setup is a **manual** step:
+the user (or you, documenting this for them) opens
+`chrome://extensions` or `edge://extensions`, enables Developer Mode,
+and clicks "Load unpacked" pointing at the folder containing this
+project's `manifest.json`. If earlier drafts of this doc implied the
+installer handles this automatically, that was aspirational, not
+something actually wired up here — correct it in your release notes too.
+
+**Note on WebView2:** likewise, "the installer will check and prompt"
+for the WebView2 Runtime only if you actually add that check to your
+`installer.iss` (Inno Setup has example snippets for this — see
+`README_BUILD.md`'s Prerequisites section). It isn't automatic just
+because you're using Inno Setup.
+
+If you need to rebuild the installer once you have a working `.iss`:
 
 ```bash
 # First build the application
@@ -62,11 +82,11 @@ The installer will be created in the `installer/` folder as `MediaDownloader Set
 2. Click on "Releases" in the right sidebar
 3. Click "Create a new release"
 4. Fill in the release details:
-   - **Tag version**: `v0.2.3`
-   - **Release title**: `Media Downloader v0.2.3`
+   - **Tag version**: `v0.2.6`
+   - **Release title**: `Media Downloader v0.2.6`
    - **Description**: 
      ```
-     ## Media Downloader v0.2.3
+     ## Media Downloader v0.2.6
      
      Complete Windows desktop application for downloading media from various websites.
      
@@ -112,24 +132,32 @@ If you install GitHub CLI (`gh`), you can create releases from the command line:
 gh auth login
 
 # Create the release
-gh release create v0.2.3 \
-  --title "Media Downloader v0.2.3" \
-  --notes "Media Downloader v0.2.3 - Complete Windows desktop application for downloading media" \
+gh release create v0.2.4 \
+  --title "Media Downloader v0.2.4" \
+  --notes "Media Downloader v0.2.4 - Complete Windows desktop application for downloading media" \
   installer/MediaDownloader\ Setup.exe
 ```
 
 ## Step 5: Update Browser Extension (Optional)
 
-The installer automatically includes and registers the browser extension for Chrome and Edge. However, if you want to distribute the extension separately for manual installation:
+There's no installer-driven registration step to rely on (see the note
+in Step 3) — sharing the extension separately for manual installation is
+in fact the normal path, not a fallback:
 
-1. Create a zip of the extension folder:
+1. Create a zip of the extension files (they live at the project root —
+   `manifest.json`, `popup.html`, `content.js`, `background.js`, plus
+   any `icons/` folder):
    ```bash
-   Compress-Archive -Path browser_extension -DestinationPath MediaDownloader-Extension-v0.2.3.zip
+   Compress-Archive -Path manifest.json,popup.html,content.js,background.js,icons -DestinationPath MediaDownloader-Extension-v0.2.4.zip
    ```
+   (Adjust the file list if your checkout organizes these differently —
+   the key point is zipping the extension's own files, not the whole repo.)
 
 2. Upload this as an additional asset in your GitHub release
 
-Note: Manual extension installation requires enabling Developer Mode in Chrome/Edge settings.
+Users install it the same way described in Step 3: unzip, then
+`chrome://extensions` or `edge://extensions` → Developer Mode → "Load
+unpacked" → select the unzipped folder.
 
 ## Step 6: Test the Release
 
@@ -138,14 +166,14 @@ Note: Manual extension installation requires enabling Developer Mode in Chrome/E
 3. Test the basic functionality:
    - Application launches correctly from Start Menu
    - Can paste a URL and generate a command
-   - Browser extension is automatically registered (if selected during install)
+   - Browser extension zip (if you published one) unpacks and loads via "Load unpacked" in Developer Mode
    - Application appears in "Apps & Features" for proper uninstallation
 
 ## Step 7: Share Your Release
 
 Once your release is published, you can share the URL with users. The URL will be in the format:
 ```
-https://github.com/Brandon-Morision/MediaDownloader/releases/tag/v0.2.3
+https://github.com/Brandon-Morision/MediaDownloader/releases/tag/v0.2.4
 ```
 
 ## Future Updates

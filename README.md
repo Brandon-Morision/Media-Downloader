@@ -192,5 +192,5 @@ For issues and questions:
 
 ---
 
-**Version:** 0.2.3  
-**Last Updated:** 2026-08-23
+**Version:** 0.2.6
+**Last Updated:** 2026-08-30

@@ -117,15 +117,26 @@ select { appearance:none; }
 }
 
 .downloads-col {
-  width:400px; flex-shrink:0;
+  width:var(--downloads-width, 400px); flex-shrink:0;
   border-left:1px solid var(--border); background:var(--s0);
   display:flex; flex-direction:column; overflow:hidden;
+}
+.resize-handle {
+  width:5px; flex-shrink:0; cursor:col-resize; position:relative; z-index:5;
+}
+.resize-handle::after {
+  content:""; position:absolute; top:0; bottom:0; left:2px; width:1px;
+  background:var(--border); transition:background .12s, width .12s, left .12s;
+}
+.resize-handle:hover::after, .resize-handle.dragging::after {
+  background:var(--acc-border); width:2px; left:1.5px;
 }
 
 @media (max-width: 860px) {
   .body-grid { flex-direction:column; overflow-y:auto; }
   .content-col { overflow-y:visible; }
   .downloads-col { width:100%; border-left:none; border-top:1px solid var(--border); }
+  .resize-handle { display:none; }
 }
 
 /* dry run / browser banners */
@@ -161,6 +172,22 @@ select { appearance:none; }
   font-size:10.5px; font-weight:600; padding:2px 8px; border-radius:99px; flex-shrink:0; white-space:nowrap;
 }
 .input-caption { font-size:10.5px; color:var(--t3); padding-left:2px; }
+
+.auth-hint-row {
+  display:none; align-items:center; gap:7px; padding:6px 10px; border-radius:var(--r);
+  background:var(--amber-dim); border:1px solid var(--amber-border); color:var(--amber);
+  font-size:11px; font-weight:500;
+}
+.auth-hint-row.show { display:flex; }
+.auth-hint-row svg { flex-shrink:0; opacity:.85; }
+.auth-hint-text { flex:1; min-width:0; }
+.auth-hint-action {
+  flex-shrink:0; padding:3px 9px; border-radius:6px;
+  border:1px solid var(--amber-border); background:transparent; color:var(--amber);
+  font-size:10.5px; font-weight:600; font-family:inherit; cursor:pointer;
+  transition:background .12s;
+}
+.auth-hint-action:hover { background:rgba(240,160,75,.18); }
 
 /* search autocomplete — only ever shown in search mode, never for links */
 .autocomplete-dropdown {
@@ -266,37 +293,53 @@ select { appearance:none; }
 .search-section.show { display:flex; }
 .search-section-head { display:flex; align-items:center; gap:8px; }
 .search-section-title { font-size:12px; font-weight:600; color:var(--t2); }
-.search-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:12px; }
+.search-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:14px; }
 .sr-card {
   background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg); overflow:hidden;
   cursor:pointer; transition:border-color .15s, transform .15s, box-shadow .15s; display:flex; flex-direction:column;
 }
-.sr-card:hover { border-color:var(--acc-border); transform:translateY(-2px); box-shadow:0 6px 24px rgba(0,0,0,.4); }
+.sr-card:hover { border-color:var(--acc-border); transform:translateY(-2px); box-shadow:0 8px 28px rgba(0,0,0,.45); }
 .sr-card.preview-card { cursor:default; max-width:280px; }
 .sr-card.preview-card:hover { border-color:var(--border); transform:none; box-shadow:none; }
 .sr-thumb-wrap { position:relative; overflow:hidden; }
-.sr-thumb { width:100%; aspect-ratio:16/9; object-fit:cover; background:var(--s2); display:block; }
-.sr-duration {
-  position:absolute; bottom:5px; right:6px; background:rgba(0,0,0,.82); color:#fff; font-size:10px;
-  font-family:'JetBrains Mono',monospace; font-weight:600; padding:1px 5px; border-radius:4px; pointer-events:none;
+.sr-thumb { width:100%; aspect-ratio:16/9; object-fit:cover; background:var(--s2); display:block; transition:transform .3s ease; }
+.sr-card:hover .sr-thumb { transform:scale(1.045); }
+/* Softens the hard image-to-panel cut that made the thumbnail look
+   pasted on top of the info block rather than part of one cohesive
+   card: fades the base of the thumbnail toward the card's own
+   background color instead of stopping abruptly at a flat edge. */
+.sr-thumb-scrim {
+  position:absolute; left:0; right:0; bottom:0; height:38%;
+  background:linear-gradient(to bottom, transparent, var(--s1) 100%);
+  pointer-events:none;
 }
-.sr-info { padding:8px 10px 10px; display:flex; flex-direction:column; gap:3px; flex:1; }
+.sr-duration {
+  position:absolute; bottom:6px; right:7px; background:rgba(0,0,0,.82); color:#fff; font-size:10px;
+  font-family:'JetBrains Mono',monospace; font-weight:600; padding:2px 6px; border-radius:4px; pointer-events:none;
+}
+.sr-info { padding:10px 11px 9px; display:flex; flex-direction:column; gap:5px; flex:1; }
 .sr-title {
-  font-size:12px; font-weight:600; color:var(--t1); line-height:1.4;
+  font-size:12.5px; font-weight:600; color:var(--t1); line-height:1.4;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
-.sr-channel { font-size:10.5px; color:var(--t3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.sr-meta { font-size:10px; color:var(--t3); font-family:'JetBrains Mono',monospace; margin-top:2px; }
-.sr-fmt-row { margin:0 8px 6px; }
-.sr-fmt-row .sr-fmt-select { font-size:11px; padding:5px 24px 5px 8px; }
-.sr-add-btn {
-  margin:0 8px 8px; padding:6px; border-radius:6px; border:1px solid var(--border); background:var(--s2);
-  color:var(--t2); font-size:11.5px; font-weight:600; font-family:inherit; cursor:pointer;
-  display:flex; align-items:center; justify-content:center; gap:5px;
+.sr-channel-row { display:flex; align-items:center; gap:6px; min-width:0; margin-top:1px; }
+.sr-avatar {
+  width:16px; height:16px; border-radius:50%; flex-shrink:0; color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-size:9px; font-weight:700; text-transform:uppercase;
+}
+.sr-channel { font-size:10.5px; color:var(--t3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.sr-meta { font-size:10px; color:var(--t3); font-family:'JetBrains Mono',monospace; }
+.sr-actions-row { display:flex; gap:6px; padding:0 11px 11px; }
+.sr-fmt-select { flex:1; min-width:0; font-size:11px; padding:6px 22px 6px 8px; }
+.sr-add-icon-btn {
+  flex-shrink:0; width:30px; height:30px; padding:0; border-radius:var(--r);
+  border:1px solid var(--border); background:var(--s2); color:var(--t2); font-family:inherit; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
   transition:border-color .14s, background .14s, color .14s;
 }
-.sr-add-btn:hover { border-color:var(--acc-border); background:var(--acc-dim); color:var(--t1); }
-.sr-add-btn.added { border-color:rgba(62,207,142,.3); background:var(--green-dim); color:var(--green); }
+.sr-add-icon-btn:hover { border-color:var(--acc-border); background:var(--acc-dim); color:var(--t1); }
+.sr-add-icon-btn.added { border-color:rgba(62,207,142,.3); background:var(--green-dim); color:var(--green); }
 .sr-skeleton { background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg); overflow:hidden; }
 .sk-thumb {
   width:100%; aspect-ratio:16/9; background:linear-gradient(90deg, var(--s2) 25%, var(--s3) 50%, var(--s2) 75%);
@@ -320,6 +363,16 @@ select { appearance:none; }
 .downloads-section { display:flex; flex-direction:column; gap:10px; flex:1; min-height:0; padding:16px; }
 .downloads-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; flex-shrink:0; }
 .dl-list-wrap { flex:1; min-height:0; overflow-y:auto; }
+.dl-pagination-container { padding-top:10px; border-top:1px solid var(--border); flex-shrink:0; }
+.dl-pagination { display:flex; align-items:center; justify-content:center; gap:14px; }
+.dl-page-btn {
+  padding:6px 14px; border-radius:6px; border:1px solid var(--border); background:var(--s2);
+  color:var(--t2); font-size:11.5px; font-weight:600; cursor:pointer; font-family:inherit;
+  transition:border-color .14s, background .14s, color .14s;
+}
+.dl-page-btn:hover:not(:disabled) { border-color:var(--acc-border); background:var(--acc-dim); color:var(--t1); }
+.dl-page-btn:disabled { opacity:.4; cursor:not-allowed; }
+.dl-page-info { font-size:11px; color:var(--t3); font-weight:500; }
 .downloads-title { font-size:12px; font-weight:600; color:var(--t2); display:flex; align-items:center; gap:6px; }
 .dl-badge {
   background:var(--acc-dim); color:var(--acc); font-size:10px; font-weight:700;
@@ -358,7 +411,16 @@ select { appearance:none; }
 .dl-dot.error   { background:var(--red); }
 .dl-dot.pending, .dl-dot.cancelled { background:var(--t3); }
 .dl-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
-.dl-name { font-size:12.5px; font-weight:600; color:var(--t1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dl-name-row { display:flex; align-items:center; gap:4px; min-width:0; }
+.dl-name { font-size:12.5px; font-weight:600; color:var(--t1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
+.dl-link-actions { display:flex; gap:2px; flex-shrink:0; opacity:0; transition:opacity .12s; }
+.dl-row:hover .dl-link-actions, .dl-link-actions:focus-within { opacity:1; }
+.dl-link-btn {
+  width:20px; height:20px; border-radius:5px; border:1px solid transparent;
+  background:transparent; color:var(--t3); display:flex; align-items:center; justify-content:center;
+  transition:background .12s, color .12s, border-color .12s; flex-shrink:0;
+}
+.dl-link-btn:hover { background:var(--s2); color:var(--t1); border-color:var(--border); }
 .dl-meta {
   font-size:10.5px; color:var(--t3); font-family:'JetBrains Mono',monospace;
   display:flex; gap:6px; align-items:center; overflow:hidden;
@@ -387,9 +449,23 @@ select { appearance:none; }
 
 /* expanded (active) card extras */
 .dl-progress { display:flex; flex-direction:column; gap:7px; }
-.bar-track { height:3px; background:var(--s3); border-radius:99px; overflow:hidden; }
+.bar-track { height:3px; background:var(--s3); border-radius:99px; overflow:hidden; display:flex; align-items:center; }
 .bar-fill { height:100%; background:var(--acc); border-radius:99px; width:0%; transition:width .3s ease; }
 .bar-fill.ind { width:35%!important; animation:sweep 1.3s ease-in-out infinite; }
+/* Non-directional "busy" indicator — used instead of a percentage bar
+   when there's genuinely no target to measure progress against (an
+   unlimited gallery-dl download has no "% done"). Deliberately NOT
+   bar-shaped, so it can't be read as "almost finished" the way a swept
+   bar visually implies. */
+.activity-pulse { display:flex; align-items:center; gap:4px; height:100%; padding-left:2px; }
+.activity-pulse span {
+  width:4px; height:4px; border-radius:50%; background:var(--acc); opacity:.3;
+  animation: activity-blink 1.1s ease-in-out infinite;
+}
+.activity-pulse span:nth-child(2) { animation-delay:.15s; }
+.activity-pulse span:nth-child(3) { animation-delay:.3s; }
+@keyframes activity-blink { 0%,100%{opacity:.25; transform:scale(1);} 50%{opacity:1; transform:scale(1.4);} }
+.prog-cnt-emphasis { font-weight:700; color:var(--t1); }
 @keyframes sweep { 0%{margin-left:-35%} 100%{margin-left:100%} }
 .dl-progress-row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .dl-file { font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--t3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
@@ -405,6 +481,21 @@ select { appearance:none; }
 .btn-sm:disabled { opacity:.35; cursor:not-allowed; }
 .btn-sm.danger { color:var(--red); border-color:rgba(242,109,109,.25); }
 .btn-sm.danger:hover:not(:disabled) { background:var(--red-dim); }
+.dl-speed-stats {
+  display:grid; grid-template-columns:repeat(2, 1fr); gap:7px 14px;
+  background:var(--bg); border:1px solid var(--border); border-radius:7px;
+  padding:9px 11px;
+}
+.dl-stat { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.dl-stat-label { font-size:9.5px; color:var(--t3); text-transform:uppercase; letter-spacing:.04em; }
+.dl-stat-value {
+  font-size:12px; font-family:'JetBrains Mono',monospace; color:var(--t1); font-weight:600;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.dl-speed-stats-note {
+  font-size:11px; color:var(--t3); background:var(--bg); border:1px solid var(--border);
+  border-radius:7px; padding:9px 11px; line-height:1.5;
+}
 .log-box {
   background:var(--bg); border:1px solid var(--border); border-radius:7px; padding:7px 10px;
   font-family:'JetBrains Mono',monospace; font-size:10.5px; line-height:1.75; color:var(--t3);
@@ -457,13 +548,14 @@ select { appearance:none; }
   display:flex; align-items:center; gap:4px; margin-left:auto;
 }
 .player-title { font-size:13px; font-weight:600; color:var(--t1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.player-body { padding:14px 16px; display:flex; flex-direction:column; gap:10px; overflow-y:auto; }
+.player-body { padding:14px 16px; display:flex; flex-direction:column; gap:10px; overflow-y:auto; min-height:0; }
 .player-media-wrap {
   background:#000; border-radius:var(--r); overflow:hidden;
   display:flex; align-items:center; justify-content:center; min-height:120px;
+  flex-shrink:0;
 }
 .player-media-msg { color:var(--t3); padding:30px; font-size:12px; text-align:center; }
-.player-playlist { display:flex; flex-direction:column; gap:4px; max-height:160px; overflow-y:auto; }
+.player-playlist { display:flex; flex-direction:column; gap:4px; max-height:160px; overflow-y:auto; min-height:0; flex-shrink:1; }
 .player-playlist-btn {
   flex-shrink:0;
   text-align:left; padding:6px 9px; border-radius:6px; border:1px solid var(--border); background:var(--s2);
@@ -666,6 +758,14 @@ select { appearance:none; }
 }
 .gallery-cell-video { color:var(--t2); }
 .gallery-cell-fallback { color:var(--t3); font-size:20px; }
+.gallery-cell-play-badge {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  pointer-events:none;
+}
+.gallery-cell-play-badge svg {
+  width:14px; height:14px; padding:9px; border-radius:50%;
+  background:rgba(0,0,0,.55); color:#fff;
+}
 
 .lightbox-overlay {
   display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:10001;
@@ -737,6 +837,28 @@ select { appearance:none; }
 .lightbox-content:fullscreen .mp-player { width:100%; height:100%; }
 
 /* ─────────────────────────────────────────────
+   CONFIRM DIALOG — reusable, for destructive actions
+───────────────────────────────────────────── */
+.confirm-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:10500;
+  align-items:center; justify-content:center; padding:24px;
+}
+.confirm-overlay.show { display:flex; }
+.confirm-card {
+  background:var(--s1); border:1px solid var(--border-hi); border-radius:var(--r-lg);
+  padding:20px; width:min(380px, 90vw); box-shadow:0 20px 60px rgba(0,0,0,.6);
+}
+.confirm-title { font-size:14px; font-weight:600; color:var(--t1); margin-bottom:8px; }
+.confirm-message { font-size:12.5px; color:var(--t2); line-height:1.55; margin-bottom:18px; }
+.confirm-actions { display:flex; justify-content:flex-end; gap:8px; }
+.confirm-btn-danger {
+  padding:6px 14px; border-radius:7px; border:1px solid rgba(242,109,109,.35);
+  background:var(--red-dim); color:var(--red); font-size:12.5px; font-weight:600;
+  font-family:inherit; cursor:pointer; transition:background .14s, border-color .14s;
+}
+.confirm-btn-danger:hover { background:rgba(242,109,109,.18); border-color:rgba(242,109,109,.5); }
+
+/* ─────────────────────────────────────────────
    TOAST
 ───────────────────────────────────────────── */
 .toast {
@@ -747,6 +869,95 @@ select { appearance:none; }
   display:flex; align-items:center; gap:7px; white-space:nowrap; max-width:420px;
 }
 .toast.show { opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto; }
+
+/* ─────────────────────────────────────────────
+   ABOUT & UPDATES MODAL
+───────────────────────────────────────────── */
+.update-badge-dot {
+  position: absolute; top: 1px; right: 1px; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--acc);
+  box-shadow: 0 0 6px var(--acc);
+  animation: pulse 1.8s ease infinite;
+}
+
+.about-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:10000;
+  align-items:center; justify-content:center; padding:20px;
+}
+.about-overlay.show { display:flex; }
+
+.about-card {
+  background:var(--s1); border:1px solid var(--border-hi); border-radius:var(--r-xl);
+  width:min(640px, 94vw); max-height:88vh; display:flex; flex-direction:column; overflow:hidden;
+  box-shadow:0 24px 70px rgba(0,0,0,.7);
+}
+
+.about-head {
+  display:flex; align-items:center; gap:12px; padding:14px 18px;
+  border-bottom:1px solid var(--border); flex-shrink:0; background:var(--s0);
+}
+.about-title { font-size:14px; font-weight:600; color:var(--t1); display:flex; align-items:center; gap:8px; }
+.about-body {
+  padding:18px; display:flex; flex-direction:column; gap:16px; overflow-y:auto;
+}
+
+.update-section {
+  background:var(--s2); border:1px solid var(--border); border-radius:var(--r-lg);
+  padding:14px; display:flex; flex-direction:column; gap:12px;
+}
+.update-section-head {
+  display:flex; align-items:center; justify-content:space-between;
+}
+.update-section-title {
+  font-size:12.5px; font-weight:600; color:var(--t1); display:flex; align-items:center; gap:6px;
+}
+.update-pill-badge {
+  font-size:10.5px; font-weight:600; padding:2px 8px; border-radius:99px;
+  font-family:'JetBrains Mono',monospace;
+}
+.update-pill-badge.good { background:var(--green-dim); color:var(--green); border:1px solid rgba(62,207,142,.25); }
+.update-pill-badge.warn { background:var(--amber-dim); color:var(--amber); border:1px solid var(--amber-border); }
+.update-pill-badge.info { background:var(--acc-dim); color:var(--acc); border:1px solid var(--acc-border); }
+
+.tool-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:10px;
+}
+@media (max-width: 540px) {
+  .tool-grid { grid-template-columns:1fr; }
+}
+
+.tool-card {
+  background:var(--s1); border:1px solid var(--border); border-radius:var(--r);
+  padding:11px; display:flex; flex-direction:column; gap:8px;
+}
+.tool-card-head {
+  display:flex; align-items:center; justify-content:space-between;
+}
+.tool-name { font-weight:600; font-size:12px; color:var(--t1); }
+.tool-version-row {
+  display:flex; flex-direction:column; gap:2px; font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--t3);
+}
+.tool-version-row span { color:var(--t2); font-weight:500; }
+
+.update-progress-wrap {
+  display:none; flex-direction:column; gap:5px;
+}
+.update-progress-wrap.show { display:flex; }
+.update-progress-bar {
+  height:4px; background:var(--s3); border-radius:99px; overflow:hidden;
+}
+.update-progress-fill {
+  height:100%; background:var(--acc); border-radius:99px; width:0%; transition:width .2s ease;
+}
+.update-progress-meta {
+  display:flex; justify-content:space-between; font-size:10.5px; font-family:'JetBrains Mono',monospace; color:var(--t3);
+}
+
+.release-notes-box {
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r);
+  padding:10px 12px; font-size:11.5px; line-height:1.6; color:var(--t2);
+  max-height:130px; overflow-y:auto; white-space:pre-wrap;
+}
 </style>
 </head>
 <body>
@@ -783,6 +994,11 @@ select { appearance:none; }
   </div>
 
   <button class="btn-ghost" onclick="resetInputs()" style="font-size:11.5px;">↺ Reset</button>
+  <button class="btn-ghost" id="about-btn" onclick="openAboutModal()" style="font-size:11.5px;position:relative;" title="About & Updates">
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm.93 12H7.07V6.5h1.86V12zm-.93-6.75a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>
+    <span>About</span>
+    <span class="update-badge-dot" id="topbar-update-dot" style="display:none"></span>
+  </button>
 </header>
 
 <!-- ═══════════════════════════════════════
@@ -821,6 +1037,11 @@ select { appearance:none; }
       <div class="autocomplete-dropdown" id="autocomplete-dropdown"></div>
     </div>
     <div class="input-caption" id="input-caption">Paste a link to download, or type anything else to search YouTube.</div>
+    <div class="auth-hint-row" id="auth-hint-row">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm1 8H7V7h2v5z"/></svg>
+      <span class="auth-hint-text" id="auth-hint-text"></span>
+      <button class="auth-hint-action" onclick="applyAuthHintAction()">Open Advanced options</button>
+    </div>
 
     <div class="contextual-row" id="contextual-row">
       <div class="field output-field">
@@ -940,8 +1161,11 @@ select { appearance:none; }
 
 </main>
 
+<!-- drag to resize the downloads sidebar -->
+<div class="resize-handle" id="resize-handle" title="Drag to resize · double-click to reset"></div>
+
 <!-- ═══ DOWNLOADS SIDEBAR (merges what used to be Queue + History) ═══ -->
-<aside class="downloads-col">
+<aside class="downloads-col" id="downloads-col">
   <div class="downloads-section">
     <div class="downloads-head">
       <span class="downloads-title">Downloads <span class="dl-badge" id="dl-badge">0</span></span>
@@ -958,18 +1182,31 @@ select { appearance:none; }
       <button class="btn-ghost" onclick="clearFinished()" style="font-size:11px;">Clear finished</button>
     </div>
 
-    <div class="dl-list-wrap">
+    <div class="dl-list-wrap" id="dl-list-wrap">
       <div class="dl-list" id="dl-list"></div>
       <div class="downloads-empty" id="downloads-empty" style="display:none">
         <svg width="30" height="30" viewBox="0 0 16 16" fill="currentColor" style="opacity:.15"><path d="M2 4h12a1 1 0 0 1 0 2H2a1 1 0 0 1 0-2zm0 4h8a1 1 0 0 1 0 2H2a1 1 0 0 1 0-2zm0 4h10a1 1 0 0 1 0 2H2a1 1 0 0 1 0-2z"/></svg>
         Nothing here yet. Paste a link to get started.
       </div>
     </div>
+    <div class="dl-pagination-container" id="dl-pagination" style="display:none;"></div>
   </div>
 </aside>
 
 </div><!-- /body-grid -->
 </div><!-- /shell -->
+
+<!-- confirm dialog — used for destructive actions like Clear finished -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-card">
+    <div class="confirm-title" id="confirm-title">Are you sure?</div>
+    <div class="confirm-message" id="confirm-message"></div>
+    <div class="confirm-actions">
+      <button class="btn-ghost" onclick="closeConfirm()">Cancel</button>
+      <button class="confirm-btn-danger" id="confirm-confirm-btn">Confirm</button>
+    </div>
+  </div>
+</div>
 
 <!-- toast -->
 <div class="toast" id="toast">
@@ -1029,6 +1266,132 @@ select { appearance:none; }
   <div class="lightbox-caption" id="lightbox-caption"></div>
 </div>
 
+<!-- ═══════════════════════════════════════
+     ABOUT & UPDATES MODAL
+════════════════════════════════════════ -->
+<div class="about-overlay" id="about-overlay">
+  <div class="about-card">
+    <div class="about-head">
+      <div class="logo" style="width:24px;height:24px;border-radius:6px;">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 1v9M4 7l4 4 4-4"/>
+          <rect x="2" y="13" width="12" height="1.5" rx=".75" fill="#fff" stroke="none"/>
+        </svg>
+      </div>
+      <span class="about-title">About &amp; Updates</span>
+      <button class="btn-ghost" onclick="closeAboutModal()" style="margin-left:auto;font-size:11.5px;padding:4px 9px;">✕ Close</button>
+    </div>
+
+    <div class="about-body">
+      <!-- Media Downloader Desktop App Section -->
+      <div class="update-section">
+        <div class="update-section-head">
+          <div class="update-section-title">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 1.5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11zM8 4a.75.75 0 0 0-.75.75v3.5c0 .414.336.75.75.75h2.5a.75.75 0 0 0 0-1.5H8.75V4.75A.75.75 0 0 0 8 4z"/></svg>
+            Media Downloader Desktop App
+          </div>
+          <span class="update-pill-badge info" id="app-version-badge">v0.2.6</span>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div style="font-size:11.5px;color:var(--t2);" id="app-update-status">
+            Installed version: <span style="color:var(--t1);font-family:'JetBrains Mono',monospace;" id="app-cur-ver">0.2.6</span>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn-sm" id="btn-check-updates" onclick="triggerUpdateCheck()">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.418A6 6 0 1 1 8 2v1z"/><path d="M8 0v4l3-2-3-2z"/></svg>
+              <span>Check for Updates</span>
+            </button>
+            <button class="btn-sm" id="btn-download-app-update" style="display:none;background:var(--acc);color:#fff;border-color:var(--acc);" onclick="triggerAppDownload()">
+              Download &amp; Install
+            </button>
+            <button class="btn-sm" id="btn-apply-app-update" style="display:none;background:var(--green);color:#0c0c0f;border-color:var(--green);font-weight:600;" onclick="triggerApplyAppUpdate()">
+              Restart &amp; Upgrade
+            </button>
+          </div>
+        </div>
+
+        <!-- App update progress bar -->
+        <div class="update-progress-wrap" id="app-update-progress-wrap">
+          <div class="update-progress-bar">
+            <div class="update-progress-fill" id="app-update-progress-fill"></div>
+          </div>
+          <div class="update-progress-meta">
+            <span id="app-update-speed">Downloading installer…</span>
+            <span id="app-update-pct">0%</span>
+          </div>
+        </div>
+
+        <!-- Release notes preview (hidden if up to date) -->
+        <div id="release-notes-wrap" style="display:none;flex-direction:column;gap:5px;">
+          <span style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--t3);font-weight:600;">What's New in <span id="rel-notes-ver"></span></span>
+          <div class="release-notes-box" id="release-notes-box"></div>
+        </div>
+      </div>
+
+      <!-- Download Engines Section -->
+      <div class="update-section">
+        <div class="update-section-head">
+          <div class="update-section-title">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm7.5.5A1.5 1.5 0 0 1 11.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3a1.5 1.5 0 0 1-1.5-1.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z"/></svg>
+            Download Engines (yt-dlp &amp; gallery-dl)
+          </div>
+          <button class="btn-ghost" id="btn-update-all-tools" onclick="triggerUpdateAllTools()" style="font-size:11px;display:none;">Update Both</button>
+        </div>
+
+        <p style="font-size:11px;color:var(--t3);line-height:1.4;">
+          Engines extract media from sites. When YouTube, Instagram, or Reddit change their code, updating these engines fixes downloads without reinstalling the app.
+        </p>
+
+        <div class="tool-grid">
+          <!-- yt-dlp card -->
+          <div class="tool-card">
+            <div class="tool-card-head">
+              <span class="tool-name">yt-dlp</span>
+              <span class="update-pill-badge good" id="ytdlp-badge">Up to date</span>
+            </div>
+            <div class="tool-version-row">
+              <div>Installed: <span id="ytdlp-cur-ver">…</span></div>
+              <div id="ytdlp-latest-row" style="display:none">Latest: <span id="ytdlp-latest-ver">…</span></div>
+            </div>
+            <button class="btn-sm" id="btn-update-ytdlp" onclick="triggerToolUpdate('yt-dlp')" style="margin-top:auto;width:100%;justify-content:center;">
+              Update yt-dlp
+            </button>
+            <div class="update-progress-wrap" id="ytdlp-prog-wrap">
+              <div class="update-progress-bar"><div class="update-progress-fill" id="ytdlp-prog-fill"></div></div>
+              <div class="update-progress-meta"><span id="ytdlp-prog-speed">Updating…</span><span id="ytdlp-prog-pct">0%</span></div>
+            </div>
+          </div>
+
+          <!-- gallery-dl card -->
+          <div class="tool-card">
+            <div class="tool-card-head">
+              <span class="tool-name">gallery-dl</span>
+              <span class="update-pill-badge good" id="gallerydl-badge">Up to date</span>
+            </div>
+            <div class="tool-version-row">
+              <div>Installed: <span id="gallerydl-cur-ver">…</span></div>
+              <div id="gallerydl-latest-row" style="display:none">Latest: <span id="gallerydl-latest-ver">…</span></div>
+            </div>
+            <button class="btn-sm" id="btn-update-gallerydl" onclick="triggerToolUpdate('gallery-dl')" style="margin-top:auto;width:100%;justify-content:center;">
+              Update gallery-dl
+            </button>
+            <div class="update-progress-wrap" id="gallerydl-prog-wrap">
+              <div class="update-progress-bar"><div class="update-progress-fill" id="gallerydl-prog-fill"></div></div>
+              <div class="update-progress-meta"><span id="gallerydl-prog-speed">Updating…</span><span id="gallerydl-prog-pct">0%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size:10.5px;color:var(--t3);display:flex;justify-content:space-between;padding:0 2px;">
+        <span>Media Downloader • By Brandon</span>
+        <span id="about-github-link" style="color:var(--acc);cursor:pointer;" onclick="openGitHubRepo()">GitHub Repository</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 "use strict";
 
@@ -1036,6 +1399,46 @@ select { appearance:none; }
 // DETECTION — single input auto-detects link vs search
 // ─────────────────────────────────────────────
 const YTDLP_HOSTS = ["youtube.com","youtu.be","vimeo.com","tiktok.com","twitch.tv","dailymotion.com","bilibili.com"];
+
+// Mirrors media_downloader.py's AUTH_HINT_SITES. Kept client-side (like
+// detectTool's YTDLP_HOSTS) so the nudge appears instantly as the user
+// types/pastes, with no round trip to the backend needed for something
+// this cheap to compute.
+const AUTH_HINT_SITES = {
+  "twitter.com":   "X/Twitter often blocks anonymous requests.",
+  "x.com":         "X/Twitter often blocks anonymous requests.",
+  "instagram.com": "Private accounts and many posts require login.",
+  "pixiv.net":     "R-18 and follower-only content requires login.",
+  "reddit.com":    "Some subreddits require login to view.",
+};
+
+function authHintFor(url) {
+  const h = hostOf(url);
+  if (!h) return "";
+  for (const site in AUTH_HINT_SITES) {
+    if (h.includes(site)) return AUTH_HINT_SITES[site];
+  }
+  return "";
+}
+
+function updateAuthHint(url) {
+  const row = $("auth-hint-row");
+  const hint = url ? authHintFor(url) : "";
+  if (hint) {
+    $("auth-hint-text").textContent = hint;
+    row.classList.add("show");
+  } else {
+    row.classList.remove("show");
+  }
+}
+
+// Opens Advanced options (if closed) and focuses the cookies dropdown —
+// the actual fix for everything AUTH_HINT_SITES warns about.
+function applyAuthHintAction() {
+  if (!$("adv-body").classList.contains("open")) toggleAdv();
+  $("cookies-select").focus();
+  $("cookies-select").scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
 
 function hostOf(url) {
   try { return new URL(url).hostname.replace(/^www\./,"").toLowerCase(); } catch { return ""; }
@@ -1150,6 +1553,7 @@ function shouldShowGallery(item) {
 // shown as the primary, at-a-glance text in the Downloads list and toast.
 // ─────────────────────────────────────────────
 const ERROR_PATTERNS = [
+  { test: /app backend didn.?t respond/i,                         msg: "App still starting up — click Retry in a moment" },
   { test: /age[- ]restrict|confirm your age|sign in to confirm/i, msg: "Age-restricted content" },
   { test: /private video|this video is private/i,                msg: "This video is private" },
   { test: /video unavailable|this video (is|has been) (not available|removed)|content isn.?t available/i, msg: "Video unavailable" },
@@ -1178,7 +1582,6 @@ let downloads    = [];   // unified list — pending/running/paused/done/error/c
 let nextLocalId  = 1;
 let isRunning    = false;
 let currentJobId = null;
-let jobPaused    = false;
 let elapsedTimer = null;
 let jobStartTime = null;
 let lastCmd      = "";
@@ -1228,15 +1631,18 @@ function updateInputMode() {
     $("input-caption").textContent = "Paste a link to download, or type anything else to search YouTube.";
     clearTimeout(previewDebounceTimer);
     hideLinkPreview();
+    updateAuthHint("");
   } else if (isUrl) {
-    const tool = detectTool(normalizeUrl(raw));
+    const normalized = normalizeUrl(raw);
+    const tool = detectTool(normalized);
     $("input-icon").innerHTML = ICON_LINK;
     badge.style.display    = "inline-block";
     badge.textContent      = toolLabel(tool);
     badge.style.background = tool === "yt-dlp" ? "var(--pink-dim)" : "var(--blue-dim)";
     badge.style.color      = tool === "yt-dlp" ? "var(--pink)"     : "var(--blue)";
     $("input-caption").textContent = "Recognized as a link — ready to download.";
-    schedulePreview(normalizeUrl(raw));
+    schedulePreview(normalized);
+    updateAuthHint(normalized);
   } else {
     $("input-icon").innerHTML = ICON_SEARCH;
     badge.style.display    = "inline-block";
@@ -1246,6 +1652,7 @@ function updateInputMode() {
     $("input-caption").textContent = "Not a link — treated as a search query.";
     clearTimeout(previewDebounceTimer);
     hideLinkPreview();
+    updateAuthHint("");
   }
 
   updatePrimaryButton();
@@ -1271,20 +1678,49 @@ function schedulePreview(url) {
 }
 
 async function fetchLinkPreview(url) {
-  if (!window.pywebview?.api?.preview_link) return;
   const reqId = ++previewReqId;
   showPreviewLoading();
+
+  // Cold-start resilience — mirrors the same fix in runNext(). Previously
+  // this bailed immediately and permanently if pywebview's API wasn't
+  // ready yet, which could make preview look silently broken for the
+  // first few seconds right after launch.
+  const api = await waitForApi(5000);
+  if (String(reqId) !== String(previewReqId)) return; // input moved on while we waited
+
+  if (!api?.preview_link) {
+    showPreviewUnavailable("Preview needs the app to finish starting — try again in a moment.");
+    return;
+  }
   try {
-    await window.pywebview.api.preview_link(url, String(reqId));
+    await api.preview_link(url, String(reqId));
   } catch {
-    hideLinkPreview();
+    showPreviewUnavailable("No preview available for this link — you can still add it to download.");
   }
 }
 
 window.onLinkPreview = function(reqId, result) {
   if (String(reqId) !== String(previewReqId)) return; // stale — box has moved on
-  if (!result?.ok) { hideLinkPreview(); return; }
-  lastPreviewedUrl = $("main-input").value.trim() ? normalizeUrl($("main-input").value) : "";
+  const currentUrl = $("main-input").value.trim() ? normalizeUrl($("main-input").value) : "";
+  lastPreviewedUrl = currentUrl; // set either way — no point re-fetching an unchanged URL that just failed
+
+  if (!result?.ok) {
+    // Previously this just silently hid the preview section, which is
+    // indistinguishable from "nothing happened" — the exact complaint
+    // this was built to fix. Most of these are auth-gated sites
+    // (matches AUTH_HINT_SITES) or sites gallery-dl/yt-dlp genuinely
+    // can't preview at all — either way, saying so explicitly beats
+    // silence, and the download itself is unaffected either way.
+    const hint = authHintFor(currentUrl);
+    const msg = hint
+      ? `Couldn't load a preview — ${hint} You can still add it below; try cookies in Advanced options.`
+      : result?.reason === "timeout"
+        ? "Preview took too long to load — you can still add it below."
+        : "No preview available for this link — you can still add it below.";
+    showPreviewUnavailable(msg);
+    return;
+  }
+
   renderLinkPreview(result);
 };
 
@@ -1301,6 +1737,20 @@ function showPreviewLoading() {
     '</div>';
 }
 
+function showPreviewUnavailable(msg) {
+  sectionMode = "preview";
+  $("search-section").classList.add("show");
+  $("search-section-title").textContent = "Preview";
+  $("search-result-count").textContent = "";
+  $("search-results").innerHTML =
+    '<div class="search-empty" style="padding:22px 20px;">' +
+      '<svg width="26" height="26" viewBox="0 0 16 16" fill="currentColor" style="opacity:.35">' +
+        '<path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.75 10.5h-1.5v-1.5h1.5v1.5zm0-3h-1.5V4.5h1.5V8.5z"/>' +
+      '</svg>' +
+      escHtml(msg) +
+    '</div>';
+}
+
 function renderLinkPreview(result) {
   sectionMode = "preview";
   $("search-section").classList.add("show");
@@ -1311,17 +1761,29 @@ function renderLinkPreview(result) {
   if (result.channel) metaParts.push(result.channel);
   if (result.count)   metaParts.push(result.count + " item" + (result.count === 1 ? "" : "s"));
 
+  // Whatever best identifies "who/where this is from" — the channel for
+  // a video, or the site host (gallery-dl previews set title to the
+  // host already) for a gallery — used to seed the avatar circle, same
+  // visual language as the search-result cards.
+  const identityLabel = result.channel || result.title || "?";
+
   $("search-results").innerHTML =
     '<div class="sr-card preview-card">' +
       '<div class="sr-thumb-wrap">' +
         (result.thumbnail
           ? `<img class="sr-thumb" src="${escHtml(result.thumbnail)}" alt="" onerror="this.style.display='none'">`
           : '<div class="sr-thumb"></div>') +
+        '<div class="sr-thumb-scrim"></div>' +
         (result.duration ? `<span class="sr-duration">${fmtDuration(result.duration)}</span>` : "") +
       '</div>' +
       '<div class="sr-info">' +
         `<div class="sr-title" title="${escHtml(result.title || "")}">${escHtml(result.title || "")}</div>` +
-        (metaParts.length ? `<div class="sr-channel">${escHtml(metaParts.join(" · "))}</div>` : "") +
+        (metaParts.length
+          ? '<div class="sr-channel-row">' +
+              `<span class="sr-avatar" style="background:${avatarColorFor(identityLabel)}">${escHtml(identityLabel.charAt(0))}</span>` +
+              `<span class="sr-channel">${escHtml(metaParts.join(" · "))}</span>` +
+            '</div>'
+          : "") +
       '</div>' +
     '</div>';
 }
@@ -1604,6 +2066,38 @@ function cancelScheduler() {
 }
 
 // ─────────────────────────────────────────────
+// CONFIRM DIALOG — reusable for destructive actions. Deliberately a
+// custom in-app modal rather than window.confirm(): a native browser
+// confirm dialog would work, but it renders as an OS-chrome message box
+// that clashes with everything else in this app's styling, and can't
+// carry a styled "danger" action button.
+// ─────────────────────────────────────────────
+let _confirmCallback = null;
+function showConfirm(title, message, confirmLabel, onConfirm) {
+  $("confirm-title").textContent = title;
+  $("confirm-message").textContent = message;
+  const btn = $("confirm-confirm-btn");
+  btn.textContent = confirmLabel || "Confirm";
+  _confirmCallback = onConfirm;
+  $("confirm-overlay").classList.add("show");
+}
+function closeConfirm() {
+  $("confirm-overlay").classList.remove("show");
+  _confirmCallback = null;
+}
+$("confirm-confirm-btn").addEventListener("click", () => {
+  const cb = _confirmCallback;
+  closeConfirm();
+  if (cb) cb();
+});
+$("confirm-overlay").addEventListener("click", e => {
+  if (e.target.id === "confirm-overlay") closeConfirm();
+});
+window.addEventListener("keydown", e => {
+  if (e.key === "Escape" && $("confirm-overlay").classList.contains("show")) closeConfirm();
+});
+
+// ─────────────────────────────────────────────
 // SESSION STATS
 // ─────────────────────────────────────────────
 function updateSessionStats() {
@@ -1668,20 +2162,32 @@ function retryDownload(id) {
 
 async function clearFinished() {
   const finishedIds = downloads.filter(i => ["done","error","cancelled"].includes(i.state)).map(i => i.historyId).filter(Boolean);
-  downloads = downloads.filter(i => !["done","error","cancelled"].includes(i.state));
-  if (finishedIds.length && window.pywebview?.api?.clear_history) {
-    try { await window.pywebview.api.clear_history(); } catch {}
-  }
-  renderDownloads();
-  showToast("Cleared finished downloads");
+  const finishedCount = downloads.filter(i => ["done","error","cancelled"].includes(i.state)).length;
+  if (!finishedCount) { showToast("Nothing to clear"); return; }
+
+  showConfirm(
+    "Clear finished downloads?",
+    `This removes ${finishedCount} finished download${finishedCount === 1 ? "" : "s"} from the list and permanently deletes ${finishedCount === 1 ? "its" : "their"} history. This can't be undone.`,
+    `Clear ${finishedCount}`,
+    async () => {
+      downloads = downloads.filter(i => !["done","error","cancelled"].includes(i.state));
+      downloadsHistoryPage = 0;
+      if (finishedIds.length && window.pywebview?.api?.clear_history) {
+        try { await window.pywebview.api.clear_history(); } catch {}
+      }
+      renderDownloads();
+      showToast("Cleared finished downloads");
+    }
+  );
 }
 
 function setFilter(f) {
   currentFilter = f;
+  downloadsHistoryPage = 0;
   document.querySelectorAll(".filter-chip").forEach(el => el.classList.toggle("active", el.dataset.filter === f));
   renderDownloads();
 }
-$("dl-search-input").addEventListener("input", renderDownloads);
+$("dl-search-input").addEventListener("input", () => { downloadsHistoryPage = 0; renderDownloads(); });
 
 async function openFolder(id) {
   const item = downloads.find(i => i.id === id);
@@ -1689,6 +2195,59 @@ async function openFolder(id) {
   try { await window.pywebview.api.open_output_folder(item.outputDir || (item.cfg && item.cfg.output)); }
   catch { showToast("Couldn't open folder", false); }
 }
+
+const ICON_COPY_LINK = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="9" rx="1.5"/><path d="M10.5 5.5V3.5A1.5 1.5 0 0 0 9 2H3.5A1.5 1.5 0 0 0 2 3.5V9a1.5 1.5 0 0 0 1.5 1.5H5.5"/></svg>';
+const ICON_OPEN_LINK = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3H3.5A1.5 1.5 0 0 0 2 4.5v8A1.5 1.5 0 0 0 3.5 14h8a1.5 1.5 0 0 0 1.5-1.5V9.5"/><path d="M9.5 2H14v4.5"/><path d="M14 2 7.5 8.5"/></svg>';
+
+// Copies a download's source URL to the clipboard — reuses whatever the
+// link's hover tooltip already reveals, without needing a redownload
+// just to get at it. Tries the modern async Clipboard API first; falls
+// back to the older execCommand("copy") trick (temporary offscreen
+// textarea) for contexts where the async API is unavailable or blocked
+// — some WebView2 configurations treat a locally-loaded page as a
+// non-secure origin, which restricts navigator.clipboard.
+async function copyTextToClipboard(text) {
+  if (!text) return;
+  try {
+    if (!navigator.clipboard) throw new Error("Clipboard API unavailable");
+    await navigator.clipboard.writeText(text);
+    showToast("Link copied");
+    return;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      showToast(ok ? "Link copied" : "Couldn't copy link", ok);
+    } catch {
+      showToast("Couldn't copy link", false);
+    }
+  }
+}
+
+// Opens a download's source URL in the user's default OS browser —
+// mirrors openFolder()/open_file()'s pattern of a thin native call, but
+// for viewing the original page rather than the downloaded file.
+async function openLinkInBrowser(url) {
+  if (!url) return;
+  if (!window.pywebview?.api?.open_url_external) {
+    showToast("App backend not available to open the link", false);
+    return;
+  }
+  try {
+    const res = await window.pywebview.api.open_url_external(url);
+    if (!res?.ok) showToast(res?.error || "Couldn't open link", false);
+  } catch {
+    showToast("Couldn't open link", false);
+  }
+}
+
 function playDownloadItem(id) {
   const item = downloads.find(i => i.id === id);
   if (!item) return;
@@ -1718,6 +2277,9 @@ function matchesFilter(item, filter) {
   return true;
 }
 
+let downloadsHistoryPage = 0;
+const DOWNLOADS_PAGE_SIZE = 50;
+
 function renderDownloads() {
   $("dl-badge").textContent = downloads.length;
   const q = ($("dl-search-input").value || "").trim().toLowerCase();
@@ -1728,10 +2290,24 @@ function renderDownloads() {
     return (i.filename || "").toLowerCase().includes(q) || (i.url || "").toLowerCase().includes(q);
   });
 
-  const active   = filtered.filter(i => ["running","paused","pending"].includes(i.state));
-  const finished = filtered.filter(i => ["done","error","cancelled"].includes(i.state))
+  const active = filtered.filter(i => ["running","paused","pending"].includes(i.state));
+  const finishedAll = filtered.filter(i => ["done","error","cancelled"].includes(i.state))
     .sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
-  const ordered = [...active, ...finished];
+
+  // Only the finished/history portion is paginated — active jobs are
+  // always shown in full (rarely more than a handful at once).
+  // history.json is capped at 2000 entries and loadInitialHistory() maps
+  // every one of them into `downloads` at startup; rendering all of them
+  // into the DOM in one pass got noticeably sluggish for long-time users
+  // with a large history. This caps what's actually rendered per page —
+  // the underlying data and search/filter still cover everything.
+  const totalPages = Math.max(1, Math.ceil(finishedAll.length / DOWNLOADS_PAGE_SIZE));
+  if (downloadsHistoryPage >= totalPages) downloadsHistoryPage = totalPages - 1;
+  if (downloadsHistoryPage < 0) downloadsHistoryPage = 0;
+  const pageStart = downloadsHistoryPage * DOWNLOADS_PAGE_SIZE;
+  const finishedPage = finishedAll.slice(pageStart, pageStart + DOWNLOADS_PAGE_SIZE);
+
+  const ordered = [...active, ...finishedPage];
 
   $("downloads-empty").style.display = downloads.length === 0 ? "flex" : "none";
   const list = $("dl-list");
@@ -1742,11 +2318,45 @@ function renderDownloads() {
     div.className = "downloads-empty";
     div.textContent = "No downloads match this filter.";
     list.appendChild(div);
+    renderDownloadsPagination(0, 1);
     return;
   }
 
   ordered.forEach(item => list.appendChild(renderRow(item)));
   updateQueuePositionLabel();
+  renderDownloadsPagination(finishedAll.length, totalPages);
+}
+
+function renderDownloadsPagination(finishedCount, totalPages) {
+  const container = $("dl-pagination");
+  if (!container) return;
+  if (totalPages <= 1) { container.style.display = "none"; container.innerHTML = ""; return; }
+
+  container.style.display = "block";
+  const row = document.createElement("div");
+  row.className = "dl-pagination";
+
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "dl-page-btn";
+  prevBtn.textContent = "← Previous";
+  prevBtn.disabled = downloadsHistoryPage === 0;
+  prevBtn.onclick = () => { downloadsHistoryPage--; renderDownloads(); $("dl-list-wrap")?.scrollTo({ top: 0 }); };
+
+  const info = document.createElement("span");
+  info.className = "dl-page-info";
+  info.textContent = `Page ${downloadsHistoryPage + 1} of ${totalPages} (${finishedCount} finished)`;
+
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "dl-page-btn";
+  nextBtn.textContent = "Next →";
+  nextBtn.disabled = downloadsHistoryPage >= totalPages - 1;
+  nextBtn.onclick = () => { downloadsHistoryPage++; renderDownloads(); $("dl-list-wrap")?.scrollTo({ top: 0 }); };
+
+  container.innerHTML = "";
+  row.appendChild(prevBtn);
+  row.appendChild(info);
+  row.appendChild(nextBtn);
+  container.appendChild(row);
 }
 
 function renderRow(item) {
@@ -1778,9 +2388,32 @@ function renderRow(item) {
   top.className = "dl-top";
   top.innerHTML =
     '<div class="dl-dot ' + item.state + '"></div>' +
-    '<div class="dl-info"><div class="dl-name" title="' + escHtml(item.url) + '">' + escHtml(displayName) + '</div>' + metaHtml + '</div>' +
+    '<div class="dl-info"><div class="dl-name-row"><span class="dl-name" title="' + escHtml(item.url) + '">' + escHtml(displayName) + '</span><span class="dl-link-actions" data-link-actions></span></div>' + metaHtml + '</div>' +
     '<div class="dl-tag" style="background:' + tagBg + ';color:' + tagColor + '">' + toolLabel(item.tool) + '</div>';
   el.appendChild(top);
+
+  // Copy-link / open-in-browser, right next to the name — reuses the URL
+  // that's already discoverable via the name's hover tooltip, without
+  // requiring a redownload to do anything with it. Built as real
+  // elements with closures over item.url (like the actions row below)
+  // rather than string-interpolating the URL into an inline onclick
+  // attribute.
+  const linkActionsEl = top.querySelector("[data-link-actions]");
+  if (linkActionsEl && item.url) {
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "dl-link-btn";
+    copyBtn.title = "Copy link";
+    copyBtn.innerHTML = ICON_COPY_LINK;
+    copyBtn.onclick = e => { e.stopPropagation(); copyTextToClipboard(item.url); };
+    linkActionsEl.appendChild(copyBtn);
+
+    const openBtn = document.createElement("button");
+    openBtn.className = "dl-link-btn";
+    openBtn.title = "Open link in browser";
+    openBtn.innerHTML = ICON_OPEN_LINK;
+    openBtn.onclick = e => { e.stopPropagation(); openLinkInBrowser(item.url); };
+    linkActionsEl.appendChild(openBtn);
+  }
 
   // actions row (compact rows only — the active row gets its own controls below)
   if (item.state !== "running" && item.state !== "paused") {
@@ -1828,10 +2461,12 @@ function renderRow(item) {
   }
 
   // ── expanded active card (running / paused) ──
+  const pauseLabel = item.state === "paused" ? "▶ Resume" : "⏸ Pause";
+  const hasByteStats = item.tool === "yt-dlp";
   const prog = document.createElement("div");
   prog.className = "dl-progress";
   prog.innerHTML =
-    '<div class="bar-track"><div class="bar-fill" id="active-bar-fill"></div></div>' +
+    '<div class="bar-track"><div class="bar-fill" id="active-bar-fill"></div><div class="activity-pulse" id="active-activity-pulse" style="display:none"><span></span><span></span><span></span></div></div>' +
     '<div class="dl-progress-row">' +
       '<span class="dl-file" id="active-prog-file"></span>' +
       '<div class="dl-progress-meta">' +
@@ -1842,12 +2477,20 @@ function renderRow(item) {
       '</div>' +
     '</div>' +
     '<div class="dl-ctrl">' +
-      '<button class="btn-sm" id="btn-pause" onclick="onPauseClick()">⏸ Pause</button>' +
+      '<button class="btn-sm" id="btn-pause" onclick="onPauseClick()">' + pauseLabel + '</button>' +
       '<button class="btn-sm danger" id="btn-cancel" onclick="onCancelClick()">⏹ Cancel</button>' +
-      '<button class="btn-sm disclosure-btn" id="btn-toggle-logs" onclick="toggleLogs()" style="margin-left:auto;">Show logs</button>' +
+      '<button class="btn-sm disclosure-btn" id="btn-toggle-logs" onclick="toggleLogs()" style="margin-left:auto;">Show details</button>' +
       '<button class="btn-sm disclosure-btn" id="btn-toggle-cmd" onclick="toggleCmd()">View command</button>' +
     '</div>' +
     '<div class="cmd-text" id="active-cmd-text" style="display:none"></div>' +
+    (hasByteStats
+      ? '<div class="dl-speed-stats" id="active-speed-stats" style="display:none">' +
+          '<div class="dl-stat"><span class="dl-stat-label">Downloaded</span><span class="dl-stat-value" id="dl-stat-downloaded">—</span></div>' +
+          '<div class="dl-stat"><span class="dl-stat-label">Total size</span><span class="dl-stat-value" id="dl-stat-total">—</span></div>' +
+          '<div class="dl-stat"><span class="dl-stat-label">Remaining</span><span class="dl-stat-value" id="dl-stat-remaining">—</span></div>' +
+          '<div class="dl-stat"><span class="dl-stat-label">Speed</span><span class="dl-stat-value" id="dl-stat-speed">—</span></div>' +
+        '</div>'
+      : '<div class="dl-speed-stats-note" id="active-speed-stats" style="display:none">Byte-level size/speed isn\'t available for this type of download — see the item count above instead.</div>') +
     '<div class="log-box" id="active-log-box" style="display:none"></div>';
   el.appendChild(prog);
   return el;
@@ -1858,9 +2501,14 @@ let showCmdOn  = false;
 function toggleLogs() {
   showLogsOn = !showLogsOn;
   const box = $("active-log-box");
+  const stats = $("active-speed-stats");
   if (box) box.style.display = showLogsOn ? "block" : "none";
+  // Empty string (not "grid"/"block") clears the inline override and lets
+  // each variant's own CSS class decide its display type — the stats
+  // grid and the gallery-dl fallback note use different display values.
+  if (stats) stats.style.display = showLogsOn ? "" : "none";
   const btn = $("btn-toggle-logs");
-  if (btn) btn.textContent = showLogsOn ? "Hide logs" : "Show logs";
+  if (btn) btn.textContent = showLogsOn ? "Hide details" : "Show details";
 }
 function toggleCmd() {
   showCmdOn = !showCmdOn;
@@ -1892,8 +2540,21 @@ async function runNext() {
   const item = downloads.find(i => i.state === "pending");
   if (!item) return;
 
-  const api = await waitForApi(3000);
-  if (!api) { showToast("No download backend — copy the command to run manually", false); return; }
+  // Cold-start grace period. WebView2/pywebview initialization can
+  // genuinely take a few seconds on a slower machine right after launch
+  // — 3s was tight enough to occasionally misfire as a hard failure
+  // during a perfectly healthy startup. If it DOES still time out, route
+  // it through finishItem() so the item lands in the normal, retryable
+  // "error" state with a Retry button — previously a timeout just
+  // toasted once and returned with the item untouched, and since
+  // isRunning was never set true, nothing else re-triggered runNext()
+  // for that item specifically — it stayed silently stuck as "pending"
+  // until the user happened to queue something unrelated.
+  const api = await waitForApi(8000);
+  if (!api) {
+    finishItem(item, false, "App backend didn't respond — it may still be starting up.");
+    return;
+  }
 
   isRunning      = true;
   item.state     = "running";
@@ -1908,14 +2569,28 @@ async function runNext() {
   const cmdBox = $("active-cmd-text");
   if (cmdBox) cmdBox.innerHTML = highlightCmd(cmd, tool);
 
-  jobPaused    = false;
   jobStartTime = Date.now();
   clearInterval(elapsedTimer);
   elapsedTimer = setInterval(updateElapsed, 1000);
 
+  // Generate the job id here, client-side, and set currentJobId BEFORE
+  // awaiting the start call below. start_download_async's background
+  // thread can start emitting onDownloadLine/onDownloadProgress calls
+  // while this await is still in flight (they're pushed via evaluate_js
+  // independently of the promise resolving) — if currentJobId weren't
+  // set until after the await, those early callbacks would silently miss
+  // the `if (jobId !== currentJobId) return;` guard on arrival.
+  const clientJobId = (window.crypto?.randomUUID)
+    ? window.crypto.randomUUID()
+    : "job-" + Date.now().toString(16) + "-" + Math.random().toString(16).slice(2);
+  item.jobId   = clientJobId;
+  currentJobId = clientJobId;
+
   try {
-    const res = await api.start_download_async(item.url, item.cfg, item.toolOverride || "");
+    const res = await api.start_download_async(item.url, item.cfg, item.toolOverride || "", clientJobId);
     if (!res?.ok) { finishItem(item, false, res?.error || "Failed to start"); return; }
+    // Backend echoes back the same id when it accepts the client-supplied
+    // one; fall back to whatever it actually used just in case.
     item.jobId   = res.job_id;
     currentJobId = res.job_id;
   } catch (e) {
@@ -1978,28 +2653,68 @@ window.onDownloadLine = function(jobId, line) {
   lb.scrollTop = lb.scrollHeight;
 };
 
-window.onDownloadProgress = function(jobId, itemsDone, limit, currentFile, percent, speed, eta) {
+window.onDownloadProgress = function(jobId, snapshot) {
   if (jobId !== currentJobId) return;
+  const { items_done: itemsDone, limit, current_file: currentFile, percent, speed, eta, downloaded_bytes: downloadedBytes, total_bytes: totalBytes } = snapshot;
   const item = downloads.find(i => i.jobId === jobId);
   if (item) { item.itemsDone = itemsDone; item.limit = limit; }
 
   const fill = $("active-bar-fill");
+  const pulse = $("active-activity-pulse");
+  const cntEl = $("active-prog-cnt");
   if (!fill) return; // active card not in the DOM this tick (filtered out) — state still tracked on the item
+
   if (percent > 0) {
+    pulse.style.display = "none";
+    fill.style.display = "";
     fill.style.width = Math.min(100, percent) + "%";
     fill.classList.remove("ind");
-    $("active-prog-cnt").textContent = limit > 0 ? itemsDone + " / " + limit : Math.round(percent) + "%";
+    cntEl.classList.remove("prog-cnt-emphasis");
+    cntEl.textContent = limit > 0 ? itemsDone + " / " + limit : Math.round(percent) + "%";
   } else if (limit > 0) {
+    pulse.style.display = "none";
+    fill.style.display = "";
     fill.style.width = Math.min(100, Math.round(itemsDone / limit * 100)) + "%";
     fill.classList.remove("ind");
-    $("active-prog-cnt").textContent = itemsDone + " / " + limit;
+    cntEl.classList.remove("prog-cnt-emphasis");
+    cntEl.textContent = itemsDone + " / " + limit;
   } else {
-    fill.classList.add("ind");
-    $("active-prog-cnt").textContent = itemsDone > 0 ? itemsDone + " files" : "";
+    // No real percentage AND no target count to divide by (e.g. an
+    // unlimited gallery-dl download) — a bar here, swept or otherwise,
+    // would visually claim progress toward an endpoint that doesn't
+    // exist. Use the non-directional activity-pulse instead, and let
+    // the actual file count — not a fabricated bar position — carry
+    // the real information, emphasized so it reads as the primary signal.
+    fill.style.display = "none";
+    pulse.style.display = "flex";
+    cntEl.classList.toggle("prog-cnt-emphasis", itemsDone > 0);
+    cntEl.textContent = itemsDone > 0 ? itemsDone + " files" : "Starting…";
   }
   if (currentFile) $("active-prog-file").textContent = currentFile;
   $("active-prog-speed").textContent = speed ? "↓ " + speed : "";
   $("active-prog-eta").textContent   = eta   ? "ETA " + eta  : "";
+
+  // IDM-style byte-level stats, shown in the "Show details" panel.
+  // Only present for yt-dlp jobs — gallery-dl exposes no reliable
+  // per-file byte progress, so that variant of this row is a plain
+  // note instead (see renderRow) and these elements won't exist.
+  const dEl = $("dl-stat-downloaded"), tEl = $("dl-stat-total"), rEl = $("dl-stat-remaining"), sEl = $("dl-stat-speed");
+  if (dEl) {
+    if (typeof downloadedBytes === "number" && typeof totalBytes === "number" && totalBytes > 0) {
+      dEl.textContent = fmtBytes(downloadedBytes);
+      tEl.textContent = fmtBytes(totalBytes);
+      rEl.textContent = fmtBytes(Math.max(0, totalBytes - downloadedBytes));
+    } else {
+      // A live/fragmented stream line without a known total — still
+      // worth showing what we do know (downloaded so far) rather than
+      // blanking everything out.
+      dEl.textContent = typeof downloadedBytes === "number" ? fmtBytes(downloadedBytes) : "—";
+      tEl.textContent = "—";
+      rEl.textContent = "—";
+    }
+    sEl.textContent = speed || "—";
+  }
+
   updateQueuePositionLabel();
 };
 
@@ -2020,20 +2735,19 @@ function updateElapsed() {
 // ─────────────────────────────────────────────
 async function onPauseClick() {
   if (!currentJobId || !window.pywebview?.api) return;
-  const action = jobPaused ? "resume_download" : "pause_download";
+  const item = downloads.find(i => i.jobId === currentJobId);
+  if (!item) return;
+  const isPaused = item.state === "paused";
+  const action = isPaused ? "resume_download" : "pause_download";
   const res = await window.pywebview.api[action](currentJobId);
   if (!res?.ok) { showToast(res?.error || "Action failed", false); return; }
-  jobPaused = !jobPaused;
-  const btn = $("btn-pause");
-  if (btn) btn.innerHTML = jobPaused ? "▶ Resume" : "⏸ Pause";
-  const item = downloads.find(i => i.jobId === currentJobId);
-  if (item) { item.state = jobPaused ? "paused" : "running"; renderDownloads(); }
+  item.state = isPaused ? "running" : "paused";
+  renderDownloads();
 }
 async function onCancelClick() {
   if (!currentJobId || !window.pywebview?.api) return;
   const res = await window.pywebview.api.cancel_download(currentJobId);
   if (!res?.ok) showToast(res?.error || "Cancel failed", false);
-  jobPaused = false;
 }
 
 // ─────────────────────────────────────────────
@@ -2202,6 +2916,18 @@ function showSearchError(msg) {
       ${escHtml(msg)}
     </div>`;
 }
+// Deterministic color from a channel name (same string always gets the
+// same color, no lookup/storage needed) — gives each result card's
+// channel a small visual anchor since the search API doesn't provide
+// actual channel avatar images.
+function avatarColorFor(name) {
+  let hash = 0;
+  const s = name || "?";
+  for (let i = 0; i < s.length; i++) hash = s.charCodeAt(i) + ((hash << 5) - hash);
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 55%, 45%)`;
+}
+
 function renderSearchResults(results) {
   sectionMode = "search";
   const grid = document.createElement("div");
@@ -2212,25 +2938,28 @@ function renderSearchResults(results) {
     card.innerHTML = `
       <div class="sr-thumb-wrap">
         <img class="sr-thumb" src="${escHtml(r.thumbnail)}" alt="" loading="lazy" onerror="this.style.background='var(--s3)'">
+        <div class="sr-thumb-scrim"></div>
         ${r.duration ? `<span class="sr-duration">${fmtDuration(r.duration)}</span>` : ""}
       </div>
       <div class="sr-info">
         <div class="sr-title" title="${escHtml(r.title)}">${escHtml(r.title)}</div>
-        <div class="sr-channel">${escHtml(r.channel)}</div>
+        <div class="sr-channel-row">
+          <span class="sr-avatar" style="background:${avatarColorFor(r.channel)}">${escHtml((r.channel || "?").charAt(0))}</span>
+          <span class="sr-channel">${escHtml(r.channel)}</span>
+        </div>
         ${r.views ? `<div class="sr-meta">${fmtViews(r.views)}</div>` : ""}
       </div>
-      <div class="sr-fmt-row">
+      <div class="sr-actions-row">
         <select class="inp sel sr-fmt-select">
           <option value="mp4" selected>Video · mp4</option>
           <option value="m4a">Audio · m4a</option>
           <option value="mp3">Audio · mp3</option>
           <option value="best">Best quality</option>
         </select>
-      </div>
-      <button class="sr-add-btn" data-url="${escHtml(r.url)}" data-title="${escHtml(r.title)}">
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a1 1 0 0 1 1 1v4h4a1 1 0 1 1 0 2H9v4a1 1 0 1 1-2 0V9H3a1 1 0 1 1 0-2h4V3a1 1 0 0 1 1-1z"/></svg>
-        Add
-      </button>`;
+        <button class="sr-add-icon-btn" title="Add to downloads" data-url="${escHtml(r.url)}" data-title="${escHtml(r.title)}">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a1 1 0 0 1 1 1v4h4a1 1 0 1 1 0 2H9v4a1 1 0 1 1-2 0V9H3a1 1 0 1 1 0-2h4V3a1 1 0 0 1 1-1z"/></svg>
+        </button>
+      </div>`;
 
     // Selecting a format shouldn't bubble up and trigger the whole-card
     // click-to-add handler below.
@@ -2238,12 +2967,12 @@ function renderSearchResults(results) {
     fmtSelect.addEventListener("click", e => e.stopPropagation());
     fmtSelect.addEventListener("mousedown", e => e.stopPropagation());
 
-    card.querySelector(".sr-add-btn").addEventListener("click", function(e) {
+    card.querySelector(".sr-add-icon-btn").addEventListener("click", function(e) {
       e.stopPropagation();
       queueSearchResult(this.dataset.url, this.dataset.title, this, fmtSelect.value);
     });
     card.addEventListener("click", function() {
-      const btn = this.querySelector(".sr-add-btn");
+      const btn = this.querySelector(".sr-add-icon-btn");
       queueSearchResult(btn.dataset.url, btn.dataset.title, btn, fmtSelect.value);
     });
     grid.appendChild(card);
@@ -2258,7 +2987,8 @@ function queueSearchResult(url, title, btn, format) {
   cfg.format = format || cfg.format;
   addDownload(url, cfg);
   btn.classList.add("added");
-  btn.innerHTML = `<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M13.7 4.3a1 1 0 0 0-1.4 0L6 10.6 3.7 8.3a1 1 0 0 0-1.4 1.4l3 3a1 1 0 0 0 1.4 0l7-7a1 1 0 0 0 0-1.4z"/></svg> Added`;
+  btn.title = "Added";
+  btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M13.7 4.3a1 1 0 0 0-1.4 0L6 10.6 3.7 8.3a1 1 0 0 0-1.4 1.4l3 3a1 1 0 0 0 1.4 0l7-7a1 1 0 0 0 0-1.4z"/></svg>`;
 }
 
 // ─────────────────────────────────────────────
@@ -2303,10 +3033,24 @@ const MP_ICON_FULLSCREEN_EXIT = '<svg width="12" height="12" viewBox="0 0 16 16"
 // the lightbox chrome. Targets a whole container (not just the bare
 // <video>) so our own custom controls stay visible/usable in fullscreen,
 // instead of being replaced by the browser's native video fullscreen UI.
+//
+// Target-aware rather than a blind "exit if anything is fullscreen":
+// previously this exited fullscreen whenever ANY element was fullscreen,
+// regardless of which one `el` pointed at — harmless as long as only one
+// fullscreen-triggering control ever existed per view, but a real
+// footgun the moment two different buttons target two different
+// elements (as the lightbox's own top-level button and a video's
+// control-bar button used to), since clicking either one would just
+// exit fullscreen instead of switching targets, leaving their icon
+// states out of sync with each other.
 function toggleFullscreen(el) {
   if (!el) return;
-  if (document.fullscreenElement) {
+  if (document.fullscreenElement === el) {
     document.exitFullscreen();
+  } else if (document.fullscreenElement) {
+    document.exitFullscreen().then(() => {
+      (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+    }).catch(() => {});
   } else {
     (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
   }
@@ -2672,9 +3416,42 @@ function miniPlayerTogglePlay(e) {
 // ─────────────────────────────────────────────
 let galleryFiles = [];
 let galleryUrls  = {};
+let videoThumbUrls = {};   // path -> thumbnail url, cached across the whole session
 let lightboxIndex = -1;
 let galleryPage = 0;
 const GALLERY_PAGE_SIZE = 50;
+const GALLERY_PLAY_BADGE = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l11 6-11 6V2z"/></svg>';
+
+function galleryVideoFallback(cell) {
+  cell.innerHTML = '<div class="gallery-cell-video"><svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l11 6-11 6V2z"/></svg></div>';
+}
+function galleryVideoThumbError(imgEl) {
+  const cell = imgEl.closest(".gallery-cell");
+  if (cell) galleryVideoFallback(cell);
+}
+
+// Lazily fetches a video's frame thumbnail (extracted via ffmpeg on the
+// backend, cached there by path+mtime) and swaps it into the cell once
+// ready. Only called for cells not already in videoThumbUrls, and only
+// for files on the currently visible gallery page — so opening a huge
+// gallery doesn't kick off dozens of ffmpeg extractions at once.
+async function fetchVideoThumbnail(file, cellEl) {
+  if (!window.pywebview?.api?.get_video_thumbnail_url) return;
+  try {
+    const res = await window.pywebview.api.get_video_thumbnail_url(file.path);
+    if (res?.ok && res.url) {
+      videoThumbUrls[file.path] = res.url;
+      // Guard against a stale response landing after the user paginated
+      // away or closed the gallery — only touch the DOM if this cell is
+      // still showing the same file.
+      if (cellEl.isConnected && cellEl.title === file.name) {
+        cellEl.innerHTML =
+          `<img src="${escHtml(res.url)}" alt="" loading="lazy" onerror="galleryVideoThumbError(this)">` +
+          `<div class="gallery-cell-play-badge">${GALLERY_PLAY_BADGE}</div>`;
+      }
+    }
+  } catch {}
+}
 
 function galleryImgError(imgEl) {
   const cell = imgEl.closest(".gallery-cell");
@@ -2727,10 +3504,19 @@ function renderGalleryGrid() {
         ? `<img src="${escHtml(url)}" alt="" loading="lazy" onerror="galleryImgError(this)">`
         : '<div class="gallery-cell-fallback">?</div>';
     } else {
-      // Video thumbnail extraction would need an actual decode/frame-grab
-      // step, which isn't worth the cost here — a play-badge tile is a
-      // reasonable stand-in, and the file still opens full-size on click.
-      cell.innerHTML = '<div class="gallery-cell-video"><svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l11 6-11 6V2z"/></svg></div>';
+      // Video: use the cached ffmpeg-extracted frame if we already have
+      // it; otherwise show the plain play-icon tile immediately and
+      // kick off a lazy fetch — extraction happens once per file (cached
+      // by path+mtime on the backend) so revisiting a gallery is instant.
+      const cachedThumb = videoThumbUrls[f.path];
+      if (cachedThumb) {
+        cell.innerHTML =
+          `<img src="${escHtml(cachedThumb)}" alt="" loading="lazy" onerror="galleryVideoThumbError(this)">` +
+          `<div class="gallery-cell-play-badge">${GALLERY_PLAY_BADGE}</div>`;
+      } else {
+        galleryVideoFallback(cell);
+        fetchVideoThumbnail(f, cell);
+      }
     }
     cell.addEventListener("click", () => openLightbox(actualIndex));
     grid.appendChild(cell);
@@ -2807,6 +3593,7 @@ function renderLightbox() {
   const clearSpinner = () => spinner.remove();
 
   if (isImage(f.name)) {
+    $("lightbox-fullscreen-btn").style.display = "flex";
     const img = document.createElement("img");
     img.className = "lightbox-img";
     img.alt = f.name;
@@ -2818,6 +3605,13 @@ function renderLightbox() {
     img.src = url || "";
     content.appendChild(img);
   } else {
+    // Videos get fullscreen from their own control bar (targets
+    // .mp-player, which has the correct :fullscreen sizing rules) — the
+    // lightbox-level button targets the outer .lightbox-content wrapper
+    // instead, which skips those rules and renders the video small
+    // inside a full black screen. Hiding it here avoids two competing,
+    // differently-scoped fullscreen controls for the same video.
+    $("lightbox-fullscreen-btn").style.display = "none";
     const mediaEl = document.createElement("video");
     mediaEl.className = "mp-video";
     mediaEl.controls = false;
@@ -2899,7 +3693,8 @@ window.addEventListener("keydown", e => {
   } else if (e.key === "ArrowDown") {
     if (mpCurrentMediaEl) { e.preventDefault(); mpCurrentMediaEl.volume = Math.max(0, mpCurrentMediaEl.volume - MP_VOLUME_STEP); }
   } else if (e.key === "Escape") {
-    if ($("lightbox-overlay").classList.contains("show")) closeLightbox();
+    if ($("about-overlay").classList.contains("show")) closeAboutModal();
+    else if ($("lightbox-overlay").classList.contains("show")) closeLightbox();
     else if ($("player-overlay").classList.contains("show")) closePlayer();
   }
 });
@@ -2933,19 +3728,380 @@ function browserBannerDismiss() {
 }
 
 // ─────────────────────────────────────────────
+// RESIZABLE DOWNLOADS SIDEBAR
+// ─────────────────────────────────────────────
+const DOWNLOADS_WIDTH_KEY = "mdl_downloads_col_width";
+const DOWNLOADS_WIDTH_DEFAULT = 400;
+const DOWNLOADS_WIDTH_MIN = 300;
+const DOWNLOADS_WIDTH_MAX = 640;
+
+function applyDownloadsWidth(px) {
+  document.documentElement.style.setProperty("--downloads-width", px + "px");
+}
+function saveDownloadsWidth(px) {
+  try { localStorage.setItem(DOWNLOADS_WIDTH_KEY, String(px)); } catch {}
+}
+function loadDownloadsWidth() {
+  let saved = null;
+  try { saved = parseInt(localStorage.getItem(DOWNLOADS_WIDTH_KEY), 10); } catch {}
+  const width = (saved && saved >= DOWNLOADS_WIDTH_MIN && saved <= DOWNLOADS_WIDTH_MAX) ? saved : DOWNLOADS_WIDTH_DEFAULT;
+  applyDownloadsWidth(width);
+}
+
+(function initResizeHandle() {
+  const handle = $("resize-handle");
+  const col = $("downloads-col");
+  if (!handle || !col) return;
+
+  let dragging = false, startX = 0, startWidth = 0;
+
+  handle.addEventListener("mousedown", e => {
+    dragging = true;
+    handle.classList.add("dragging");
+    startX = e.clientX;
+    startWidth = col.getBoundingClientRect().width;
+    document.body.style.userSelect = "none";
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    // The sidebar is right-aligned, so dragging the handle LEFT should
+    // grow it (mouse moves toward negative x relative to start).
+    const delta = startX - e.clientX;
+    const next = Math.min(DOWNLOADS_WIDTH_MAX, Math.max(DOWNLOADS_WIDTH_MIN, startWidth + delta));
+    applyDownloadsWidth(next);
+  });
+  window.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove("dragging");
+    document.body.style.userSelect = "";
+    const current = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--downloads-width"), 10);
+    saveDownloadsWidth(current || DOWNLOADS_WIDTH_DEFAULT);
+  });
+  handle.addEventListener("dblclick", () => {
+    applyDownloadsWidth(DOWNLOADS_WIDTH_DEFAULT);
+    saveDownloadsWidth(DOWNLOADS_WIDTH_DEFAULT);
+  });
+
+  loadDownloadsWidth();
+})();
+
+// ─────────────────────────────────────────────
+// ABOUT & UPDATES
+// ─────────────────────────────────────────────
+let appUpdateData = null;
+let toolsUpdateData = null;
+let downloadedInstallerPath = null;
+
+function openAboutModal() {
+  $("about-overlay").classList.add("show");
+  refreshInstalledVersions();
+}
+
+function closeAboutModal() {
+  $("about-overlay").classList.remove("show");
+}
+
+function refreshInstalledVersions() {
+  if (!window.pywebview?.api?.get_system_versions) return;
+  window.pywebview.api.get_system_versions().then(info => {
+    if (!info) return;
+    if (info.app) {
+      $("app-cur-ver").textContent = info.app.version || "0.2.6";
+      $("app-version-badge").textContent = "v" + (info.app.version || "0.2.6");
+    }
+    if (info["yt-dlp"]) {
+      const v = info["yt-dlp"].version || "Unknown";
+      $("ytdlp-cur-ver").textContent = v;
+      if (info["yt-dlp"].is_user_tool) {
+        $("ytdlp-cur-ver").innerHTML = escHtml(v) + ' <span style="color:var(--green);font-size:10px;">(updated)</span>';
+      }
+    }
+    if (info["gallery-dl"]) {
+      const v = info["gallery-dl"].version || "Unknown";
+      $("gallerydl-cur-ver").textContent = v;
+      if (info["gallery-dl"].is_user_tool) {
+        $("gallerydl-cur-ver").innerHTML = escHtml(v) + ' <span style="color:var(--green);font-size:10px;">(updated)</span>';
+      }
+    }
+  }).catch(() => {});
+}
+
+function openGitHubRepo() {
+  const repo = "https://github.com/Brandon-Morision/Media-Downloader";
+  if (window.pywebview?.api?.open_url_external) {
+    window.pywebview.api.open_url_external(repo);
+  } else {
+    window.open(repo, "_blank");
+  }
+}
+
+function triggerUpdateCheck() {
+  const btn = $("btn-check-updates");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">↻</span> Checking…';
+  $("app-update-status").textContent = "Checking for updates…";
+
+  if (window.pywebview?.api?.check_updates_async) {
+    window.pywebview.api.check_updates_async().catch(err => {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.418A6 6 0 1 1 8 2v1z"/><path d="M8 0v4l3-2-3-2z"/></svg> <span>Check for Updates</span>';
+      showToast("Failed to check for updates: " + err, false);
+    });
+  } else {
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.418A6 6 0 1 1 8 2v1z"/><path d="M8 0v4l3-2-3-2z"/></svg> <span>Check for Updates</span>';
+      $("app-update-status").textContent = "Backend updater not connected.";
+    }, 500);
+  }
+}
+
+window.onUpdateCheckComplete = function(data) {
+  const btn = $("btn-check-updates");
+  btn.disabled = false;
+  btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.418A6 6 0 1 1 8 2v1z"/><path d="M8 0v4l3-2-3-2z"/></svg> <span>Check for Updates</span>';
+
+  if (!data || !data.ok) {
+    showToast("Update check failed", false);
+    $("app-update-status").textContent = "Could not check for updates right now.";
+    return;
+  }
+
+  // App updates
+  appUpdateData = data.app;
+  if (appUpdateData && appUpdateData.update_available) {
+    $("app-update-status").innerHTML = `<span style="color:var(--amber);font-weight:600;">Update available: v${escHtml(appUpdateData.latest_version)}</span>`;
+    $("btn-download-app-update").style.display = "inline-flex";
+    $("btn-download-app-update").textContent = `Download v${appUpdateData.latest_version}`;
+    $("topbar-update-dot").style.display = "block";
+
+    if (appUpdateData.release_notes) {
+      $("release-notes-wrap").style.display = "flex";
+      $("rel-notes-ver").textContent = "v" + appUpdateData.latest_version;
+      $("release-notes-box").textContent = appUpdateData.release_notes;
+    }
+  } else {
+    $("app-update-status").innerHTML = `<span style="color:var(--green);">✓ Media Downloader is up to date</span>`;
+    $("btn-download-app-update").style.display = "none";
+    $("release-notes-wrap").style.display = "none";
+  }
+
+  // Tools updates
+  toolsUpdateData = data.tools;
+  let anyToolUpdate = false;
+  if (toolsUpdateData) {
+    const yt = toolsUpdateData["yt-dlp"];
+    if (yt) {
+      if (yt.latest_version) {
+        $("ytdlp-latest-row").style.display = "block";
+        $("ytdlp-latest-ver").textContent = yt.latest_version;
+      }
+      if (yt.update_available) {
+        anyToolUpdate = true;
+        $("ytdlp-badge").className = "update-pill-badge warn";
+        $("ytdlp-badge").textContent = "Update available";
+        $("btn-update-ytdlp").style.background = "var(--acc)";
+        $("btn-update-ytdlp").style.color = "#fff";
+      } else {
+        $("ytdlp-badge").className = "update-pill-badge good";
+        $("ytdlp-badge").textContent = "Up to date";
+      }
+    }
+
+    const gdl = toolsUpdateData["gallery-dl"];
+    if (gdl) {
+      if (gdl.latest_version) {
+        $("gallerydl-latest-row").style.display = "block";
+        $("gallerydl-latest-ver").textContent = gdl.latest_version;
+      }
+      if (gdl.update_available) {
+        anyToolUpdate = true;
+        $("gallerydl-badge").className = "update-pill-badge warn";
+        $("gallerydl-badge").textContent = "Update available";
+        $("btn-update-gallerydl").style.background = "var(--acc)";
+        $("btn-update-gallerydl").style.color = "#fff";
+      } else {
+        $("gallerydl-badge").className = "update-pill-badge good";
+        $("gallerydl-badge").textContent = "Up to date";
+      }
+    }
+  }
+
+  if (anyToolUpdate) {
+    $("btn-update-all-tools").style.display = "inline-flex";
+    $("topbar-update-dot").style.display = "block";
+  } else {
+    $("btn-update-all-tools").style.display = "none";
+  }
+
+  if (data.any_update) {
+    showToast("Updates are available!", true);
+  } else {
+    showToast("Everything is up to date", true);
+  }
+};
+
+window.onUpdateAvailable = function(payload) {
+  if (payload && payload.any_update) {
+    $("topbar-update-dot").style.display = "block";
+  }
+};
+
+function triggerToolUpdate(tool) {
+  const btn = tool === "yt-dlp" ? $("btn-update-ytdlp") : $("btn-update-gallerydl");
+  const progWrap = tool === "yt-dlp" ? $("ytdlp-prog-wrap") : $("gallerydl-prog-wrap");
+  const progFill = tool === "yt-dlp" ? $("ytdlp-prog-fill") : $("gallerydl-prog-fill");
+  const progSpeed = tool === "yt-dlp" ? $("ytdlp-prog-speed") : $("gallerydl-prog-speed");
+  const progPct = tool === "yt-dlp" ? $("ytdlp-prog-pct") : $("gallerydl-prog-pct");
+
+  btn.disabled = true;
+  btn.style.display = "none";
+  progWrap.classList.add("show");
+  progFill.style.width = "0%";
+  progSpeed.textContent = "Connecting…";
+  progPct.textContent = "0%";
+
+  if (window.pywebview?.api?.update_engine_async) {
+    window.pywebview.api.update_engine_async(tool).then(res => {
+      if (!res.ok) {
+        btn.disabled = false;
+        btn.style.display = "inline-flex";
+        progWrap.classList.remove("show");
+        showToast(res.error || "Update failed", false);
+      }
+    }).catch(err => {
+      btn.disabled = false;
+      btn.style.display = "inline-flex";
+      progWrap.classList.remove("show");
+      showToast("Error updating tool: " + err, false);
+    });
+  }
+}
+
+function triggerUpdateAllTools() {
+  triggerToolUpdate("gallery-dl");
+  triggerToolUpdate("yt-dlp");
+}
+
+window.onUpdateProgress = function(data) {
+  if (!data) return;
+  if (data.type === "tool") {
+    const isYt = data.tool === "yt-dlp";
+    const progFill = isYt ? $("ytdlp-prog-fill") : $("gallerydl-prog-fill");
+    const progSpeed = isYt ? $("ytdlp-prog-speed") : $("gallerydl-prog-speed");
+    const progPct = isYt ? $("ytdlp-prog-pct") : $("gallerydl-prog-pct");
+
+    if (progFill) progFill.style.width = (data.percent || 0) + "%";
+    if (progSpeed) progSpeed.textContent = (data.speed || "") + (data.total_bytes ? ` (${fmtBytes(data.downloaded_bytes)} / ${fmtBytes(data.total_bytes)})` : "");
+    if (progPct) progPct.textContent = (data.percent || 0) + "%";
+  } else if (data.type === "app") {
+    $("app-update-progress-wrap").classList.add("show");
+    $("app-update-progress-fill").style.width = (data.percent || 0) + "%";
+    $("app-update-speed").textContent = (data.speed || "Downloading…") + (data.total_bytes ? ` (${fmtBytes(data.downloaded_bytes)} / ${fmtBytes(data.total_bytes)})` : "");
+    $("app-update-pct").textContent = (data.percent || 0) + "%";
+  }
+};
+
+window.onEngineUpdateComplete = function(result) {
+  if (!result) return;
+  const tool = result.tool;
+  const isYt = tool === "yt-dlp";
+  const btn = isYt ? $("btn-update-ytdlp") : $("btn-update-gallerydl");
+  const progWrap = isYt ? $("ytdlp-prog-wrap") : $("gallerydl-prog-wrap");
+  const badge = isYt ? $("ytdlp-badge") : $("gallerydl-badge");
+
+  progWrap.classList.remove("show");
+  btn.style.display = "inline-flex";
+  btn.disabled = false;
+  btn.style.background = "";
+  btn.style.color = "";
+
+  if (result.ok) {
+    showToast(`✓ ${tool} updated to ${result.version}`, true);
+    badge.className = "update-pill-badge good";
+    badge.textContent = "Up to date";
+    if (isYt) {
+      $("ytdlp-cur-ver").innerHTML = escHtml(result.version) + ' <span style="color:var(--green);font-size:10px;">(updated)</span>';
+      $("ytdlp-latest-row").style.display = "none";
+    } else {
+      $("gallerydl-cur-ver").innerHTML = escHtml(result.version) + ' <span style="color:var(--green);font-size:10px;">(updated)</span>';
+      $("gallerydl-latest-row").style.display = "none";
+    }
+  } else {
+    showToast(result.error || `Failed to update ${tool}`, false);
+  }
+};
+
+function triggerAppDownload() {
+  if (!appUpdateData || !appUpdateData.asset_url) {
+    showToast("No installer URL available", false);
+    return;
+  }
+  const btn = $("btn-download-app-update");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">↻</span> Downloading…';
+  $("app-update-progress-wrap").classList.add("show");
+  $("app-update-progress-fill").style.width = "0%";
+
+  if (window.pywebview?.api?.download_app_update_async) {
+    window.pywebview.api.download_app_update_async(appUpdateData.asset_url, appUpdateData.asset_name).catch(err => {
+      btn.disabled = false;
+      btn.textContent = "Download & Install";
+      $("app-update-progress-wrap").classList.remove("show");
+      showToast("Download failed: " + err, false);
+    });
+  }
+}
+
+window.onAppInstallerReady = function(result) {
+  $("app-update-progress-wrap").classList.remove("show");
+  const btnDownload = $("btn-download-app-update");
+  const btnApply = $("btn-apply-app-update");
+
+  if (result && result.ok) {
+    downloadedInstallerPath = result.installer_path;
+    btnDownload.style.display = "none";
+    btnApply.style.display = "inline-flex";
+    $("app-update-status").innerHTML = `<span style="color:var(--green);font-weight:600;">Installer ready! Click 'Restart &amp; Upgrade' to install.</span>`;
+    showToast("Update installer downloaded successfully!", true);
+  } else {
+    btnDownload.disabled = false;
+    btnDownload.textContent = "Download & Install";
+    showToast(result.error || "Failed to download installer", false);
+  }
+};
+
+function triggerApplyAppUpdate() {
+  if (!downloadedInstallerPath) {
+    showToast("No installer found", false);
+    return;
+  }
+  const btn = $("btn-apply-app-update");
+  btn.disabled = true;
+  btn.textContent = "Restarting…";
+
+  if (window.pywebview?.api?.apply_app_update) {
+    window.pywebview.api.apply_app_update(downloadedInstallerPath, false);
+  }
+}
+
+// ─────────────────────────────────────────────
 // PYWEBVIEW WIRING / INIT
 // ─────────────────────────────────────────────
 window.addEventListener("pywebviewready", () => {
   if (window.pywebview?.api?.pick_folder) $("browse-btn").style.display = "flex";
   loadInitialHistory();
   loadRecentSearches();
+  refreshInstalledVersions();
 });
 
 updateSessionStats();
 updateInputMode();
 renderDownloads();
 // in case pywebviewready already fired before this script ran
-waitForApi(1500).then(api => { if (api) { loadInitialHistory(); loadRecentSearches(); } });
+waitForApi(1500).then(api => { if (api) { loadInitialHistory(); loadRecentSearches(); refreshInstalledVersions(); } });
 </script>
 </body>
 </html>

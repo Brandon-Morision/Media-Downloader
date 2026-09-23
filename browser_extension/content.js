@@ -284,7 +284,7 @@
         #__mdl_panel__ {
           position: fixed; bottom: 78px; right: 24px; z-index: 2147483646;
           width: 340px; max-height: 420px; overflow: hidden;
-          background: #18181d; border: 1px solid #2c2c38; border-radius: 14px;
+          background: #18181d; border: 1px solid #2c2c38; border-radius: 13px;
           box-shadow: 0 12px 40px rgba(0,0,0,.6);
           display: none; flex-direction: column;
           color: #eaeaf2; font-size: 12px;
@@ -298,7 +298,7 @@
         #__mdl_panel_body__ { overflow-y: auto; flex: 1; padding: 8px; }
         .mdl-item {
           display: flex; flex-direction: column; gap: 4px;
-          padding: 9px 10px; border-radius: 8px; margin-bottom: 6px;
+          padding: 9px 10px; border-radius: 9px; margin-bottom: 6px;
           background: #111115; border: 1px solid #2c2c38;
           cursor: pointer; transition: border-color .12s, background .12s;
         }
@@ -313,7 +313,7 @@
           color: #8a8a9e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .mdl-send-page {
-          margin: 8px; padding: 10px; border-radius: 8px;
+          margin: 8px; padding: 10px; border-radius: 9px;
           background: #7c6dfa; color: white; font-weight: 600; font-size: 12.5px;
           text-align: center; cursor: pointer; border: none;
           transition: opacity .15s;
@@ -322,6 +322,24 @@
         .mdl-empty { padding: 20px; text-align: center; color: #44445a; font-size: 12px; }
         .mdl-close { cursor: pointer; opacity: .6; font-size: 16px; padding: 2px 6px; }
         .mdl-close:hover { opacity: 1; }
+
+        /* Toast — matches the desktop app's own .toast component exactly
+           (same colors/shape/motion), so feedback looks the same whether
+           it comes from the page or the app itself. Used for every send
+           action (the page button AND individual detected-stream items),
+           which previously only ever updated the "Send page URL" button's
+           text — meaning clicking a stream item gave no visible feedback
+           on the item you actually clicked. */
+        #__mdl_toast__ {
+          position: fixed; bottom: 24px; left: 50%; z-index: 2147483647;
+          transform: translateX(-50%) translateY(8px);
+          background: #1f1f26; border: 1px solid #3a3a48; border-radius: 10px;
+          padding: 9px 16px; font-size: 13px; color: #eaeaf2;
+          box-shadow: 0 10px 34px rgba(0,0,0,.55);
+          opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;
+          display: flex; align-items: center; gap: 8px; white-space: nowrap; max-width: 360px;
+        }
+        #__mdl_toast__.show { opacity: 1; transform: translateX(-50%) translateY(0); }
       </style>
 
       <div id="__mdl_fab__">
@@ -344,6 +362,8 @@
         </div>
         <button class="mdl-send-page" id="__mdl_send_page__">Send page URL</button>
       </div>
+
+      <div id="__mdl_toast__"></div>
     `;
     document.documentElement.appendChild(root);
 
@@ -409,26 +429,33 @@
   }
 
   // ─── send to desktop app ─────────────────────────────────────────────────
-  async function sendToApp(url, title) {
-    const btn = document.getElementById("__mdl_send_page__");
-    const orig = btn?.textContent;
-    if (btn) btn.textContent = "Sending…";
+  let toastHideTimer = null;
+  function showToast(message, ok = true) {
+    const toast = document.getElementById("__mdl_toast__");
+    if (!toast) return;
+    const icon = ok ? "✓" : "✕";
+    const iconColor = ok ? "#3ecf8e" : "#f26d6d";
+    toast.innerHTML =
+      `<span style="color:${iconColor};font-weight:700;">${icon}</span>` +
+      `<span>${escapeHtml(message)}</span>`;
+    toast.classList.add("show");
+    clearTimeout(toastHideTimer);
+    toastHideTimer = setTimeout(() => toast.classList.remove("show"), 2600);
+  }
 
+  async function sendToApp(url, title) {
     try {
       const res = await chrome.runtime.sendMessage({
         type: "SEND_URL",
         url,
         title: title || document.title,
       });
-      if (btn) {
-        btn.textContent = res?.ok ? "Sent ✓" : "App not running";
-        setTimeout(() => { if (btn) btn.textContent = orig || "Send page URL"; }, 1800);
-      }
+      showToast(
+        res?.ok ? "Sent to Media Downloader" : "App not running — open it first",
+        !!res?.ok
+      );
     } catch {
-      if (btn) {
-        btn.textContent = "App not running";
-        setTimeout(() => { if (btn) btn.textContent = orig || "Send page URL"; }, 1800);
-      }
+      showToast("App not running — open it first", false);
     }
   }
 

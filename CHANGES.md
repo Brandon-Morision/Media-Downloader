@@ -5,6 +5,19 @@ This document summarizes the high priority improvements implemented to enhance t
 
 ## Completed Improvements
 
+### 0. ✅ Dual-Tier Auto-Update System (v0.2.6)
+**Status:** Completed
+
+**Changes:**
+- Created `updater.py` with standalone engine tool updater (`yt-dlp` from GitHub, `gallery-dl` from Codeberg) and desktop app updater.
+- Updated `media_downloader.py:resolve_tool_path` to check `~/.media_downloader/tools/` first, allowing zero-UAC tool updates in the user profile.
+- Added "About & Updates" modal to `index.html` with real-time version cards, progress tracking, and topbar notification dot.
+- Added background startup check (4s delay) in `app.py`.
+- Integrated Inno Setup silent upgrade handoff (`/CLOSEAPPLICATIONS /RESTARTAPPLICATIONS`).
+- Standardized byte-level progress reporting and range-streaming security.
+
+---
+
 ### 1. ✅ Create requirements.txt with all Python dependencies
 **Status:** Completed
 

@@ -66,6 +66,21 @@ SITE_NOTES = {
 SEP  = "=" * 58
 THIN = "-" * 58
 
+# Sites where anonymous (no-cookie) requests routinely fail or return
+# partial results — surfaced as a proactive UI nudge toward the cookies
+# option before the user hits a confusing "Login required" error with no
+# indication that Advanced options had the fix one click away. Deliberately
+# a smaller, more specific list than SITE_NOTES (which is about tool
+# selection, not auth) — only sites where this is common enough to be
+# worth a nudge every time, not just possible in some cases.
+AUTH_HINT_SITES = {
+    "twitter.com":    "X/Twitter often blocks anonymous requests.",
+    "x.com":          "X/Twitter often blocks anonymous requests.",
+    "instagram.com":  "Private accounts and many posts require login.",
+    "pixiv.net":      "R-18 and follower-only content requires login.",
+    "reddit.com":     "Some subreddits require login to view.",
+}
+
 # Initialize logger
 logger = get_logger(__name__)
 
@@ -94,6 +109,23 @@ def site_hint(url: str) -> str:
     return "tool will be auto-detected"
 
 
+def auth_hint(url: str) -> str:
+    """Return a short nudge toward using cookies for sites known to
+    routinely need login, or "" if the URL's host doesn't match any of
+    them. Mirrored client-side in index.html's AUTH_HINT_SITES for
+    instant, no-round-trip feedback in the input card — this backend
+    copy exists so anything server-side (previews, future warnings) can
+    reuse the same list rather than re-deriving it."""
+    try:
+        host = urlparse(url).netloc.replace("www.", "").lower()
+    except Exception:
+        return ""
+    for key, note in AUTH_HINT_SITES.items():
+        if key in host:
+            return note
+    return ""
+
+
 def _app_base_dir() -> str:
     """
     Directory the running app lives in.
@@ -113,27 +145,29 @@ def resolve_tool_path(tool: str) -> str:
     Resolve the executable to actually invoke for "gallery-dl" or
     "yt-dlp". Checks, in order:
 
-      1. tools/<tool>.exe next to the running app — the expected
+      1. ~/.media_downloader/tools/<tool>.exe — user-updated tools directory.
+         Takes precedence so downloaded engine updates work instantly without
+         requiring admin rights or reinstalling the app.
+      2. tools/<tool>.exe next to the running app — the expected
          location with the shipped MediaDownloader.spec, which sets
          contents_directory="." specifically so bundled files land
          here rather than under _internal/ (PyInstaller 6's default).
-      2. _internal/tools/<tool>.exe — fallback in case a future rebuild
+      3. _internal/tools/<tool>.exe — fallback in case a future rebuild
          drops that contents_directory override and reverts to
          PyInstaller's default layout.
-      3. build_assets/tools/<tool>.exe — the same folder build_windows.py
-         stages binaries from before packaging. Checking it here too
-         means dropping a binary in ONE place works for both dev-mode
-         runs (`python app.py`) and the packaged build, instead of
-         needing the same file copied into two different folders.
-      4. the bare tool name, resolved via PATH (covers `pip install`
+      4. build_assets/tools/<tool>.exe — the same folder build_windows.py
+         stages binaries from before packaging.
+      5. the bare tool name, resolved via PATH (covers `pip install`
          dev setups and non-Windows platforms).
 
     Always returns a string usable as cmd[0]; callers don't need to
     know which case applied.
     """
     exe_name = f"{tool}.exe" if os.name == "nt" else tool
+    user_tools_dir = os.path.join(os.path.expanduser("~"), ".media_downloader", "tools")
     base = _app_base_dir()
     for candidate in (
+        os.path.join(user_tools_dir, exe_name),
         os.path.join(base, "tools", exe_name),
         os.path.join(base, "_internal", "tools", exe_name),
         os.path.join(base, "build_assets", "tools", exe_name),
@@ -146,8 +180,8 @@ def resolve_tool_path(tool: str) -> str:
 def resolve_ffmpeg_dir() -> str:
     """
     Return the directory that contains ffmpeg(.exe) if it is bundled
-    in the app's tools/ folder (or the build_assets/tools/ staging
-    folder — see resolve_tool_path), otherwise return an empty string.
+    in the app's tools/ folder (or the user tools / build_assets/tools/
+    staging folder — see resolve_tool_path), otherwise return an empty string.
 
     yt-dlp accepts --ffmpeg-location as either a directory (it appends
     the executable name itself) or a full path to the binary. Passing
@@ -158,8 +192,10 @@ def resolve_ffmpeg_dir() -> str:
     back to searching PATH as normal — so this is always safe to call.
     """
     exe_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+    user_tools_dir = os.path.join(os.path.expanduser("~"), ".media_downloader", "tools")
     base = _app_base_dir()
     for tools_dir in (
+        user_tools_dir,
         os.path.join(base, "tools"),
         os.path.join(base, "_internal", "tools"),
         os.path.join(base, "build_assets", "tools"),
@@ -195,6 +231,16 @@ def _art_cache_dir() -> str:
     return base
 
 
+def _thumb_cache_dir() -> str:
+    """Separate cache dir for video-frame thumbnails (gallery grid), kept
+    apart from art_cache (audio cover art) since they're conceptually
+    different — art is embedded metadata pulled out of the file, this is
+    a frame rendered from the video stream itself."""
+    base = os.path.join(os.path.expanduser("~"), ".media_downloader", "thumb_cache")
+    os.makedirs(base, exist_ok=True)
+    return base
+
+
 def extract_embedded_art(file_path: str) -> str:
     """
     Extract an audio file's embedded cover art (ID3 APIC for mp3, the
@@ -203,6 +249,16 @@ def extract_embedded_art(file_path: str) -> str:
     than pulling in a tagging library (mutagen etc.) for the reverse
     operation. Returns the cached image path, or "" if there's no
     embedded art, ffmpeg is unavailable, or extraction otherwise fails.
+
+    Always transcodes to real JPEG rather than stream-copying the
+    embedded art's original codec — m4a's 'covr' atom commonly holds PNG
+    data, and a straight `-vcodec copy` would write those PNG bytes into
+    a file named "*.jpg". Browsers still render that fine via content
+    sniffing, but it's an incorrect mismatch: app.py's local media server
+    derives the HTTP Content-Type from the .jpg extension
+    (mimetypes.guess_type), so a PNG-in-.jpg file was being served with
+    an inaccurate `image/jpeg` header. Transcoding is negligible cost
+    here — this is a single small still image, not a video.
 
     Cached by source path + mtime so a re-download of the same filename
     doesn't serve a stale cached cover.
@@ -223,7 +279,7 @@ def extract_embedded_art(file_path: str) -> str:
 
     try:
         proc = subprocess.run(
-            [ffmpeg, "-y", "-i", file_path, "-an", "-vcodec", "copy", cache_path],
+            [ffmpeg, "-y", "-i", file_path, "-an", "-frames:v", "1", "-q:v", "3", cache_path],
             capture_output=True, timeout=15, creationflags=CREATE_NO_WINDOW,
         )
         if proc.returncode == 0 and os.path.isfile(cache_path) and os.path.getsize(cache_path) > 0:
@@ -233,6 +289,58 @@ def extract_embedded_art(file_path: str) -> str:
 
     # No embedded art stream (most common — not every download has one) or
     # extraction otherwise failed. Clean up a possible empty/partial file.
+    try:
+        if os.path.isfile(cache_path) and os.path.getsize(cache_path) == 0:
+            os.remove(cache_path)
+    except OSError:
+        pass
+    return ""
+
+
+def extract_video_thumbnail(file_path: str) -> str:
+    """
+    Extract a representative frame from a video file as a cached jpg
+    thumbnail, using the same bundled ffmpeg that extract_embedded_art
+    uses for audio cover art. Returns the cached image path, or "" if
+    ffmpeg is unavailable, the file doesn't exist, or extraction
+    otherwise fails (corrupt/incomplete video, unsupported codec, etc —
+    all silent-fallback cases since the gallery just shows its generic
+    video-tile icon when this comes back empty).
+
+    Cached by source path + mtime so a re-download of the same filename
+    doesn't serve a stale cached thumbnail.
+    """
+    ffmpeg = resolve_ffmpeg_path()
+    if not ffmpeg or not os.path.isfile(file_path):
+        return ""
+
+    try:
+        mtime = int(os.path.getmtime(file_path))
+    except OSError:
+        return ""
+
+    key = hashlib.sha1(f"thumb:{file_path}:{mtime}".encode("utf-8")).hexdigest()
+    cache_path = os.path.join(_thumb_cache_dir(), f"{key}.jpg")
+    if os.path.isfile(cache_path) and os.path.getsize(cache_path) > 0:
+        return cache_path
+
+    try:
+        # Seek 1s in before grabbing a frame — the very first frame of a
+        # lot of encodes is a black/blank frame, and 1s in is cheap for
+        # ffmpeg to seek to (keyframe-adjacent) while giving a far more
+        # representative thumbnail than frame 0. Downscaled to keep the
+        # cached file small — this is a gallery-grid tile, not a preview.
+        proc = subprocess.run(
+            [ffmpeg, "-y", "-ss", "1", "-i", file_path,
+             "-frames:v", "1", "-vf", "scale=320:-1",
+             cache_path],
+            capture_output=True, timeout=15, creationflags=CREATE_NO_WINDOW,
+        )
+        if proc.returncode == 0 and os.path.isfile(cache_path) and os.path.getsize(cache_path) > 0:
+            return cache_path
+    except Exception:
+        pass
+
     try:
         if os.path.isfile(cache_path) and os.path.getsize(cache_path) == 0:
             os.remove(cache_path)
@@ -385,6 +493,26 @@ def build_gallery_dl_cmd(url: str, cfg: dict) -> list:
     return cmd
 
 
+def _ytdlp_extra_headers(url: str) -> list:
+    """
+    Extra --add-header flags a site needs to be reachable at all via
+    yt-dlp — not just for downloading, but for any request against it,
+    including a lightweight metadata probe. Shared between
+    build_ytdlp_cmd() (the real download) and app.py's preview_link()
+    (a --dump-single-json metadata-only call): previously only the
+    download path included these, so a site needing them to be reachable
+    would silently fail link preview while still downloading fine —
+    looking like a broken/missing preview feature when it was really
+    just a missing header on that one code path.
+    """
+    if "1flex.org" in url:
+        return [
+            "--add-header", "Referer: https://www.1flex.org/",
+            "--add-header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        ]
+    return []
+
+
 def build_ytdlp_cmd(url: str, cfg: dict) -> list:
     cmd = [resolve_tool_path("yt-dlp")]
     if cfg.get("output"):
@@ -397,13 +525,11 @@ def build_ytdlp_cmd(url: str, cfg: dict) -> list:
     else:
         cmd += ["-o", "%(title)s.%(ext)s"]
 
-    # Custom headers for 1flex.org (HLS streaming site)
-    if "1flex.org" in url:
-        cmd += [
-            "--add-header", "Referer: https://www.1flex.org/",
-            "--add-header", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        ]
-        logger.info("Added custom headers for 1flex.org")
+    # Headers/flags a few sites specifically need to be reachable at all.
+    extra_headers = _ytdlp_extra_headers(url)
+    if extra_headers:
+        cmd += extra_headers
+        logger.info("Added custom headers for known site requirements")
 
     # HLS-specific flags for streaming sites
     if "1flex.org" in url or any(site in url for site in ["youtube.com", "twitch.tv"]):
@@ -560,14 +686,49 @@ _YTDLP_ALREADY = re.compile(r"\[download\]\s+(.+?)\s+has already been downloaded
 _YTDLP_MERGE_LINE = re.compile(r'\[Merger\]\s+Merging formats into\s+"(.+)"')
 _YTDLP_DELETE_LINE = re.compile(r"Deleting original file\s+(.+?)\s+\(pass -k to keep\)")
 
-# Full progress line, e.g.:
-#   [download]  45.2% of   10.00MiB at    1.21MiB/s ETA 00:07
-# The "of ..." size is skipped with a non-greedy match since its format
-# varies (can be "~" prefixed for unknown/live sizes) and isn't needed —
-# percent/speed/ETA are the three fields the compact UI displays.
+# Matches yt-dlp's own progress-line templates (verified directly against
+# yt-dlp's source in downloader/common.py's report_progress — not
+# guessed): the size field is right-justified with variable leading
+# whitespace and may be "~"-prefixed for an estimated (not exact) total;
+# speed is either a real rate or the literal "Unknown B/s"; ETA is either
+# a time or the literal "Unknown". Previously the size was deliberately
+# discarded via a non-greedy skip — capturing it here is what makes
+# byte-level downloaded/remaining stats possible instead of just percent.
 _YTDLP_PROGRESS_LINE = re.compile(
-    r"\[download\]\s+([\d.]+)%.*?\bat\s+(\S+/s)\s+ETA\s+(\S+)"
+    r"\[download\]\s+([\d.]+)%"
+    r"(?:\s+of\s+~?\s*([\d.]+[A-Za-z]+))?"
+    r"\s+at\s+(\S+/s|Unknown\s+B/s)"
+    r"\s+ETA\s+(\S+)"
 )
+
+# yt-dlp formats sizes via its own format_bytes() as e.g. "9.54MiB",
+# "512.00KiB" — binary (1024-based) units with an "i". Also accepts
+# decimal (1000-based) units defensively in case that ever changes.
+_SIZE_UNIT_MULTIPLIERS = {
+    "B": 1,
+    "KIB": 1024, "MIB": 1024 ** 2, "GIB": 1024 ** 3, "TIB": 1024 ** 4, "PIB": 1024 ** 5,
+    "KB": 1000, "MB": 1000 ** 2, "GB": 1000 ** 3, "TB": 1000 ** 4, "PB": 1000 ** 5,
+}
+
+
+def _parse_size_to_bytes(size_str):
+    """Converts a yt-dlp-formatted size string (e.g. '9.54MiB') into a
+    byte count as a float. Returns None if it can't be parsed — callers
+    treat that as "no byte-level size info available", the same as if
+    the size field weren't present in the progress line at all."""
+    if not size_str:
+        return None
+    m = re.match(r"([\d.]+)\s*([A-Za-z]+)", size_str.strip())
+    if not m:
+        return None
+    value_str, unit = m.groups()
+    mult = _SIZE_UNIT_MULTIPLIERS.get(unit.upper())
+    if mult is None:
+        return None
+    try:
+        return float(value_str) * mult
+    except ValueError:
+        return None
 
 # File extensions the built-in media player knows how to play.
 PLAYABLE_EXTENSIONS = {
@@ -591,6 +752,8 @@ class DownloadJob:
         self.percent = 0.0           # 0-100, yt-dlp only (gallery-dl has no reliable %)
         self.speed = ""              # e.g. "1.21MiB/s" — yt-dlp only
         self.eta = ""                # e.g. "00:07" — yt-dlp only
+        self.downloaded_bytes = None  # bytes so far for the current file — yt-dlp only, None when unknown
+        self.total_bytes = None       # total size of the current file — yt-dlp only, None when unknown (e.g. live streams)
         self.files = []              # [{"name": ..., "path": ...}, ...] completed files
         self.error = None
         self.started_at = time.time()
@@ -744,6 +907,8 @@ def job_status(job_id: str) -> dict:
             "percent": job.percent,
             "speed": job.speed,
             "eta": job.eta,
+            "downloaded_bytes": job.downloaded_bytes,
+            "total_bytes": job.total_bytes,
             "elapsed": round(time.time() - job.started_at, 1),
             "error": job.error,
             "files": files,
@@ -822,6 +987,8 @@ def _parse_progress_line(job: DownloadJob, line: str, limit: int):
                 job.percent = 0.0
                 job.speed = ""
                 job.eta = ""
+                job.downloaded_bytes = None
+                job.total_bytes = None
 
             m_already = _YTDLP_ALREADY.search(line)
             if m_already:
@@ -830,14 +997,27 @@ def _parse_progress_line(job: DownloadJob, line: str, limit: int):
                 job.percent = 100.0
                 job.speed = ""
                 job.eta = ""
+                job.downloaded_bytes = None
+                job.total_bytes = None
                 job.items_done += 1
                 _record_file(job, name)
 
             m_prog = _YTDLP_PROGRESS_LINE.search(line)
             if m_prog:
                 pct = float(m_prog.group(1))
-                job.speed = m_prog.group(2)
-                job.eta = m_prog.group(3)
+                total_bytes = _parse_size_to_bytes(m_prog.group(2)) if m_prog.group(2) else None
+                job.speed = m_prog.group(3)
+                job.eta = m_prog.group(4)
+                if total_bytes is not None:
+                    job.total_bytes = total_bytes
+                    job.downloaded_bytes = total_bytes * (pct / 100.0)
+                else:
+                    # This particular line had no size info (e.g. a
+                    # fragment/live-stream line without a known total) —
+                    # don't clear a total we already picked up from an
+                    # earlier line for this same file, but don't fabricate
+                    # one either.
+                    pass
                 # Count the file as done the first time we see 100% for it
                 # (guarded so repeated 100% lines, e.g. across fragments,
                 # don't double-count the same file).
@@ -867,7 +1047,16 @@ def _parse_progress_line(job: DownloadJob, line: str, limit: int):
                 name = os.path.basename(stripped)
                 job.current_file = name
                 job.items_done += 1
-                job.percent = 100.0 if not limit else min(100.0, job.items_done / limit * 100)
+                # Only a real percentage when a limit was actually set —
+                # there's a finite target to divide by. With no limit,
+                # leave percent at 0 so the UI correctly reports this as
+                # indeterminate progress (an unbounded gallery scrape has
+                # no "% done"). Previously this was `100.0 if not limit
+                # else ...`, which set percent to 100 — a full, completed-
+                # looking bar — right after the very first file of an
+                # unlimited download, and kept it there for the entire
+                # (potentially very long) remaining run.
+                job.percent = min(100.0, job.items_done / limit * 100) if limit else 0.0
                 # Use the path gallery-dl actually printed, not
                 # output_dir + basename — gallery-dl organizes many
                 # extractors (Pinterest boards, subreddits, Twitter
@@ -981,6 +1170,8 @@ def download_from_ui(url: str, cfg: dict, tool_override: str = "", on_line=None,
                     "percent": job.percent,
                     "speed": job.speed,
                     "eta": job.eta,
+                    "downloaded_bytes": job.downloaded_bytes,
+                    "total_bytes": job.total_bytes,
                 }
             if on_progress:
                 try:
