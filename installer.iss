@@ -6,7 +6,7 @@
 
 ; Version is managed centrally in version.py - update that file to change versions
 #define AppName      "Media Downloader"
-#define AppVersion   "0.2.6"
+#define AppVersion   "0.3.0"
 #define AppPublisher "Brandon"
 #define AppExeName   "MediaDownloader.exe"
 #define SourceDir    "dist\MediaDownloader"
@@ -67,8 +67,8 @@ Source: "build_assets\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ExtDir}\*"; DestDir: "{app}\extension"; Flags: ignoreversion recursesubdirs createallsubdirs; Tasks: chromeext or edgeext
 
 [Icons]
-Name: "{group}\{#AppName}";       Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\icon.ico"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
+Name: "{group}\{#AppName}";       Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent

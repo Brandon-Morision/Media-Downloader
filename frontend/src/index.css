@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Default: Emerald theme matching MediaDown design */
+  --acc: #00e599;
+  --acc-dim: rgba(0, 229, 153, 0.12);
+  --acc-glow: rgba(0, 229, 153, 0.35);
+  --acc-border: rgba(0, 229, 153, 0.40);
+  --acc-gradient: linear-gradient(135deg, #00e599 0%, #10b981 100%);
+}
+
+[data-theme="emerald"] {
+  --acc: #00e599;
+  --acc-dim: rgba(0, 229, 153, 0.12);
+  --acc-glow: rgba(0, 229, 153, 0.35);
+  --acc-border: rgba(0, 229, 153, 0.40);
+  --acc-gradient: linear-gradient(135deg, #00e599 0%, #10b981 100%);
+}
+
+[data-theme="ocean"] {
+  --acc: #38bdf8;
+  --acc-dim: rgba(56, 189, 248, 0.12);
+  --acc-glow: rgba(56, 189, 248, 0.35);
+  --acc-border: rgba(56, 189, 248, 0.40);
+  --acc-gradient: linear-gradient(135deg, #38bdf8 0%, #60a5fa 100%);
+}
+
+[data-theme="amber"] {
+  --acc: #f59e0b;
+  --acc-dim: rgba(245, 158, 11, 0.12);
+  --acc-glow: rgba(245, 158, 11, 0.35);
+  --acc-border: rgba(245, 158, 11, 0.40);
+  --acc-gradient: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+}
+
+[data-theme="rose"] {
+  --acc: #f43f5e;
+  --acc-dim: rgba(244, 63, 94, 0.12);
+  --acc-glow: rgba(244, 63, 94, 0.35);
+  --acc-border: rgba(244, 63, 94, 0.40);
+  --acc-gradient: linear-gradient(135deg, #f43f5e 0%, #fb7185 100%);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Glassmorphic Layer Utility */
+.glass-panel {
+  background: rgba(17, 19, 28, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-elevated {
+  background: rgba(24, 27, 38, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.5);
+}
+
+.glow-focus:focus-within {
+  border-color: var(--acc);
+  box-shadow: 0 0 0 1px var(--acc), 0 0 16px -2px var(--acc-glow);
+}
+
+/* Vinyl Spin & Music Animations */
+@keyframes vinyl-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-vinyl-spin {
+  animation: vinyl-spin 20s linear infinite;
+}
+
+.animate-vinyl-spin-fast {
+  animation: vinyl-spin 12s linear infinite;
+}
+
+.animate-vinyl-spin.paused,
+.animate-vinyl-spin-fast.paused {
+  animation-play-state: paused;
+}
+
+.vinyl-disc {
+  background: radial-gradient(circle at center, #18181f 0%, #111115 40%, #202028 45%, #141418 60%, #09090d 100%);
+  box-shadow: 0 12px 40px -4px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 0 0 2px rgba(255, 255, 255, 0.05);
+}
+
+/* Mini Equalizer Dancing Bars */
+@keyframes eq-bounce-1 {
+  0%, 100% { height: 3px; }
+  50% { height: 13px; }
+}
+@keyframes eq-bounce-2 {
+  0%, 100% { height: 13px; }
+  50% { height: 5px; }
+}
+@keyframes eq-bounce-3 {
+  0%, 100% { height: 7px; }
+  50% { height: 15px; }
+}
+
+.eq-bar-1 { animation: eq-bounce-1 0.75s ease-in-out infinite; }
+.eq-bar-2 { animation: eq-bounce-2 0.65s ease-in-out infinite 0.15s; }
+.eq-bar-3 { animation: eq-bounce-3 0.85s ease-in-out infinite 0.3s; }
+

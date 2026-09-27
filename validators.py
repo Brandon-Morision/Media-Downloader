@@ -231,11 +231,14 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
     validated = {}
     
     # Validate output directory
-    if 'output' in config:
-        output = config['output']
-        if output and not validate_path(output, must_exist=False):
-            raise ValidationError(f"Invalid output directory: {output}")
-        validated['output'] = output
+    output = config.get('output')
+    if output and isinstance(output, str) and output.strip():
+        output_str = output.strip()
+        if not validate_path(output_str, must_exist=False):
+            raise ValidationError(f"Invalid output directory: {output_str}")
+        validated['output'] = output_str
+    else:
+        validated['output'] = os.path.join(os.path.expanduser("~"), "Downloads", "media")
     
     # Validate limit
     if 'limit' in config:
@@ -268,11 +271,58 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
     # Validate format
     if 'format' in config:
         format_val = config['format']
-        valid_formats = {'auto', 'mp4', 'mp3', 'm4a', 'best'}
+        valid_formats = {
+            'auto', 'mp4', 'mp3', 'm4a', 'best',
+            '2160p', '1440p', '1080p', '720p', '480p',
+            'flac', 'wav', 'opus'
+        }
         if format_val not in valid_formats:
             raise ValidationError(f"Invalid format: {format_val}")
         validated['format'] = format_val
     
+    # Validate rate limiting
+    if 'rate_limit' in config:
+        rate_limit = config['rate_limit']
+        if rate_limit:
+            if not isinstance(rate_limit, str) or not re.match(r'^[0-9]+(?:\.[0-9]+)?[kKmMgG]?B?$', rate_limit.strip()):
+                raise ValidationError(f"Invalid rate limit format: {rate_limit}")
+            validated['rate_limit'] = rate_limit.strip()
+        else:
+            validated['rate_limit'] = ""
+
+    # Validate custom CLI arguments
+    if 'custom_args' in config:
+        custom_args = config['custom_args']
+        if custom_args:
+            if not isinstance(custom_args, str) or len(custom_args) > 512:
+                raise ValidationError("Custom arguments exceed maximum allowed length (512 characters)")
+            validated['custom_args'] = custom_args.strip()
+        else:
+            validated['custom_args'] = ""
+
+    # Validate playlist items selection (e.g. '1-5, 8, 10-12')
+    if 'playlist_items' in config:
+        playlist_items = config['playlist_items']
+        if playlist_items:
+            if not isinstance(playlist_items, str):
+                raise ValidationError("Playlist items must be a string specification")
+            raw_tokens = playlist_items.split(',')
+            if any(not tok.strip() for tok in raw_tokens):
+                raise ValidationError("Invalid playlist items specification: empty items found")
+            items = [tok.strip() for tok in raw_tokens]
+            valid_spec = re.compile(r'^(\d+|\d+-\d+|:\d+|\d+:)$')
+            for it in items:
+                m = valid_spec.match(it)
+                if not m:
+                    raise ValidationError(f"Invalid playlist item specifier: {it}")
+                if '-' in it and not it.startswith('-') and not it.endswith('-'):
+                    p1, p2 = it.split('-', 1)
+                    if int(p1) > int(p2):
+                        raise ValidationError(f"Invalid range in playlist items: {it} (start > end)")
+            validated['playlist_items'] = ','.join(items)
+        else:
+            validated['playlist_items'] = ""
+
     # Validate username (if provided)
     if 'username' in config:
         username = config['username']
@@ -307,7 +357,7 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
             raise ValidationError(f"Invalid sleep value: {sleep}")
     
     # Copy boolean flags
-    for key in ['verbose', 'dry_run', 'zip', 'metadata']:
+    for key in ['verbose', 'dry_run', 'zip', 'metadata', 'sponsorblock']:
         if key in config:
             validated[key] = bool(config[key])
     
@@ -494,6 +544,16 @@ def validate_history_entry_id(entry_id: str) -> bool:
     
     logger.warning(f"Invalid history entry ID format: {entry_id}")
     return False
+
+
+def validate_completion_action(action: str) -> bool:
+    """
+    Validate a post-download queue completion action.
+    Allowed: 'nothing', 'exit', 'sleep', 'shutdown'
+    """
+    if not isinstance(action, str):
+        return False
+    return action.strip().lower() in {"nothing", "exit", "sleep", "shutdown"}
 
 
 if __name__ == "__main__":

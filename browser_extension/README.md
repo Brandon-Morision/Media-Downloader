@@ -1,54 +1,45 @@
-# Media Downloader — Browser Extension
+# Media Downloader — Browser Companion Extension (v0.3.0)
 
-Connects Chrome or Edge to the Media Downloader desktop app.
-When you visit a supported page (YouTube, Reddit, Tumblr, Pixiv etc.)
-a floating button appears — click it to send the URL directly to the
-app's download queue without any copy-pasting.
+Seamlessly connects Google Chrome, Microsoft Edge, Brave, and other Chromium browsers directly to the **Media Downloader** desktop application.
 
-## Installation
+### Key Capabilities
 
-### Step 1 — Open extension manager
+- **One-Click Page Forwarding:** Click the floating pill button or the extension popup to send any media page to the download queue.
+- **Movable & Draggable In-Page Widget:** Click and drag the floating button anywhere on your screen to prevent stacking on top of websites' native controls or chat widgets. Positions are remembered across pages and browsers.
+- **Deep Stream Sniffer:** Automatically extracts HLS (`.m3u8`), DASH (`.mpd`), MP4, WebM, and audio feeds from HTML5 players and background network requests.
+- **Right-Click Context Menus:** Right-click any link, video, audio, image, or page and select **"Download with Media Downloader"** to send it instantly.
+- **Shadow DOM Isolation:** In-page widgets are isolated inside a closed Shadow Root so host webpage styles and resets never break the extension UI.
+- **Site Routing:** Auto-detects whether `gallery-dl` (e.g. RedGifs, Reddit, Pixiv, Tumblr) or `yt-dlp` (e.g. YouTube, Vimeo, TikTok, Twitch) handles the link.
 
-**Chrome:** go to `chrome://extensions`
-**Edge:**   go to `edge://extensions`
+---
+
+## Installation Guide
+
+### Step 1 — Open Extensions Manager
+- **Google Chrome / Brave:** Navigate to `chrome://extensions`
+- **Microsoft Edge:** Navigate to `edge://extensions`
 
 ### Step 2 — Enable Developer Mode
+Turn on the **Developer mode** toggle in the top-right corner.
 
-Toggle **Developer mode** on (top-right corner of the extensions page).
+### Step 3 — Load Unpacked
+1. Click the **Load unpacked** button in the top toolbar.
+2. Select this `browser_extension` folder.
+3. The Media Downloader icon will appear in your browser toolbar. Pin it for quick access!
 
-### Step 3 — Load the extension
+---
 
-Click **Load unpacked** and select this `browser_extension/` folder.
+## Supported Sites & Engines
 
-The Media Downloader icon will appear in your toolbar.
+- **gallery-dl:** RedGifs, Reddit, Imgur, Twitter / X, Instagram, Pixiv, Tumblr, Flickr, DeviantArt, Pinterest, Cyberdrop, Erome, e621, Gelbooru, Rule34, Danbooru, Kemono, Coomer, ArtStation, and hundreds more.
+- **yt-dlp:** YouTube, Vimeo, TikTok, Twitch, Dailymotion, Bilibili, Soundcloud, Bandcamp, Facebook, 1flex.org, and all major video streaming platforms.
 
-## How it works
-
-1. Open the **Media Downloader** desktop app first
-2. Browse to any supported page in Chrome or Edge
-3. A floating **"Send to Downloader"** button appears bottom-right
-4. Click it — the URL is sent to the app and added to the queue
-5. Alternatively click the extension icon in the toolbar for the popup
-
-## Supported sites
-
-gallery-dl: Reddit, Imgur, Twitter/X, Instagram, Pixiv, Tumblr,
-            Flickr, DeviantArt, Pinterest, Cyberdrop, e621, Gelbooru
-
-yt-dlp:     YouTube, Vimeo, TikTok, Twitch, Dailymotion, Bilibili
+---
 
 ## Troubleshooting
 
-**"App not running" error**
-The desktop app must be open before sending URLs. The extension
-connects to it on localhost:6789 — this is only accessible from
-your own machine, never from the internet.
+- **"Media Downloader is not running" error:**
+  Ensure the Media Downloader desktop application is open. The extension connects over a secure local bridge (`http://127.0.0.1:6789`) which is only accessible on your local machine.
 
-**Button doesn't appear**
-The page might not be a recognised site. Use the popup instead —
-click the extension icon and hit "Send to Downloader" manually.
-Any http/https URL can be sent this way.
-
-**Token mismatch after restarting the app**
-The app generates a new token every launch. The extension
-re-pairs automatically on the next request — just click Send again.
+- **App restarted / Token re-pairing:**
+  The desktop app generates a fresh session token on each launch for security. If the app restarts, the extension automatically re-fetches the new token on the next click.

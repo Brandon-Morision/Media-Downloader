@@ -22,6 +22,8 @@ import tempfile
 import shutil
 import hashlib
 import time
+import re
+import unicodedata
 from urllib.parse import urlparse
 
 from logger import get_logger
@@ -138,6 +140,19 @@ def _app_base_dir() -> str:
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
+
+
+def get_default_download_dir() -> str:
+    """
+    Return standard user media download directory (~/Downloads/media).
+    Created if missing so it is always guaranteed to exist and be writable.
+    """
+    d = os.path.join(os.path.expanduser("~"), "Downloads", "media")
+    try:
+        os.makedirs(d, exist_ok=True)
+    except Exception:
+        pass
+    return d
 
 
 def resolve_tool_path(tool: str) -> str:
@@ -338,6 +353,16 @@ def extract_video_thumbnail(file_path: str) -> str:
         )
         if proc.returncode == 0 and os.path.isfile(cache_path) and os.path.getsize(cache_path) > 0:
             return cache_path
+
+        # If seeking 1s failed (e.g. video is shorter than 1 second), extract frame 0
+        proc0 = subprocess.run(
+            [ffmpeg, "-y", "-ss", "0", "-i", file_path,
+             "-frames:v", "1", "-vf", "scale=320:-1",
+             cache_path],
+            capture_output=True, timeout=15, creationflags=CREATE_NO_WINDOW,
+        )
+        if proc0.returncode == 0 and os.path.isfile(cache_path) and os.path.getsize(cache_path) > 0:
+            return cache_path
     except Exception:
         pass
 
@@ -459,9 +484,12 @@ def _restore_netrc(info: dict):
 
 def build_gallery_dl_cmd(url: str, cfg: dict) -> list:
     cmd = [resolve_tool_path("gallery-dl")]
-    if cfg.get("output"):
-        cmd += ["-d", os.path.expanduser(cfg["output"])]
-    if cfg.get("limit"):
+    out_raw = cfg.get("output")
+    out = os.path.expanduser(str(out_raw).strip()) if (out_raw and str(out_raw).strip()) else get_default_download_dir()
+    cmd += ["-d", out]
+    if cfg.get("playlist_items"):
+        cmd += ["--range", str(cfg["playlist_items"])]
+    elif cfg.get("limit"):
         cmd += ["--range", f"1-{cfg['limit']}"]
     if cfg.get("filename"):
         cmd += ["-o", f"filename={cfg['filename']}"]
@@ -489,6 +517,12 @@ def build_gallery_dl_cmd(url: str, cfg: dict) -> list:
     cmd += ["-o", f"sleep-request={sleep}"]
     cmd += ["-o", "retries=5"]
     cmd += ["-o", "retry-codes=[429, 500, 502, 503]"]
+    if cfg.get("custom_args"):
+        import shlex
+        try:
+            cmd += shlex.split(cfg["custom_args"])
+        except Exception as e:
+            logger.warning(f"Failed to parse custom_args for gallery-dl: {e}")
     cmd.append(url)
     return cmd
 
@@ -515,15 +549,13 @@ def _ytdlp_extra_headers(url: str) -> list:
 
 def build_ytdlp_cmd(url: str, cfg: dict) -> list:
     cmd = [resolve_tool_path("yt-dlp")]
-    if cfg.get("output"):
-        out = os.path.expanduser(cfg["output"])
-        # Use --paths for the directory and keep -o as a bare filename
-        # template. Letting yt-dlp join directory + template internally
-        # avoids os.path.join() producing backslashes in the template on
-        # Windows, which yt-dlp's own path handling doesn't expect.
-        cmd += ["-P", out, "-o", "%(title)s.%(ext)s"]
-    else:
-        cmd += ["-o", "%(title)s.%(ext)s"]
+    out_raw = cfg.get("output")
+    out = os.path.expanduser(str(out_raw).strip()) if (out_raw and str(out_raw).strip()) else get_default_download_dir()
+    # Use --paths for the directory and keep -o as a bare filename
+    # template. Letting yt-dlp join directory + template internally
+    # avoids os.path.join() producing backslashes in the template on
+    # Windows, which yt-dlp's own path handling doesn't expect.
+    cmd += ["-P", out, "-o", "%(title)s.%(ext)s"]
 
     # Headers/flags a few sites specifically need to be reachable at all.
     extra_headers = _ytdlp_extra_headers(url)
@@ -540,12 +572,18 @@ def build_ytdlp_cmd(url: str, cfg: dict) -> list:
         ]
         logger.debug("Added HLS streaming flags")
 
-    if cfg.get("limit"):
+    if cfg.get("playlist_items"):
+        cmd += ["--playlist-items", str(cfg["playlist_items"])]
+    elif cfg.get("limit"):
         cmd += ["--playlist-end", str(cfg["limit"])]
     if cfg.get("verbose"):
         cmd += ["--verbose"]
     if cfg.get("cookies"):
         cmd += ["--cookies-from-browser", cfg["cookies"]]
+    if cfg.get("rate_limit"):
+        cmd += ["--limit-rate", str(cfg["rate_limit"])]
+    if cfg.get("sponsorblock"):
+        cmd += ["--sponsorblock-remove", "all"]
 
     # Point yt-dlp at the bundled ffmpeg when it's present in tools/.
     # This is required for --embed-thumbnail to work on m4a and mp3 files
@@ -558,7 +596,13 @@ def build_ytdlp_cmd(url: str, cfg: dict) -> list:
         cmd += ["--ffmpeg-location", ffmpeg_dir]
 
     fmt = cfg.get("format", "auto")
-    if fmt == "m4a":
+    if fmt in ("2160p", "1440p", "1080p", "720p", "480p"):
+        h = fmt[:-1]
+        cmd += [
+            "-f", f"bestvideo[height<={h}]+bestaudio/best[height<={h}]/best",
+            "--merge-output-format", "mp4"
+        ]
+    elif fmt == "m4a":
         # -f prefers an already-m4a/aac source so the extraction below is a
         # cheap, lossless remux rather than a real re-encode. Critically,
         # -x/--audio-format m4a is now ALWAYS applied regardless of what
@@ -588,11 +632,25 @@ def build_ytdlp_cmd(url: str, cfg: dict) -> list:
             "--embed-thumbnail",
             "--embed-metadata",
         ]
+    elif fmt in ("flac", "wav", "opus"):
+        cmd += [
+            "-x",
+            "--audio-format", fmt,
+            "--embed-thumbnail",
+            "--embed-metadata",
+        ]
     elif fmt == "best":
         cmd += ["-f", "bestvideo+bestaudio/best"]
     else:
         # Default: auto or mp4 — merge into mp4 container.
         cmd += ["--merge-output-format", "mp4"]
+
+    if cfg.get("custom_args"):
+        import shlex
+        try:
+            cmd += shlex.split(cfg["custom_args"])
+        except Exception as e:
+            logger.warning(f"Failed to parse custom_args for yt-dlp: {e}")
 
     cmd.append(url)
     return cmd
@@ -607,8 +665,13 @@ def run_download(url: str, tool: str, cfg: dict, dry_run: bool = False):
         print(f"          Fix:  {_missing_tool_advice(tool)}\n")
         sys.exit(1)
 
-    if cfg.get("output"):
-        os.makedirs(os.path.expanduser(cfg["output"]), exist_ok=True)
+    out_raw = cfg.get("output")
+    output_dir = os.path.expanduser(str(out_raw).strip()) if (out_raw and str(out_raw).strip()) else get_default_download_dir()
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+    except Exception as e:
+        logger.warning(f"Could not create output_dir {output_dir}: {e}")
+    cfg["output"] = output_dir
 
     cmd = build_gallery_dl_cmd(url, cfg) if tool == "gallery-dl" else build_ytdlp_cmd(url, cfg)
 
@@ -628,8 +691,8 @@ def run_download(url: str, tool: str, cfg: dict, dry_run: bool = False):
     try:
         if needs_netrc:
             netrc_info = _stage_netrc_credentials(cfg["username"], cfg["password"])
-        subprocess.run(cmd, check=True, creationflags=CREATE_NO_WINDOW)
-        out = os.path.expanduser(cfg.get("output", "."))
+        subprocess.run(cmd, cwd=output_dir, check=True, creationflags=CREATE_NO_WINDOW)
+        out = output_dir
         print(f"\n  {SEP}")
         print("  Download complete!")
         print(f"  Saved to: {out}")
@@ -672,7 +735,10 @@ except ImportError:
 # e.g. "/Downloads/media/foo/bar.jpg" printed on its own line once a file
 # finishes. This is a heuristic, not a guarantee — output formats vary by
 # extractor and version — so it's used for a "best effort" item counter.
-_GALLERY_DL_FILE_LINE = re.compile(r"^[^\s].*\.(jpg|jpeg|png|gif|webp|mp4|m4a|webm|mov|m4v)$", re.IGNORECASE)
+_GALLERY_DL_FILE_LINE = re.compile(
+    r"^[^\s].*\.(jpg|jpeg|png|gif|webp|bmp|tiff|heic|avif|svg|mp4|webm|mov|mkv|m4v|avi|flv|wmv|ts|mp3|m4a|flac|wav|ogg|opus|aac)$",
+    re.IGNORECASE,
+)
 _YTDLP_DEST_LINE = re.compile(r"\[download\]\s+Destination:\s+(.+)$")
 _YTDLP_ALREADY = re.compile(r"\[download\]\s+(.+?)\s+has already been downloaded")
 
@@ -886,6 +952,77 @@ def cancel_job(job_id: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
+def resolve_existing_media_path(path: str, output_dir: str = None) -> str:
+    """
+    Resolve a requested or recorded media path to a real file existing on disk.
+
+    Handles cases where:
+    - Path is relative vs absolute.
+    - User changed the download directory or file lives in default download dir.
+    - Filename encoding/sanitization disparities between tools/OS:
+      e.g., yt-dlp on Windows replaces '/' with '⧸' (U+29F8, Big Solidus) on disk,
+      but might output spaces in logs/progress depending on stdout codepage, or vice versa.
+    - Normalizes unicode (NFKC), punctuation, and whitespace for robust fuzzy matching.
+    """
+    if not path:
+        return ""
+
+    expanded = os.path.expanduser(str(path).strip())
+    if os.path.isfile(expanded):
+        return os.path.normpath(expanded)
+
+    dl_dir = get_default_download_dir()
+    candidate_dirs = []
+    if output_dir and os.path.isdir(output_dir):
+        candidate_dirs.append(output_dir)
+    if dl_dir and os.path.isdir(dl_dir) and dl_dir not in candidate_dirs:
+        candidate_dirs.append(dl_dir)
+    parent_dir = os.path.dirname(expanded)
+    if parent_dir and os.path.isdir(parent_dir) and parent_dir not in candidate_dirs:
+        candidate_dirs.append(parent_dir)
+
+    base_name = os.path.basename(expanded)
+
+    # 1. Direct candidate checks in search directories
+    for d in candidate_dirs:
+        direct = os.path.join(d, base_name)
+        if os.path.isfile(direct):
+            return os.path.normpath(direct)
+
+    # 2. Fuzzy / normalized matching in search directories
+    def _normalize_name(name: str) -> str:
+        name = unicodedata.normalize("NFKC", name)
+        name = re.sub(r'[\s\u29f8_/\-\:\.\'\"\\\#]+', ' ', name).strip().lower()
+        return name
+
+    target_norm = _normalize_name(base_name)
+    target_stem, target_ext = os.path.splitext(base_name)
+    target_stem_norm = _normalize_name(target_stem)
+    target_ext = target_ext.lower()
+
+    for d in candidate_dirs:
+        try:
+            for fname in os.listdir(d):
+                cand_path = os.path.join(d, fname)
+                if not os.path.isfile(cand_path):
+                    continue
+                # Exact normalized match
+                if _normalize_name(fname) == target_norm:
+                    return os.path.normpath(cand_path)
+                # Match stem with same extension
+                cand_stem, cand_ext = os.path.splitext(fname)
+                if cand_ext.lower() == target_ext and _normalize_name(cand_stem) == target_stem_norm:
+                    return os.path.normpath(cand_path)
+                # Also accept audio-container equivalents if audio (e.g. .m4a vs .mp3 vs .webm vs .mp4)
+                if target_ext in (".m4a", ".mp3", ".opus", ".webm", ".mp4") and cand_ext.lower() in (".m4a", ".mp3", ".opus", ".webm", ".mp4"):
+                    if _normalize_name(cand_stem) == target_stem_norm:
+                        return os.path.normpath(cand_path)
+        except Exception:
+            continue
+
+    return ""
+
+
 def job_status(job_id: str) -> dict:
     job = _JOBS.get(job_id)
     if not job:
@@ -893,21 +1030,24 @@ def job_status(job_id: str) -> dict:
     with job.lock:
         files = []
         for f in job.files:
+            fpath = f.get("path") if isinstance(f, dict) else str(f)
+            real_path = resolve_existing_media_path(fpath, output_dir=job.output_dir) or fpath
             size = None
             try:
-                size = os.path.getsize(f["path"])
+                if os.path.isfile(real_path):
+                    size = os.path.getsize(real_path)
             except OSError:
                 pass
-            files.append({"name": f["name"], "path": f["path"], "size": size})
+            files.append({"name": os.path.basename(real_path), "path": real_path, "size": size})
         return {
             "ok": True,
             "state": job.state,
-            "items_done": job.items_done,
+            "items_done": job.items_done or len(files),
             "current_file": job.current_file,
             "percent": job.percent,
             "speed": job.speed,
             "eta": job.eta,
-            "downloaded_bytes": job.downloaded_bytes,
+            "downloaded_bytes": job.downloaded_bytes or sum((f["size"] or 0) for f in files),
             "total_bytes": job.total_bytes,
             "elapsed": round(time.time() - job.started_at, 1),
             "error": job.error,
@@ -922,14 +1062,20 @@ def _record_file(job: DownloadJob, name: str):
     it later. De-duplicates by name since gallery-dl/yt-dlp can each log
     the same finished file more than once (retries, "already downloaded"
     followed by a metadata line, etc)."""
-    path = os.path.join(job.output_dir, name) if job.output_dir else name
-    if not any(f["name"] == name for f in job.files):
-        job.files.append({"name": name, "path": path})
+    abs_dir = job.output_dir or get_default_download_dir()
+    path = name if os.path.isabs(name) else os.path.join(abs_dir, name)
+    base_name = os.path.basename(name)
+    if not any(f["name"] == base_name for f in job.files):
+        job.files.append({"name": base_name, "path": path})
 
 
 _SCANNABLE_EXTENSIONS = {
-    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".heic", ".avif",
-    ".mp4", ".webm", ".mov", ".mkv", ".m4v", ".avi",
+    # Images
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".heic", ".avif", ".svg",
+    # Videos
+    ".mp4", ".webm", ".mov", ".mkv", ".m4v", ".avi", ".flv", ".wmv", ".ts",
+    # Audio
+    ".mp3", ".m4a", ".flac", ".wav", ".ogg", ".opus", ".aac",
 }
 _SCAN_FILE_CAP = 2000  # safety cap so a huge/unexpected output_dir can't stall completion
 
@@ -1034,7 +1180,9 @@ def _parse_progress_line(job: DownloadJob, line: str, limit: int):
             m_merge = _YTDLP_MERGE_LINE.search(line)
             if m_merge:
                 merged_path = m_merge.group(1).strip()
-                job.files = [{"name": os.path.basename(merged_path), "path": merged_path}]
+                abs_dir = job.output_dir or get_default_download_dir()
+                full_path = merged_path if os.path.isabs(merged_path) else os.path.join(abs_dir, merged_path)
+                job.files = [{"name": os.path.basename(merged_path), "path": full_path}]
                 job.current_file = os.path.basename(merged_path)
 
             m_delete = _YTDLP_DELETE_LINE.search(line)
@@ -1043,29 +1191,26 @@ def _parse_progress_line(job: DownloadJob, line: str, limit: int):
                 job.files = [f for f in job.files if f["name"] != deleted_name]
         else:  # gallery-dl — no reliable per-file percentage in its output
             stripped = line.strip()
-            if _GALLERY_DL_FILE_LINE.match(stripped):
-                name = os.path.basename(stripped)
+            clean_path = stripped[2:].strip() if stripped.startswith("# ") else stripped
+            if not clean_path.startswith("[") and _GALLERY_DL_FILE_LINE.match(clean_path):
+                name = os.path.basename(clean_path)
+                abs_dir = job.output_dir or get_default_download_dir()
+                full_path = clean_path if os.path.isabs(clean_path) else os.path.join(abs_dir, clean_path)
                 job.current_file = name
                 job.items_done += 1
-                # Only a real percentage when a limit was actually set —
-                # there's a finite target to divide by. With no limit,
-                # leave percent at 0 so the UI correctly reports this as
-                # indeterminate progress (an unbounded gallery scrape has
-                # no "% done"). Previously this was `100.0 if not limit
-                # else ...`, which set percent to 100 — a full, completed-
-                # looking bar — right after the very first file of an
-                # unlimited download, and kept it there for the entire
-                # (potentially very long) remaining run.
                 job.percent = min(100.0, job.items_done / limit * 100) if limit else 0.0
-                # Use the path gallery-dl actually printed, not
-                # output_dir + basename — gallery-dl organizes many
-                # extractors (Pinterest boards, subreddits, Twitter
-                # users, etc) into nested subfolders, so reconstructing
-                # a flat path is simply wrong for anything not sitting
-                # directly in the top-level output folder.
-                full_path = stripped if os.path.isabs(stripped) else os.path.abspath(stripped)
                 if not any(f["name"] == name for f in job.files):
                     job.files.append({"name": name, "path": full_path})
+                try:
+                    bytes_sum = 0
+                    for f in job.files:
+                        f_path = f.get("path")
+                        if f_path and os.path.isfile(f_path):
+                            bytes_sum += os.path.getsize(f_path)
+                    if bytes_sum > 0:
+                        job.downloaded_bytes = bytes_sum
+                except Exception:
+                    pass
     except Exception:
         pass
 
@@ -1101,9 +1246,13 @@ def download_from_ui(url: str, cfg: dict, tool_override: str = "", on_line=None,
             "job_id": job_id, "state": "error",
         }
 
-    output_dir = os.path.expanduser(cfg.get("output", "")) if cfg.get("output") else ""
-    if output_dir:
+    out_raw = cfg.get("output")
+    output_dir = os.path.expanduser(str(out_raw).strip()) if (out_raw and str(out_raw).strip()) else get_default_download_dir()
+    try:
         os.makedirs(output_dir, exist_ok=True)
+    except Exception as e:
+        logger.warning(f"Could not create output_dir {output_dir}: {e}")
+    cfg["output"] = output_dir
 
     cmd = build_gallery_dl_cmd(url, cfg) if tool == "gallery-dl" else build_ytdlp_cmd(url, cfg)
     cmd_str = " ".join(cmd)
@@ -1126,13 +1275,20 @@ def download_from_ui(url: str, cfg: dict, tool_override: str = "", on_line=None,
         if needs_netrc:
             netrc_info = _stage_netrc_credentials(cfg["username"], cfg["password"])
 
+        proc_env = os.environ.copy()
+        proc_env["PYTHONIOENCODING"] = "utf-8"
+
         process = subprocess.Popen(
             cmd,
+            cwd=output_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             bufsize=1,
             creationflags=CREATE_NO_WINDOW,
+            env=proc_env,
         )
         job.process = process
         if psutil is not None:
@@ -1183,9 +1339,12 @@ def download_from_ui(url: str, cfg: dict, tool_override: str = "", on_line=None,
 
         if job.state == "cancelled":
             logger.info(f"Download job {job_id} cancelled by user")
+            _scan_output_dir_for_files(job, output_dir)
+            job.finished_at = time.time()
             return {
                 "ok": False, "tool": tool, "command": cmd_str, "output_dir": output_dir,
                 "error": "Cancelled by user.", "job_id": job_id, "state": "cancelled",
+                "files": job.files,
             }
 
         if process.returncode != 0:
@@ -1193,22 +1352,72 @@ def download_from_ui(url: str, cfg: dict, tool_override: str = "", on_line=None,
             # Prefer the actual tool-reported error text (last_error_line) —
             # it's what a friendly-message mapper on the frontend needs to
             # work with. "Exited with code N" alone has no useful signal.
-            detail = last_error_line or last_line
-            job.error = f"{detail} (exit code {process.returncode})" if detail else f"Exited with code {process.returncode}"
+            detail = last_error_line
+            if not detail and last_line:
+                is_path_or_file = (
+                    os.path.isabs(last_line)
+                    or any(last_line.lower().endswith(f".{ext}") for ext in PLAYABLE_EXTENSIONS)
+                    or last_line.startswith(("http://", "https://"))
+                    or os.path.sep in last_line
+                    or "/" in last_line
+                )
+                if not is_path_or_file:
+                    detail = last_line
+            
+            if not detail:
+                if job.files:
+                    detail = f"Download stopped prematurely ({len(job.files)} file{'s' if len(job.files) > 1 else ''} saved)"
+                else:
+                    detail = f"Download stopped or interrupted (exit code {process.returncode})"
+
+            job.error = f"{detail} (exit code {process.returncode})" if detail and "exit code" not in detail else (detail or f"Exited with code {process.returncode}")
             logger.error(f"Download job {job_id} failed: {job.error}")
+            _scan_output_dir_for_files(job, output_dir)
+            job.finished_at = time.time()
             return {
                 "ok": False, "tool": tool, "command": cmd_str, "output_dir": output_dir,
                 "error": job.error, "job_id": job_id, "state": "error",
+                "files": job.files,
             }
 
         job.state = "done"
         logger.info(f"Download job {job_id} completed successfully")
-        if tool == "gallery-dl" and not job.files:
+
+        # Verify recorded files against disk using resolve_existing_media_path
+        verified_files = []
+        for f in job.files:
+            fpath = f.get("path") if isinstance(f, dict) else str(f)
+            real_path = resolve_existing_media_path(fpath, output_dir=output_dir)
+            if real_path and os.path.isfile(real_path):
+                verified_files.append({
+                    "name": os.path.basename(real_path),
+                    "path": real_path,
+                    "size": os.path.getsize(real_path)
+                })
+
+        # If any files are missing, empty, or tool is gallery-dl, scan output directory for newly created media
+        if len(verified_files) < len(job.files) or not verified_files or tool == "gallery-dl":
             logger.debug(f"Scanning output directory for files for job {job_id}")
             _scan_output_dir_for_files(job, output_dir)
+            for f in job.files:
+                fpath = f.get("path") if isinstance(f, dict) else str(f)
+                real_path = resolve_existing_media_path(fpath, output_dir=output_dir)
+                if real_path and os.path.isfile(real_path):
+                    if not any(vf["path"] == real_path for vf in verified_files):
+                        verified_files.append({
+                            "name": os.path.basename(real_path),
+                            "path": real_path,
+                            "size": os.path.getsize(real_path)
+                        })
+
+        if verified_files:
+            job.files = verified_files
+
+        job.finished_at = time.time()
         return {
             "ok": True, "tool": tool, "command": cmd_str, "output_dir": output_dir,
             "error": None, "job_id": job_id, "state": "done",
+            "files": job.files,
         }
 
     except FileNotFoundError as e:

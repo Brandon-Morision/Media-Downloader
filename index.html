@@ -5,6 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Media Downloader</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+(function() {
+  try {
+    var t = localStorage.getItem("md_theme_accent");
+    var themes = {
+      violet: ["#7c6dfa", "rgba(124,109,250,0.10)", "rgba(124,109,250,0.20)", "rgba(124,109,250,0.35)"],
+      emerald: ["#3ecf8e", "rgba(62,207,142,0.10)", "rgba(62,207,142,0.20)", "rgba(62,207,142,0.35)"],
+      ocean: ["#38bdf8", "rgba(56,189,248,0.10)", "rgba(56,189,248,0.20)", "rgba(56,189,248,0.35)"],
+      amber: ["#f59e0b", "rgba(245,158,11,0.10)", "rgba(245,158,11,0.20)", "rgba(245,158,11,0.35)"],
+      rose: ["#f43f5e", "rgba(244,63,94,0.10)", "rgba(244,63,94,0.20)", "rgba(244,63,94,0.35)"]
+    };
+    if (t && themes[t]) {
+      var r = document.documentElement.style;
+      r.setProperty("--acc", themes[t][0]);
+      r.setProperty("--acc-dim", themes[t][1]);
+      r.setProperty("--acc-glow", themes[t][2]);
+      r.setProperty("--acc-border", themes[t][3]);
+    }
+  } catch(e) {}
+})();
+</script>
 <style>
 /* ─────────────────────────────────────────────
    TOKENS
@@ -102,6 +123,222 @@ select { appearance:none; }
 }
 .btn-ghost:hover { border-color:var(--border-hi); color:var(--t1); background:var(--s2); }
 .btn-ghost:disabled { opacity:.38; cursor:not-allowed; }
+
+/* ─────────────────────────────────────────────
+   MULTI-VIEW & NAVIGATION RAIL
+───────────────────────────────────────────── */
+.app-container {
+  display:flex; flex:1; min-height:0; overflow:hidden;
+}
+.nav-rail {
+  width:64px; flex-shrink:0; background:var(--s0);
+  border-right:1px solid var(--border);
+  display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:8px;
+  z-index:20;
+}
+.nav-item {
+  width:50px; height:50px; border-radius:var(--r);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  color:var(--t2); cursor:pointer; position:relative; background:transparent;
+  border:1px solid transparent;
+  transition:background .15s ease, color .15s ease, transform .12s ease;
+}
+.nav-item:hover {
+  background:var(--s2); color:var(--t1); transform:translateY(-1px);
+}
+.nav-item.active {
+  background:var(--acc-dim); color:var(--acc); border-color:var(--acc-border);
+}
+.nav-label {
+  font-size:9.5px; font-weight:600; letter-spacing:-.01em; text-align:center; pointer-events:none;
+}
+.nav-badge {
+  position:absolute; top:4px; right:4px; min-width:14px; height:14px;
+  padding:0 3px; border-radius:99px; background:var(--acc); color:#fff;
+  font-size:8.5px; font-weight:700; font-family:'JetBrains Mono',monospace;
+  display:flex; align-items:center; justify-content:center;
+}
+.view-viewport {
+  flex:1; display:flex; min-height:0; overflow:hidden; position:relative;
+}
+.app-view {
+  display:none; width:100%; height:100%; min-height:0; overflow:hidden;
+}
+.app-view.active {
+  display:flex; flex-direction:column;
+}
+
+/* ─────────────────────────────────────────────
+   LIBRARY VIEW
+───────────────────────────────────────────── */
+.library-container {
+  flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden;
+  padding:16px 20px; gap:14px; background:var(--bg);
+}
+.library-head {
+  display:flex; flex-direction:column; gap:10px; flex-shrink:0;
+}
+.library-title-row {
+  display:flex; align-items:center; gap:10px;
+}
+.library-title {
+  font-size:16px; font-weight:700; color:var(--t1); letter-spacing:-.02em;
+}
+.library-stats-pill {
+  font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--t3);
+  background:var(--s1); border:1px solid var(--border); padding:2px 8px; border-radius:99px;
+}
+.library-filter-row {
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+}
+.lib-search-wrap {
+  display:flex; align-items:center; gap:6px; background:var(--s1);
+  border:1px solid var(--border); border-radius:var(--r); padding:4px 9px;
+  width:220px; transition:border-color .14s;
+}
+.lib-search-wrap:focus-within { border-color:var(--border-hi); }
+.lib-search-wrap input { font-size:11.5px; color:var(--t1); width:100%; }
+.lib-search-wrap input::placeholder { color:var(--t3); }
+
+.library-body {
+  flex:1; min-height:0; overflow-y:auto; padding-right:4px;
+}
+.library-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px;
+}
+.lib-card {
+  background:var(--s1); border:1px solid var(--border); border-radius:var(--r-lg);
+  overflow:hidden; display:flex; flex-direction:column;
+  transition:border-color .15s, transform .15s, box-shadow .15s;
+}
+.lib-card:hover {
+  border-color:var(--acc-border); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,.4);
+}
+.lib-thumb-wrap {
+  position:relative; width:100%; aspect-ratio:16/9; background:var(--s2);
+  display:flex; align-items:center; justify-content:center; overflow:hidden;
+}
+.lib-thumb {
+  width:100%; height:100%; object-fit:cover; display:block;
+}
+.lib-thumb-icon {
+  color:var(--t3); opacity:.6;
+}
+.lib-badge {
+  position:absolute; bottom:6px; right:6px; background:rgba(0,0,0,.8); color:#fff;
+  font-size:9.5px; font-weight:600; font-family:'JetBrains Mono',monospace;
+  padding:2px 6px; border-radius:4px; pointer-events:none;
+}
+.lib-info {
+  padding:10px 12px; display:flex; flex-direction:column; gap:6px; flex:1;
+}
+.lib-title {
+  font-size:12px; font-weight:600; color:var(--t1); line-height:1.4;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.lib-meta-row {
+  display:flex; align-items:center; gap:8px; font-size:10.5px; color:var(--t3);
+  font-family:'JetBrains Mono',monospace;
+}
+.lib-tag {
+  font-size:9px; text-transform:uppercase; font-weight:700; padding:1px 5px;
+  border-radius:3px; background:var(--s3); color:var(--t2);
+}
+.lib-actions {
+  display:flex; align-items:center; gap:6px; padding:0 12px 10px; margin-top:auto;
+}
+.lib-btn {
+  display:inline-flex; align-items:center; gap:4px; padding:4px 8px;
+  border-radius:6px; border:1px solid var(--border); background:var(--s2);
+  color:var(--t2); font-size:11px; cursor:pointer; font-family:inherit;
+  transition:all .12s ease;
+}
+.lib-btn:hover { border-color:var(--border-hi); color:var(--t1); background:var(--s3); }
+.lib-btn.primary { background:var(--acc-dim); border-color:var(--acc-border); color:var(--acc); font-weight:600; }
+.lib-btn.primary:hover { background:var(--acc); color:#fff; }
+.lib-btn.danger { margin-left:auto; }
+.lib-btn.danger:hover { border-color:rgba(242,109,109,.4); color:var(--red); }
+
+.library-empty {
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
+  padding:60px 20px; color:var(--t3); font-size:13px; text-align:center;
+}
+
+/* ─────────────────────────────────────────────
+   SETTINGS VIEW
+───────────────────────────────────────────── */
+.settings-container {
+  flex:1; display:flex; flex-direction:column; min-height:0; overflow-y:auto;
+  padding:20px 24px; gap:18px; max-width:760px;
+}
+.settings-head {
+  display:flex; flex-direction:column; gap:4px;
+}
+.settings-title {
+  font-size:18px; font-weight:700; color:var(--t1); letter-spacing:-.02em;
+}
+.settings-body {
+  display:flex; flex-direction:column; gap:16px;
+}
+.settings-card {
+  background:var(--s1); border:1px solid var(--border); border-radius:var(--r-xl);
+  padding:16px 18px; display:flex; flex-direction:column; gap:14px;
+}
+.settings-card-head {
+  display:flex; flex-direction:column; gap:2px;
+}
+.settings-card-title {
+  display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--t1);
+}
+.settings-fields-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:12px;
+}
+@media (max-width: 640px) {
+  .settings-fields-grid { grid-template-columns:1fr; }
+}
+
+/* Theme Swatches */
+.theme-swatches-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:10px;
+}
+.theme-swatch {
+  display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:var(--r);
+  border:1px solid var(--border); background:var(--s2); cursor:pointer;
+  transition:all .15s ease; position:relative;
+}
+.theme-swatch:hover { border-color:var(--border-hi); transform:translateY(-1px); }
+.theme-swatch.active { border-color:var(--acc-border); background:var(--acc-dim); box-shadow:0 0 0 1px var(--acc); }
+.swatch-circle { width:16px; height:16px; border-radius:50%; flex-shrink:0; box-shadow:0 1px 4px rgba(0,0,0,.4); }
+.swatch-name { font-size:11.5px; font-weight:500; color:var(--t1); }
+.swatch-tag {
+  font-size:8.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+  color:var(--t3); margin-left:auto;
+}
+
+/* ─────────────────────────────────────────────
+   DRAG AND DROP OVERLAY
+───────────────────────────────────────────── */
+.drag-drop-overlay {
+  display:none; position:fixed; inset:0; background:rgba(12,12,15,.85);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  z-index:99999; align-items:center; justify-content:center;
+  pointer-events:none; border:2px dashed var(--acc); margin:8px; border-radius:var(--r-xl);
+  transition:opacity .2s ease;
+}
+.drag-drop-overlay.active { display:flex; }
+.drag-drop-card {
+  display:flex; flex-direction:column; align-items:center; gap:12px;
+  background:var(--s1); border:1px solid var(--acc-border); padding:36px 48px;
+  border-radius:var(--r-xl); box-shadow:0 20px 60px rgba(0,0,0,.6);
+  animation:drag-pulse 2s ease infinite; text-align:center;
+}
+.drag-drop-icon {
+  width:64px; height:64px; border-radius:50%; background:var(--acc-dim); color:var(--acc);
+  display:flex; align-items:center; justify-content:center;
+}
+.drag-drop-title { font-size:16px; font-weight:700; color:var(--t1); }
+.drag-drop-sub { font-size:12px; color:var(--t2); }
+@keyframes drag-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.02)} }
 
 /* ─────────────────────────────────────────────
    BODY LAYOUT — content column (input + search)
@@ -299,8 +536,42 @@ select { appearance:none; }
   cursor:pointer; transition:border-color .15s, transform .15s, box-shadow .15s; display:flex; flex-direction:column;
 }
 .sr-card:hover { border-color:var(--acc-border); transform:translateY(-2px); box-shadow:0 8px 28px rgba(0,0,0,.45); }
-.sr-card.preview-card { cursor:default; max-width:280px; }
-.sr-card.preview-card:hover { border-color:var(--border); transform:none; box-shadow:none; }
+.sr-card.preview-card {
+  cursor:default; max-width:540px; display:flex; flex-direction:row;
+  border-color:var(--border-hi); background:var(--s1); box-shadow:0 8px 30px rgba(0,0,0,.35);
+  border-radius:var(--r-lg); overflow:hidden;
+}
+.sr-card.preview-card:hover { border-color:var(--border-hi); transform:none; }
+.preview-card-media {
+  width:200px; flex-shrink:0; position:relative; background:var(--s2);
+  display:flex; align-items:center; justify-content:center;
+}
+.preview-card-media .sr-thumb-wrap { width:100%; height:100%; }
+.preview-card-media .sr-thumb { width:100%; height:100%; object-fit:cover; }
+.preview-info { padding:13px 15px; display:flex; flex-direction:column; gap:7px; flex:1; min-width:0; }
+.preview-qualities-wrap { display:flex; flex-direction:column; gap:5px; margin-top:3px; }
+.preview-qualities-lbl { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--t3); }
+.preview-pill-bar { display:flex; flex-wrap:wrap; gap:5px; }
+.preview-pill {
+  font-size:10.5px; font-weight:500; padding:3px 8px; border-radius:6px; border:1px solid var(--border);
+  background:var(--s2); color:var(--t2); cursor:pointer; font-family:inherit;
+  transition:border-color .14s, color .14s, background .14s;
+}
+.preview-pill:hover { border-color:var(--border-hi); color:var(--t1); background:var(--s3); }
+.preview-pill.active { border-color:var(--acc-border); background:var(--acc-dim); color:var(--acc); font-weight:600; }
+.preview-actions { display:flex; align-items:center; gap:8px; margin-top:auto; padding-top:6px; }
+.preview-dl-btn {
+  display:inline-flex; align-items:center; gap:6px; padding:6px 14px;
+  background:var(--acc); color:#fff; font-size:11.5px; font-weight:600;
+  border-radius:var(--r); cursor:pointer; font-family:inherit;
+  transition:opacity .15s ease, transform .1s ease;
+}
+.preview-dl-btn:hover { opacity:.92; transform:scale(1.02); }
+.preview-dl-btn:active { transform:scale(.98); }
+@media (max-width: 600px) {
+  .sr-card.preview-card { flex-direction:column; max-width:100%; }
+  .preview-card-media { width:100%; aspect-ratio:16/9; }
+}
 .sr-thumb-wrap { position:relative; overflow:hidden; }
 .sr-thumb { width:100%; aspect-ratio:16/9; object-fit:cover; background:var(--s2); display:block; transition:transform .3s ease; }
 .sr-card:hover .sr-thumb { transform:scale(1.045); }
@@ -320,7 +591,7 @@ select { appearance:none; }
 .sr-info { padding:10px 11px 9px; display:flex; flex-direction:column; gap:5px; flex:1; }
 .sr-title {
   font-size:12.5px; font-weight:600; color:var(--t1); line-height:1.4;
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
 .sr-channel-row { display:flex; align-items:center; gap:6px; min-width:0; margin-top:1px; }
 .sr-avatar {
@@ -604,8 +875,16 @@ select { appearance:none; }
 .mp-audio-visual {
   width:100%; aspect-ratio:16/6.5; display:flex; align-items:center; justify-content:center;
   background: radial-gradient(circle at 50% 38%, rgba(124,109,250,.28), transparent 62%), var(--s2);
+  position:relative; overflow:hidden;
+}
+.mp-canvas-wrap {
+  position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:1;
+}
+.mp-visualizer-canvas {
+  width:100%; height:100%; display:block;
 }
 .mp-audio-disc {
+  position:relative; z-index:2;
   width:88px; height:88px; border-radius:50%; flex-shrink:0;
   background:linear-gradient(135deg, var(--acc), var(--pink));
   display:flex; align-items:center; justify-content:center;
@@ -617,7 +896,7 @@ select { appearance:none; }
 @keyframes mp-spin { to { transform:rotate(360deg); } }
 
 .mp-controls {
-  display:flex; align-items:center; gap:10px; padding:10px 14px;
+  display:flex; align-items:center; gap:8px; padding:10px 14px;
   background:var(--s1); border-top:1px solid var(--border); flex-wrap:nowrap;
 }
 .mp-btn {
@@ -627,6 +906,14 @@ select { appearance:none; }
 }
 .mp-btn:hover { opacity:.88; transform:scale(1.06); }
 .mp-btn:active { transform:scale(.96); }
+.mp-ctrl-btn {
+  width:28px; height:28px; border-radius:50%; background:var(--s2); color:var(--t2); flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px;
+  border:1px solid transparent; transition:background .14s, color .14s, transform .1s ease, border-color .14s;
+}
+.mp-ctrl-btn:hover { background:var(--s3); color:var(--t1); transform:scale(1.06); }
+.mp-ctrl-btn:active { transform:scale(.95); }
+.mp-ctrl-btn.active { background:var(--acc-dim); color:var(--acc); border-color:var(--acc-border); }
 .mp-time {
   font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--t3); flex-shrink:0;
   width:36px; text-align:center;
@@ -958,6 +1245,290 @@ select { appearance:none; }
   padding:10px 12px; font-size:11.5px; line-height:1.6; color:var(--t2);
   max-height:130px; overflow-y:auto; white-space:pre-wrap;
 }
+
+/* ─────────────────────────────────────────────
+   PLAYLIST INSPECTOR DRAWER
+───────────────────────────────────────────── */
+.playlist-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:10100;
+  align-items:center; justify-content:center; padding:20px;
+}
+.playlist-overlay.show { display:flex; }
+.playlist-modal {
+  background:var(--s1); border:1px solid var(--border-hi); border-radius:var(--r-xl);
+  width:min(860px, 94vw); height:88vh; max-height:88vh; display:flex; flex-direction:column;
+  overflow:hidden; box-shadow:0 24px 72px rgba(0,0,0,.7); position:relative;
+}
+.playlist-head {
+  display:flex; align-items:center; justify-content:space-between; padding:14px 18px;
+  border-bottom:1px solid var(--border); flex-shrink:0; background:var(--s0);
+}
+.playlist-title-wrap {
+  display:flex; flex-direction:column; gap:3px; min-width:0;
+}
+.playlist-title {
+  font-size:14px; font-weight:700; color:var(--t1); letter-spacing:-.01em;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.playlist-subtitle {
+  font-size:11px; color:var(--t3); display:flex; align-items:center; gap:8px;
+  font-family:'JetBrains Mono',monospace;
+}
+.playlist-toolbar {
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;
+  gap:10px; padding:10px 18px; border-bottom:1px solid var(--border); background:var(--s1);
+  flex-shrink:0;
+}
+.playlist-quick-actions {
+  display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+}
+.playlist-tool-btn {
+  padding:4px 9px; font-size:11px; font-weight:500; border-radius:6px;
+  border:1px solid var(--border); background:var(--s2); color:var(--t2); cursor:pointer;
+  transition:border-color .14s, background .14s, color .14s; font-family:inherit;
+}
+.playlist-tool-btn:hover { border-color:var(--border-hi); color:var(--t1); background:var(--s3); }
+.playlist-range-wrap {
+  display:flex; align-items:center; gap:4px; font-size:11px; color:var(--t3);
+}
+.playlist-range-inp {
+  width:44px; padding:3px 6px; font-size:11px; text-align:center;
+  background:var(--s2); border:1px solid var(--border); border-radius:4px; color:var(--t1);
+  font-family:'JetBrains Mono',monospace;
+}
+.playlist-search-wrap {
+  display:flex; align-items:center; gap:6px; background:var(--s2);
+  border:1px solid var(--border); border-radius:6px; padding:4px 8px; width:180px;
+}
+.playlist-search-wrap input { font-size:11px; color:var(--t1); width:100%; background:none; border:none; outline:none; }
+.playlist-body {
+  flex:1; min-height:0; overflow-y:auto; padding:12px 18px; display:flex; flex-direction:column; gap:6px;
+}
+.playlist-track {
+  display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:8px;
+  background:var(--s2); border:1px solid var(--border); transition:border-color .14s, background .14s;
+  cursor:pointer; user-select:none;
+}
+.playlist-track:hover { border-color:var(--border-hi); background:var(--s3); }
+.playlist-track.selected { border-color:var(--acc-border); background:var(--acc-dim); }
+.playlist-track-cb {
+  accent-color:var(--acc); cursor:pointer; width:15px; height:15px; flex-shrink:0;
+}
+.playlist-track-idx {
+  font-size:10.5px; font-family:'JetBrains Mono',monospace; color:var(--t3); width:24px; flex-shrink:0; text-align:center;
+}
+.playlist-track-thumb {
+  width:48px; height:28px; border-radius:4px; object-fit:cover; background:var(--s1); flex-shrink:0;
+}
+.playlist-track-info {
+  flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;
+}
+.playlist-track-title {
+  font-size:12px; font-weight:600; color:var(--t1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.playlist-track-meta {
+  font-size:10px; color:var(--t3); display:flex; align-items:center; gap:6px;
+}
+.playlist-track-dur {
+  font-size:10.5px; font-family:'JetBrains Mono',monospace; color:var(--t3); flex-shrink:0;
+}
+.playlist-footer {
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;
+  gap:12px; padding:12px 18px; border-top:1px solid var(--border); background:var(--s0);
+  flex-shrink:0;
+}
+.playlist-footer-actions {
+  display:flex; align-items:center; gap:8px;
+}
+
+/* ─────────────────────────────────────────────
+   BATCH PASTE MODAL
+───────────────────────────────────────────── */
+.batch-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:10100;
+  align-items:center; justify-content:center; padding:20px;
+}
+.batch-overlay.show { display:flex; }
+.batch-modal {
+  background:var(--s1); border:1px solid var(--border-hi); border-radius:var(--r-xl);
+  width:min(680px, 92vw); max-height:88vh; display:flex; flex-direction:column;
+  overflow:hidden; box-shadow:0 24px 72px rgba(0,0,0,.7);
+}
+.batch-head {
+  display:flex; align-items:center; justify-content:space-between; padding:14px 18px;
+  border-bottom:1px solid var(--border); flex-shrink:0; background:var(--s0);
+}
+.batch-title { font-size:14px; font-weight:700; color:var(--t1); display:flex; align-items:center; gap:8px; }
+.batch-body {
+  padding:16px 18px; display:flex; flex-direction:column; gap:12px; overflow-y:auto; min-height:0;
+}
+.batch-textarea {
+  width:100%; height:160px; min-height:120px; background:var(--s2); border:1px solid var(--border);
+  border-radius:var(--r); padding:10px 12px; color:var(--t1); font-size:11.5px;
+  font-family:'JetBrains Mono',monospace; resize:vertical; line-height:1.5;
+  transition:border-color .14s, box-shadow .14s;
+}
+.batch-textarea:focus { border-color:var(--acc-border); box-shadow:0 0 0 3px var(--acc-dim); outline:none; }
+.batch-status-row {
+  display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--t3);
+}
+.batch-status-pill {
+  font-size:11px; font-family:'JetBrains Mono',monospace; padding:2px 8px; border-radius:99px;
+  background:var(--acc-dim); color:var(--acc); border:1px solid var(--acc-border); font-weight:600;
+}
+.batch-presets-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:12px; background:var(--s2);
+  border:1px solid var(--border); border-radius:var(--r-lg);
+}
+@media (max-width:560px) {
+  .batch-presets-grid { grid-template-columns:1fr; }
+}
+.batch-footer {
+  display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:12px 18px;
+  border-top:1px solid var(--border); background:var(--s0); flex-shrink:0;
+}
+/* ═══ PHASE 4: AUTOMATION, SCHEDULER & QUEUE STYLING ═══ */
+.queue-toolbar {
+  display:flex; align-items:center; justify-content:space-between; padding:7px 12px;
+  background:var(--s2); border-bottom:1px solid var(--border); font-size:11px; flex-wrap:wrap; gap:6px;
+}
+.queue-toolbar-left, .queue-toolbar-right { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.queue-ctrl-btn {
+  display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:var(--r-sm);
+  background:var(--s3); border:1px solid var(--border); color:var(--t2); font-size:11px; font-weight:500;
+  cursor:pointer; transition:all .14s;
+}
+.queue-ctrl-btn:hover { color:var(--t1); background:var(--s4); border-color:var(--border-hi); }
+.queue-ctrl-btn.paused { color:#f59e0b; border-color:rgba(245,158,11,.4); background:rgba(245,158,11,.12); font-weight:600; }
+.queue-action-label { font-size:11px; color:var(--t3); }
+.queue-action-select {
+  padding:3px 8px; border-radius:var(--r-sm); background:var(--s3); border:1px solid var(--border);
+  color:var(--t1); font-size:11px; outline:none; cursor:pointer; transition:border-color .14s;
+}
+.queue-action-select:focus { border-color:var(--acc-border); }
+
+/* Night-Owl Active Banner */
+.sched-banner {
+  display:flex; align-items:center; justify-content:space-between; padding:8px 12px;
+  background:linear-gradient(135deg, rgba(124,109,250,.15), rgba(56,189,248,.1));
+  border-bottom:1px solid var(--acc-border); font-size:11.5px; color:var(--t1); gap:8px;
+}
+.sched-banner-info { display:flex; align-items:center; gap:8px; font-weight:500; }
+.sched-pulse-dot {
+  width:7px; height:7px; border-radius:50%; background:var(--acc); box-shadow:0 0 8px var(--acc);
+  animation:schedGlow 1.5s infinite alternate ease-in-out;
+}
+@keyframes schedGlow {
+  0% { transform:scale(0.85); opacity:0.6; }
+  100% { transform:scale(1.2); opacity:1; }
+}
+.sched-banner-actions { display:flex; align-items:center; gap:6px; }
+.sched-banner-btn {
+  padding:3px 8px; border-radius:var(--r-sm); font-size:11px; font-weight:600; cursor:pointer;
+  border:1px solid transparent; transition:all .14s;
+}
+.sched-banner-btn.start { background:var(--acc); color:#fff; border-color:var(--acc); }
+.sched-banner-btn.start:hover { filter:brightness(1.1); }
+.sched-banner-btn.cancel { background:var(--s3); color:var(--t2); border-color:var(--border); }
+.sched-banner-btn.cancel:hover { color:var(--t1); border-color:var(--border-hi); }
+
+/* Night-Owl Scheduler Modal */
+.sched-modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.7); backdrop-filter:blur(8px); display:none;
+  align-items:center; justify-content:center; z-index:2500;
+}
+.sched-modal-overlay.show { display:flex; }
+.sched-modal {
+  background:var(--s1); border:1px solid var(--border-hi); border-radius:var(--r-xl);
+  width:min(480px, 92vw); max-height:85vh; display:flex; flex-direction:column;
+  overflow:hidden; box-shadow:0 24px 72px rgba(0,0,0,.7);
+}
+.sched-modal-head {
+  display:flex; align-items:center; justify-content:space-between; padding:14px 18px;
+  border-bottom:1px solid var(--border); background:var(--s0); flex-shrink:0;
+}
+.sched-modal-title { font-size:13.5px; font-weight:700; color:var(--t1); display:flex; align-items:center; gap:8px; }
+.sched-modal-body {
+  padding:16px 18px; display:flex; flex-direction:column; gap:12px; overflow-y:auto;
+}
+.sched-chips-grid { display:flex; flex-wrap:wrap; gap:8px; }
+.sched-chip {
+  padding:6px 12px; border-radius:var(--r); background:var(--s2); border:1px solid var(--border);
+  color:var(--t1); font-size:12px; font-weight:600; cursor:pointer; transition:all .14s;
+}
+.sched-chip:hover { background:var(--acc-dim); color:var(--acc); border-color:var(--acc-border); }
+.sched-modal-footer {
+  display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:12px 18px;
+  border-top:1px solid var(--border); background:var(--s0); flex-shrink:0;
+}
+
+/* Priority Up / Down Buttons on Waiting Rows */
+.dl-priority-btn {
+  display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px;
+  border-radius:var(--r-sm); background:var(--s3); border:1px solid var(--border); color:var(--t2);
+  font-size:10px; cursor:pointer; transition:all .12s; padding:0; line-height:1;
+}
+.dl-priority-btn:hover { background:var(--s4); color:var(--t1); border-color:var(--border-hi); }
+.dl-priority-btn:disabled { opacity:0.3; cursor:not-allowed; }
+
+/* Floating Clipboard Action Toast */
+.clip-action-toast {
+  position:fixed; bottom:24px; right:24px; width:360px; max-width:calc(100vw - 48px);
+  background:var(--s1); border:1px solid var(--acc-border); border-radius:var(--r-xl);
+  box-shadow:0 16px 48px rgba(0,0,0,.65), 0 0 24px var(--acc-glow); z-index:3000;
+  overflow:hidden; display:none; flex-direction:column; animation:slideUp .25s cubic-bezier(.16,1,.3,1);
+}
+.clip-action-toast.show { display:flex; }
+@keyframes slideUp {
+  0% { transform:translateY(16px); opacity:0; }
+  100% { transform:translateY(0); opacity:1; }
+}
+.cat-head {
+  display:flex; align-items:center; justify-content:space-between; padding:10px 14px;
+  background:var(--s0); border-bottom:1px solid var(--border);
+}
+.cat-source { display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--acc); }
+.cat-close {
+  background:none; border:none; color:var(--t3); cursor:pointer; font-size:12px; padding:2px 4px;
+  border-radius:var(--r-sm); transition:color .12s;
+}
+.cat-close:hover { color:var(--t1); }
+.cat-url {
+  padding:10px 14px; font-size:11.5px; font-family:'JetBrains Mono',monospace; color:var(--t1);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:var(--s2);
+}
+.cat-actions {
+  display:flex; align-items:center; gap:6px; padding:10px 14px; background:var(--s1);
+}
+.cat-btn {
+  flex:1; padding:6px 8px; border-radius:var(--r-sm); font-size:11px; font-weight:600;
+  background:var(--s3); border:1px solid var(--border); color:var(--t1); cursor:pointer;
+  transition:all .14s; text-align:center;
+}
+.cat-btn:hover { background:var(--s4); border-color:var(--border-hi); }
+.cat-btn.primary { background:var(--acc); color:#fff; border-color:var(--acc); }
+.cat-btn.primary:hover { filter:brightness(1.1); }
+.cat-progress-track { height:3px; background:var(--s3); overflow:hidden; }
+.cat-progress-fill { height:100%; width:100%; background:var(--acc); transform-origin:left; }
+
+/* Shutdown / Sleep Emergency Countdown Modal */
+.shutdown-modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,.85); backdrop-filter:blur(12px);
+  display:none; align-items:center; justify-content:center; z-index:4000;
+}
+.shutdown-modal-overlay.show { display:flex; }
+.shutdown-modal {
+  background:var(--s1); border:1px solid #f43f5e; border-radius:var(--r-2xl); width:min(440px, 92vw);
+  padding:24px; display:flex; flex-direction:column; align-items:center; text-align:center;
+  box-shadow:0 24px 80px rgba(244,63,94,.25);
+}
+.shutdown-icon {
+  width:56px; height:56px; border-radius:50%; background:rgba(244,63,94,.15);
+  display:flex; align-items:center; justify-content:center; margin-bottom:14px;
+}
+.shutdown-title { font-size:16px; font-weight:700; color:#fff; margin-bottom:8px; }
+.shutdown-desc { font-size:13px; color:var(--t2); line-height:1.5; margin-bottom:20px; }
+.shutdown-actions { display:flex; gap:10px; width:100%; justify-content:center; }
 </style>
 </head>
 <body>
@@ -1001,10 +1572,43 @@ select { appearance:none; }
   </button>
 </header>
 
-<!-- ═══════════════════════════════════════
-     MAIN
-════════════════════════════════════════ -->
-<div class="body-grid">
+<div class="app-container">
+  <!-- ═══════════════════════════════════════
+       NAVIGATION RAIL
+  ════════════════════════════════════════ -->
+  <nav class="nav-rail">
+    <button class="nav-item active" id="nav-btn-downloader" data-view="downloader" onclick="switchView('downloader')" title="Downloads">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 1v9M4 7l4 4 4-4"/>
+        <rect x="2" y="13" width="12" height="1.5" rx=".75" fill="currentColor"/>
+      </svg>
+      <span class="nav-label">Downloads</span>
+    </button>
+
+    <button class="nav-item" id="nav-btn-library" data-view="library" onclick="switchView('library')" title="Media Library & History">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M2 3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V3zm3 1a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H5z"/>
+      </svg>
+      <span class="nav-label">Library</span>
+      <span class="nav-badge" id="nav-library-badge" style="display:none">0</span>
+    </button>
+
+    <button class="nav-item" id="nav-btn-settings" data-view="settings" onclick="switchView('settings')" title="Preferences & Appearance">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 4.75a3.25 3.25 0 1 0 0 6.5 3.25 3.25 0 0 0 0-6.5zM3.25 8a4.75 4.75 0 1 1 9.5 0 4.75 4.75 0 0 1-9.5 0z"/>
+        <path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34z"/>
+      </svg>
+      <span class="nav-label">Settings</span>
+    </button>
+  </nav>
+
+  <!-- ═══════════════════════════════════════
+       VIEW VIEWPORT
+  ════════════════════════════════════════ -->
+  <div class="view-viewport">
+    <!-- ── VIEW 1: DOWNLOADER ── -->
+    <div class="app-view active" id="view-downloader">
+      <div class="body-grid">
 <main class="content-col">
 
   <div class="dryrun-bar" id="dryrun-bar">
@@ -1029,6 +1633,10 @@ select { appearance:none; }
         <span id="input-icon" style="display:flex;flex-shrink:0;color:var(--t3);"></span>
         <input id="main-input" type="text" placeholder="Paste a link — or type to search…" spellcheck="false" autocomplete="off">
         <span class="mode-badge" id="mode-badge" style="display:none"></span>
+        <button class="btn-ghost" id="batch-open-btn" onclick="openBatchModal()" title="Batch download multiple URLs" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:7px 11px;flex-shrink:0;color:var(--t2);">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>
+          Batch
+        </button>
         <button class="btn-primary" id="primary-btn" onclick="onPrimaryAction()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:var(--acc);color:#fff;font-size:13px;font-weight:600;border-radius:var(--r);letter-spacing:-.01em;flex-shrink:0;">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l11 6-11 6V2z"/></svg>
           <span id="primary-btn-label">Start</span>
@@ -1070,10 +1678,16 @@ select { appearance:none; }
         <span class="lbl">Format</span>
         <select id="format-select" class="inp sel">
           <option value="auto">Auto</option>
-          <option value="mp4">Video · mp4</option>
-          <option value="m4a">Audio · m4a</option>
+          <option value="2160p">Video · 4K (2160p)</option>
+          <option value="1440p">Video · 2K (1440p)</option>
+          <option value="1080p">Video · 1080p HD</option>
+          <option value="720p">Video · 720p</option>
+          <option value="480p">Video · 480p</option>
+          <option value="best">Video · Best quality</option>
           <option value="mp3">Audio · mp3</option>
-          <option value="best">Best quality</option>
+          <option value="m4a">Audio · m4a</option>
+          <option value="flac">Audio · flac</option>
+          <option value="wav">Audio · wav</option>
         </select>
       </div>
       <div class="format-auto-note" id="format-auto-note" style="display:none">
@@ -1103,6 +1717,18 @@ select { appearance:none; }
             <input id="sleep-input" type="number" class="inp" value="2" min="0" step="0.5">
           </div>
           <div class="field">
+            <span class="lbl">Speed limit</span>
+            <select id="rate-limit-select" class="inp sel">
+              <option value="">Unlimited</option>
+              <option value="500K">500 KB/s</option>
+              <option value="1M">1 MB/s</option>
+              <option value="2M">2 MB/s</option>
+              <option value="5M">5 MB/s</option>
+              <option value="10M">10 MB/s</option>
+              <option value="20M">20 MB/s</option>
+            </select>
+          </div>
+          <div class="field">
             <span class="lbl">Cookies</span>
             <select id="cookies-select" class="inp sel">
               <option value="">None</option>
@@ -1125,9 +1751,14 @@ select { appearance:none; }
             <span class="lbl">Filename template <span class="lbl-note">(Images/Gallery)</span></span>
             <input id="filename-input" type="text" class="inp" placeholder="{category}_{id}.{extension}">
           </div>
+          <div class="field" style="grid-column: 1 / -1;">
+            <span class="lbl">Custom arguments <span class="lbl-note">(e.g. --write-sub --geo-bypass)</span></span>
+            <input id="custom-args-input" type="text" class="inp" placeholder="e.g. --write-sub --geo-bypass" autocomplete="off">
+          </div>
         </div>
 
         <div class="tog-row">
+          <div class="tog" id="tog-sponsorblock" onclick="togClick(this)" role="switch" aria-checked="false" tabindex="0" title="Skip sponsors, intros, and self-promos using SponsorBlock"><span class="tog-dot"></span>SponsorBlock</div>
           <div class="tog" id="tog-zip"      onclick="togClick(this)" role="switch" aria-checked="false" tabindex="0" title="Images/Gallery mode only"><span class="tog-dot"></span>ZIP archive</div>
           <div class="tog" id="tog-metadata" onclick="togClick(this)" role="switch" aria-checked="false" tabindex="0" title="Images/Gallery mode only"><span class="tog-dot"></span>Metadata JSON</div>
           <div class="tog" id="tog-verbose"  onclick="togClick(this)" role="switch" aria-checked="false" tabindex="0"><span class="tog-dot"></span>Verbose</div>
@@ -1182,6 +1813,45 @@ select { appearance:none; }
       <button class="btn-ghost" onclick="clearFinished()" style="font-size:11px;">Clear finished</button>
     </div>
 
+    <!-- ═══ QUEUE CONTROL TOOLBAR & NIGHT-OWL BANNER ═══ -->
+    <div class="queue-toolbar">
+      <div class="queue-toolbar-left">
+        <button class="queue-ctrl-btn" id="queue-pause-btn" onclick="toggleQueuePause()" title="Pause queue after current download">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M4 3.5h3v9H4v-9zm5 0h3v9H9v-9z"/></svg>
+          <span id="queue-pause-label">Pause</span>
+        </button>
+        <button class="queue-ctrl-btn" id="queue-sched-btn" onclick="openSchedulerModal()" title="Schedule Night-Owl off-peak downloads">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.5 3.5v4.25l3 1.75-.75 1.25-3.5-2.05V4.5h1.25z"/></svg>
+          <span>Schedule</span>
+        </button>
+        <button class="queue-ctrl-btn" id="queue-clear-waiting-btn" onclick="clearPendingDownloads()" title="Remove all waiting downloads">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+          <span>Clear waiting</span>
+        </button>
+      </div>
+      <div class="queue-toolbar-right">
+        <span class="queue-action-label" title="Action to take when all queue downloads finish">When done:</span>
+        <select class="queue-action-select" id="queue-on-finish-select" onchange="onCompletionActionChanged(this.value)">
+          <option value="nothing">Do nothing</option>
+          <option value="exit">Close app</option>
+          <option value="sleep">Sleep PC</option>
+          <option value="shutdown">Shut down PC</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Night-Owl Active Banner -->
+    <div class="sched-banner" id="sched-banner" style="display:none;">
+      <div class="sched-banner-info">
+        <div class="sched-pulse-dot"></div>
+        <span>Night-Owl: <strong id="sched-banner-countdown">Starts in 00:00</strong></span>
+      </div>
+      <div class="sched-banner-actions">
+        <button class="sched-banner-btn start" onclick="startScheduleNow()">⚡ Start Now</button>
+        <button class="sched-banner-btn cancel" onclick="cancelScheduler()">Cancel</button>
+      </div>
+    </div>
+
     <div class="dl-list-wrap" id="dl-list-wrap">
       <div class="dl-list" id="dl-list"></div>
       <div class="downloads-empty" id="downloads-empty" style="display:none">
@@ -1194,6 +1864,193 @@ select { appearance:none; }
 </aside>
 
 </div><!-- /body-grid -->
+</div><!-- /view-downloader -->
+
+<!-- ── VIEW 2: MEDIA LIBRARY ── -->
+<div class="app-view" id="view-library">
+  <div class="library-container">
+    <div class="library-head">
+      <div class="library-title-row">
+        <h2 class="library-title">Media Library</h2>
+        <span class="library-stats-pill" id="library-stats-pill">0 files · 0 B</span>
+      </div>
+      <div class="library-filter-row">
+        <div class="filter-chips" id="lib-filter-chips">
+          <span class="filter-chip active" data-libfilter="all" onclick="setLibFilter('all')">All</span>
+          <span class="filter-chip" data-libfilter="video" onclick="setLibFilter('video')">Videos</span>
+          <span class="filter-chip" data-libfilter="audio" onclick="setLibFilter('audio')">Audio</span>
+          <span class="filter-chip" data-libfilter="gallery" onclick="setLibFilter('gallery')">Galleries</span>
+        </div>
+        <div class="lib-search-wrap">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="var(--t3)" stroke-width="1.8" stroke-linecap="round"><circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>
+          <input id="lib-search-input" type="text" placeholder="Filter files in library…" oninput="renderLibrary()">
+        </div>
+        <button class="btn-ghost" onclick="clearFinished()" style="font-size:11.5px;margin-left:auto;">Clear history</button>
+      </div>
+    </div>
+
+    <div class="library-body" id="library-body">
+      <div class="library-grid" id="library-grid"></div>
+      <div class="library-empty" id="library-empty" style="display:none;">
+        <svg width="40" height="40" viewBox="0 0 16 16" fill="currentColor" style="opacity:.15"><path d="M2 3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V3zm3 1a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H5z"/></svg>
+        <span>No media in library yet</span>
+        <button class="btn-ghost" onclick="switchView('downloader')" style="margin-top:6px;font-size:12px;">Go to Downloader</button>
+      </div>
+    </div>
+  </div>
+</div><!-- /view-library -->
+
+<!-- ── VIEW 3: SETTINGS ── -->
+<div class="app-view" id="view-settings">
+  <div class="settings-container">
+    <div class="settings-head">
+      <h2 class="settings-title">Settings &amp; Preferences</h2>
+      <span style="font-size:11.5px;color:var(--t2);">Customize your appearance, download defaults, and system preferences</span>
+    </div>
+
+    <div class="settings-body">
+      <!-- Theme Accent Card -->
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <div class="settings-card-title">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 2.5a4.5 4.5 0 0 1 4.5 4.5c0 1.24-.5 2.37-1.32 3.18A4.5 4.5 0 0 1 8 12.5a4.5 4.5 0 0 1-4.5-4.5A4.5 4.5 0 0 1 8 3.5z"/></svg>
+            Accent Theme
+          </div>
+          <span style="font-size:11px;color:var(--t3);">Select your preferred interface accent color</span>
+        </div>
+        <div class="theme-swatches-grid">
+          <div class="theme-swatch" data-theme="violet" onclick="setAccentTheme('violet')">
+            <span class="swatch-circle" style="background:#7c6dfa;"></span>
+            <span class="swatch-name">Cyber Violet</span>
+            <span class="swatch-tag">Default</span>
+          </div>
+          <div class="theme-swatch" data-theme="emerald" onclick="setAccentTheme('emerald')">
+            <span class="swatch-circle" style="background:#3ecf8e;"></span>
+            <span class="swatch-name">Emerald Glow</span>
+          </div>
+          <div class="theme-swatch" data-theme="ocean" onclick="setAccentTheme('ocean')">
+            <span class="swatch-circle" style="background:#38bdf8;"></span>
+            <span class="swatch-name">Ocean Sky</span>
+          </div>
+          <div class="theme-swatch" data-theme="amber" onclick="setAccentTheme('amber')">
+            <span class="swatch-circle" style="background:#f59e0b;"></span>
+            <span class="swatch-name">Sunset Amber</span>
+          </div>
+          <div class="theme-swatch" data-theme="rose" onclick="setAccentTheme('rose')">
+            <span class="swatch-circle" style="background:#f43f5e;"></span>
+            <span class="swatch-name">Rose Neon</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Download Defaults Card -->
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <div class="settings-card-title">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44l.915.914A1.5 1.5 0 0 0 8.622 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12V3.5z"/></svg>
+            Download Defaults
+          </div>
+          <span style="font-size:11px;color:var(--t3);">Configure default save locations and preferred formats</span>
+        </div>
+        <div class="settings-fields-grid">
+          <div class="field">
+            <span class="lbl">Default download directory</span>
+            <div class="folder-row">
+              <input id="settings-output-input" type="text" class="inp" value="~/Downloads/media" onchange="saveDefaultPreferences()">
+              <button class="btn-ghost" style="padding:5px 8px;" onclick="settingsBrowseFolder()" title="Browse">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44l.915.914A1.5 1.5 0 0 0 8.622 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12V3.5z"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="lbl">Preferred format</span>
+            <select id="settings-format-select" class="inp sel" onchange="saveDefaultPreferences()">
+              <option value="auto">Auto</option>
+              <option value="2160p">Video · 4K (2160p)</option>
+              <option value="1080p">Video · 1080p HD</option>
+              <option value="720p">Video · 720p</option>
+              <option value="best">Video · Best quality</option>
+              <option value="mp3">Audio · mp3</option>
+              <option value="m4a">Audio · m4a</option>
+            </select>
+          </div>
+          <div class="field">
+            <span class="lbl">Default speed limit</span>
+            <select id="settings-rate-limit-select" class="inp sel" onchange="saveDefaultPreferences()">
+              <option value="">Unlimited</option>
+              <option value="1M">1 MB/s</option>
+              <option value="2M">2 MB/s</option>
+              <option value="5M">5 MB/s</option>
+              <option value="10M">10 MB/s</option>
+            </select>
+          </div>
+          <div class="field">
+            <span class="lbl">Default cookie browser</span>
+            <select id="settings-cookies-select" class="inp sel" onchange="saveDefaultPreferences()">
+              <option value="">None</option>
+              <option value="chrome">Chrome</option>
+              <option value="edge">Edge</option>
+              <option value="brave">Brave</option>
+              <option value="firefox">Firefox</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Automation & System Integration Card -->
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <div class="settings-card-title">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.5 3.5v4.25l3 1.75-.75 1.25-3.5-2.05V4.5h1.25z"/></svg>
+            Automation &amp; System Integration
+          </div>
+          <span style="font-size:11px;color:var(--t3);">Configure clipboard monitor and automated completion behavior</span>
+        </div>
+        <div class="settings-fields-grid">
+          <div class="field">
+            <span class="lbl">Clipboard monitor on launch</span>
+            <select id="settings-clip-autostart-select" class="inp sel" onchange="saveDefaultPreferences()">
+              <option value="false">Off (Manual activation)</option>
+              <option value="true">On (Auto-watch clipboard)</option>
+            </select>
+          </div>
+          <div class="field">
+            <span class="lbl">Default completion action</span>
+            <select id="settings-on-finish-select" class="inp sel" onchange="saveDefaultPreferences()">
+              <option value="nothing">Do nothing</option>
+              <option value="exit">Close application</option>
+              <option value="sleep">Put computer to sleep</option>
+              <option value="shutdown">Shut down computer (60s timer)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- About & System Card -->
+      <div class="settings-card">
+        <div class="settings-card-head">
+          <div class="settings-card-title">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm.93 12H7.07V6.5h1.86V12zm-.93-6.75a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>
+            System &amp; Updates
+          </div>
+          <span style="font-size:11px;color:var(--t3);">Check for application and extractor engine updates</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--t1);">Media Downloader v0.3.0</div>
+            <div style="font-size:11px;color:var(--t3);margin-top:2px;">Built on PyWebView &middot; Python &middot; yt-dlp &middot; gallery-dl</div>
+          </div>
+          <button class="btn-ghost" onclick="openAboutModal()" style="font-size:12px;padding:6px 14px;">
+            Check for Updates
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /view-settings -->
+
+</div><!-- /view-viewport -->
+</div><!-- /app-container -->
 </div><!-- /shell -->
 
 <!-- confirm dialog — used for destructive actions like Clear finished -->
@@ -1290,12 +2147,12 @@ select { appearance:none; }
             <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 1.5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11zM8 4a.75.75 0 0 0-.75.75v3.5c0 .414.336.75.75.75h2.5a.75.75 0 0 0 0-1.5H8.75V4.75A.75.75 0 0 0 8 4z"/></svg>
             Media Downloader Desktop App
           </div>
-          <span class="update-pill-badge info" id="app-version-badge">v0.2.6</span>
+          <span class="update-pill-badge info" id="app-version-badge">v0.3.0</span>
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
           <div style="font-size:11.5px;color:var(--t2);" id="app-update-status">
-            Installed version: <span style="color:var(--t1);font-family:'JetBrains Mono',monospace;" id="app-cur-ver">0.2.6</span>
+            Installed version: <span style="color:var(--t1);font-family:'JetBrains Mono',monospace;" id="app-cur-ver">0.3.0</span>
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
             <button class="btn-sm" id="btn-check-updates" onclick="triggerUpdateCheck()">
@@ -1392,8 +2249,683 @@ select { appearance:none; }
   </div>
 </div>
 
+<!-- drag & drop link overlay -->
+<div class="drag-drop-overlay" id="drag-drop-overlay">
+  <div class="drag-drop-card">
+    <div class="drag-drop-icon">
+      <svg width="32" height="32" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 1v9M4 7l4 4 4-4"/>
+        <rect x="2" y="13" width="12" height="1.5" rx=".75" fill="currentColor"/>
+      </svg>
+    </div>
+    <div class="drag-drop-title">Drop link to download</div>
+    <div class="drag-drop-sub">Release anywhere to inspect and queue</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     PLAYLIST / ALBUM INSPECTOR DRAWER
+════════════════════════════════════════ -->
+<div class="playlist-overlay" id="playlist-drawer-overlay">
+  <div class="playlist-modal">
+    <div class="playlist-head">
+      <div class="playlist-title-wrap">
+        <div class="playlist-title" id="pl-drawer-title">Inspecting Playlist…</div>
+        <div class="playlist-subtitle">
+          <span id="pl-drawer-uploader"></span>
+          <span id="pl-drawer-count-badge" class="lib-tag" style="background:var(--acc-dim);color:var(--acc);">0 items</span>
+          <span id="pl-drawer-selected-badge" style="color:var(--t2);">0 selected</span>
+        </div>
+      </div>
+      <button class="btn-ghost" onclick="closePlaylistDrawer()" style="width:30px;height:30px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;" title="Close">✕</button>
+    </div>
+
+    <div class="playlist-toolbar">
+      <div class="playlist-quick-actions">
+        <button class="playlist-tool-btn" onclick="playlistSelectAll(true)">✓ Select All</button>
+        <button class="playlist-tool-btn" onclick="playlistSelectAll(false)">✕ Deselect All</button>
+        <button class="playlist-tool-btn" onclick="playlistInvertSelection()">⇄ Invert</button>
+        <div class="playlist-range-wrap">
+          <span>Range:</span>
+          <input type="number" id="pl-range-start" class="playlist-range-inp" min="1" value="1">
+          <span>to</span>
+          <input type="number" id="pl-range-end" class="playlist-range-inp" min="1" value="10">
+          <button class="playlist-tool-btn" onclick="playlistApplyRange()">Apply</button>
+        </div>
+      </div>
+
+      <div class="playlist-search-wrap">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="color:var(--t3);flex-shrink:0;"><circle cx="6.5" cy="6.5" r="4.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <input type="text" id="pl-search-input" placeholder="Filter tracks…" oninput="filterPlaylistTracks()">
+      </div>
+    </div>
+
+    <div class="playlist-body" id="pl-tracks-list">
+      <div style="text-align:center;padding:40px;color:var(--t3);font-size:12px;">Loading playlist entries…</div>
+    </div>
+
+    <div class="playlist-footer">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="lbl" style="font-size:11px;">Format:</span>
+        <select id="pl-format-select" class="inp sel" style="width:140px;padding:4px 8px;font-size:11.5px;">
+          <option value="auto">Auto</option>
+          <option value="1080p">1080p HD</option>
+          <option value="720p">720p</option>
+          <option value="mp3">Audio · MP3</option>
+          <option value="m4a">Audio · M4A</option>
+          <option value="flac">Audio · FLAC</option>
+        </select>
+      </div>
+
+      <div class="playlist-footer-actions">
+        <button class="btn-ghost" onclick="closePlaylistDrawer()">Cancel</button>
+        <button class="btn-ghost" id="pl-queue-individual-btn" onclick="queuePlaylistSelected(true)" title="Add each selected video as an individual download task in the queue">
+          Queue Individual Items (<span id="pl-btn-count-indiv">0</span>)
+        </button>
+        <button class="btn-primary" id="pl-download-bundle-btn" onclick="queuePlaylistSelected(false)" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:var(--acc);color:#fff;font-size:12px;font-weight:600;border-radius:var(--r);">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9M4 7l4 4 4-4"/><rect x="2" y="13" width="12" height="1.5" rx=".75" fill="currentColor"/></svg>
+          Download Bundle (<span id="pl-btn-count-bundle">0</span>)
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     BATCH URL PASTE MODAL
+════════════════════════════════════════ -->
+<div class="batch-overlay" id="batch-modal-overlay">
+  <div class="batch-modal">
+    <div class="batch-head">
+      <div class="batch-title">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" style="color:var(--acc);"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>
+        Batch URL Downloader
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn-ghost" onclick="$('batch-file-input').click()" style="font-size:11px;padding:4px 9px;" title="Import links from .txt or .csv file">
+          📁 Import File
+        </button>
+        <input type="file" id="batch-file-input" accept=".txt,.csv" style="display:none" onchange="handleBatchFileImport(event)">
+        <button class="btn-ghost" onclick="closeBatchModal()" style="width:28px;height:28px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;" title="Close">✕</button>
+      </div>
+    </div>
+
+    <div class="batch-body">
+      <div style="font-size:11.5px;color:var(--t2);">
+        Paste multiple video, audio, or image links below (one URL per line):
+      </div>
+
+      <textarea id="batch-textarea" class="batch-textarea" placeholder="https://www.youtube.com/watch?v=...&#10;https://www.instagram.com/p/...&#10;https://soundcloud.com/..." oninput="updateBatchStats()"></textarea>
+
+      <div class="batch-status-row">
+        <span id="batch-stats-text">0 lines entered</span>
+        <span class="batch-status-pill" id="batch-valid-count">0 valid URLs detected</span>
+      </div>
+
+      <div class="batch-presets-grid">
+        <div class="field">
+          <span class="lbl">Format Preset</span>
+          <select id="batch-format-select" class="inp sel">
+            <option value="auto">Auto</option>
+            <option value="1080p">Video · 1080p HD</option>
+            <option value="720p">Video · 720p</option>
+            <option value="480p">Video · 480p</option>
+            <option value="best">Video · Best quality</option>
+            <option value="mp3">Audio · MP3</option>
+            <option value="m4a">Audio · M4A</option>
+            <option value="flac">Audio · FLAC</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <span class="lbl">Speed Limit</span>
+          <select id="batch-rate-select" class="inp sel">
+            <option value="">Unlimited</option>
+            <option value="500K">500 KB/s</option>
+            <option value="1M">1 MB/s</option>
+            <option value="2M">2 MB/s</option>
+            <option value="5M">5 MB/s</option>
+            <option value="10M">10 MB/s</option>
+          </select>
+        </div>
+
+        <div class="field output-field" style="grid-column:1/-1;">
+          <span class="lbl">Output Folder</span>
+          <div class="folder-row">
+            <input id="batch-output-input" type="text" class="inp" value="~/Downloads/media">
+            <button class="btn-ghost" style="padding:5px 8px;" onclick="browseBatchFolder()" title="Browse">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h3.086a1.5 1.5 0 0 1 1.06.44l.915.914A1.5 1.5 0 0 0 8.622 3.5H13.5A1.5 1.5 0 0 1 15 5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12V3.5z"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div style="grid-column:1/-1;display:flex;align-items:center;gap:12px;padding-top:4px;">
+          <div class="tog" id="batch-sponsorblock-tog" onclick="toggleBatchSponsorblock()" role="checkbox" aria-checked="false">
+            <div class="tog-dot"></div>
+            SponsorBlock (skip sponsors)
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="batch-footer">
+      <button class="btn-ghost" onclick="closeBatchModal()">Cancel</button>
+      <button class="btn-primary" id="batch-submit-btn" onclick="submitBatchDownloads()" style="display:inline-flex;align-items:center;gap:6px;padding:7px 16px;background:var(--acc);color:#fff;font-size:12.5px;font-weight:600;border-radius:var(--r);" disabled>
+        Queue 0 Downloads
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ NIGHT-OWL SCHEDULER MODAL ═══ -->
+<div class="sched-modal-overlay" id="sched-modal-overlay">
+  <div class="sched-modal">
+    <div class="sched-modal-head">
+      <div class="sched-modal-title">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.5 3.5v4.25l3 1.75-.75 1.25-3.5-2.05V4.5h1.25z"/></svg>
+        Night-Owl Download Scheduler
+      </div>
+      <button class="btn-ghost" onclick="closeSchedulerModal()" style="width:28px;height:28px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;" title="Close">✕</button>
+    </div>
+    <div class="sched-modal-body">
+      <p style="font-size:12px;color:var(--t2);line-height:1.5;margin:0;">
+        Hold the current download queue and start downloading automatically during off-peak bandwidth hours or after a delay.
+      </p>
+
+      <div style="font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;">
+        Quick Relative Delay
+      </div>
+      <div class="sched-chips-grid">
+        <button class="sched-chip" onclick="scheduleRelative(30)">+30 min</button>
+        <button class="sched-chip" onclick="scheduleRelative(60)">+1 hour</button>
+        <button class="sched-chip" onclick="scheduleRelative(120)">+2 hours</button>
+        <button class="sched-chip" onclick="scheduleRelative(240)">+4 hours</button>
+        <button class="sched-chip" onclick="scheduleRelative(480)">+8 hours</button>
+      </div>
+
+      <div style="font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.5px;margin-top:8px;">
+        Or Start at Specific Clock Time
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input type="time" class="inp" id="sched-clock-input" value="02:00" style="width:160px;font-family:'JetBrains Mono',monospace;font-size:13px;padding:6px 10px;">
+        <button class="btn-primary" onclick="scheduleClockTime()" style="padding:7px 16px;font-size:12px;background:var(--acc);color:#fff;border-radius:var(--r);font-weight:600;">
+          Set Clock Time
+        </button>
+      </div>
+    </div>
+    <div class="sched-modal-footer">
+      <button class="btn-ghost" onclick="closeSchedulerModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ FLOATING CLIPBOARD ACTION TOAST ═══ -->
+<div class="clip-action-toast" id="clip-action-toast">
+  <div class="cat-head">
+    <div class="cat-source">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>
+      <span>Clipboard Link Detected</span>
+    </div>
+    <button class="cat-close" onclick="dismissClipActionToast()" title="Dismiss">✕</button>
+  </div>
+  <div class="cat-url" id="cat-url" title=""></div>
+  <div class="cat-actions">
+    <button class="cat-btn primary" onclick="onClipQuickDownload()">⚡ Download</button>
+    <button class="cat-btn" onclick="onClipInspect()">🔍 Inspect</button>
+    <button class="cat-btn" onclick="onClipAddToBatch()">➕ Add to Batch</button>
+  </div>
+  <div class="cat-progress-track">
+    <div class="cat-progress-fill" id="cat-progress-fill"></div>
+  </div>
+</div>
+
+<!-- ═══ SHUTDOWN WARNING MODAL ═══ -->
+<div class="shutdown-modal-overlay" id="shutdown-modal-overlay">
+  <div class="shutdown-modal">
+    <div class="shutdown-icon">
+      <svg width="28" height="28" viewBox="0 0 16 16" fill="#f43f5e"><path d="M7.5 1v7h1V1h-1z"/><path d="M3 8.812a4.999 4.999 0 0 1 2.578-4.375l-.485-.874A6 6 0 1 0 11 3.563l-.485.874A5 5 0 1 1 3 8.812z"/></svg>
+    </div>
+    <div class="shutdown-title" id="shutdown-title">Queue Finished — System Shutting Down</div>
+    <div class="shutdown-desc" id="shutdown-desc">
+      All downloads have completed. Windows will shut down in <strong id="shutdown-timer-val">60</strong> seconds.
+    </div>
+    <div class="shutdown-actions">
+      <button class="btn-primary" onclick="abortSystemShutdown()" style="background:#f43f5e;border-color:#f43f5e;font-size:13px;padding:8px 20px;color:#fff;font-weight:600;border-radius:var(--r);">
+        ⏹ Cancel Shutdown
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 "use strict";
+
+// ─────────────────────────────────────────────
+// VIEW NAVIGATION & MULTI-VIEW STATE
+// ─────────────────────────────────────────────
+let currentAppView = "downloader"; // "downloader" | "library" | "settings"
+
+function switchView(viewName) {
+  currentAppView = viewName;
+  document.querySelectorAll(".nav-item").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-view") === viewName);
+  });
+  document.querySelectorAll(".app-view").forEach(v => {
+    v.classList.toggle("active", v.id === "view-" + viewName);
+  });
+  if (viewName === "library") {
+    renderLibrary();
+  }
+}
+
+// ─────────────────────────────────────────────
+// ACCENT THEME ENGINE
+// ─────────────────────────────────────────────
+const ACCENT_THEMES = {
+  violet: {
+    acc: "#7c6dfa",
+    dim: "rgba(124,109,250,0.10)",
+    glow: "rgba(124,109,250,0.20)",
+    border: "rgba(124,109,250,0.35)",
+  },
+  emerald: {
+    acc: "#3ecf8e",
+    dim: "rgba(62,207,142,0.10)",
+    glow: "rgba(62,207,142,0.20)",
+    border: "rgba(62,207,142,0.35)",
+  },
+  ocean: {
+    acc: "#38bdf8",
+    dim: "rgba(56,189,248,0.10)",
+    glow: "rgba(56,189,248,0.20)",
+    border: "rgba(56,189,248,0.35)",
+  },
+  amber: {
+    acc: "#f59e0b",
+    dim: "rgba(245,158,11,0.10)",
+    glow: "rgba(245,158,11,0.20)",
+    border: "rgba(245,158,11,0.35)",
+  },
+  rose: {
+    acc: "#f43f5e",
+    dim: "rgba(244,63,94,0.10)",
+    glow: "rgba(244,63,94,0.20)",
+    border: "rgba(244,63,94,0.35)",
+  },
+};
+
+function setAccentTheme(themeName) {
+  const theme = ACCENT_THEMES[themeName] || ACCENT_THEMES.violet;
+  const root = document.documentElement;
+  root.style.setProperty("--acc", theme.acc);
+  root.style.setProperty("--acc-dim", theme.dim);
+  root.style.setProperty("--acc-glow", theme.glow);
+  root.style.setProperty("--acc-border", theme.border);
+  try {
+    localStorage.setItem("md_theme_accent", themeName);
+  } catch(e) {}
+  document.querySelectorAll(".theme-swatch").forEach(s => {
+    s.classList.toggle("active", s.getAttribute("data-theme") === themeName);
+  });
+}
+
+function initAccentTheme() {
+  let saved = "violet";
+  try {
+    saved = localStorage.getItem("md_theme_accent") || "violet";
+  } catch(e) {}
+  setAccentTheme(saved);
+}
+
+// ─────────────────────────────────────────────
+// MEDIA & PLAYBACK UTILITIES
+// ─────────────────────────────────────────────
+const PLAYABLE_EXT = ["mp4","m4a","mp3","webm","mov","mkv","wav","ogg","flac","avi","m4v"];
+const AUDIO_EXT    = ["mp3","m4a","wav","ogg","flac"];
+const IMAGE_EXT    = ["jpg","jpeg","png","gif","webp","bmp","svg","tiff","heic","avif"];
+
+function isPlayable(name) {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  return PLAYABLE_EXT.includes(ext);
+}
+
+function isImage(name) {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  return IMAGE_EXT.includes(ext);
+}
+
+function playableFilesFor(item) {
+  if (!item) return [];
+  const raw = item.files || [];
+  const list = raw
+    .map(f => (typeof f === "string" ? { name: f.split(/[/\\]/).pop() || f, path: f } : f))
+    .filter(f => f && f.name && isPlayable(f.name));
+  if (list.length === 0 && item.filename && isPlayable(item.filename)) {
+    const fullPath = item.outputDir ? (item.outputDir.replace(/[/\\]+$/, "") + "/" + item.filename) : item.filename;
+    list.push({ name: item.filename, path: fullPath });
+  }
+  return list;
+}
+
+function galleryFilesFor(item) {
+  if (!item) return [];
+  const raw = item.files || [];
+  return raw
+    .map(f => (typeof f === "string" ? { name: f.split(/[/\\]/).pop() || f, path: f } : f))
+    .filter(f => f && f.name && (isImage(f.name) || (isPlayable(f.name) && !AUDIO_EXT.includes((f.name.split(".").pop() || "").toLowerCase()))));
+}
+
+function shouldShowGallery(item) {
+  const g = galleryFilesFor(item);
+  if (g.length > 1) return true;
+  if (g.length === 1) return isImage(g[0].name);
+  return false;
+}
+
+async function openItemFile(id) {
+  const item = downloads.find(i => i.id === id);
+  if (!item || !window.pywebview?.api?.open_file) return;
+  const firstFilePath = (item.files && item.files.length)
+    ? (typeof item.files[0] === 'string' ? item.files[0] : item.files[0].path)
+    : (item.outputDir && item.filename ? (item.outputDir.replace(/[/\\]+$/, '') + '/' + item.filename) : "");
+  if (!firstFilePath) { showToast("No file found to open", false); return; }
+  try { await window.pywebview.api.open_file(firstFilePath); }
+  catch { showToast("Couldn't open file", false); }
+}
+
+// ─────────────────────────────────────────────
+// MEDIA LIBRARY
+// ─────────────────────────────────────────────
+let currentLibFilter = "all"; // "all" | "video" | "audio" | "gallery"
+
+function setLibFilter(f) {
+  currentLibFilter = f;
+  document.querySelectorAll("#lib-filter-chips .filter-chip").forEach(chip => {
+    chip.classList.toggle("active", chip.getAttribute("data-libfilter") === f);
+  });
+  renderLibrary();
+}
+
+function getMediaCategory(item) {
+  if (item.tool === "gallery-dl") return "gallery";
+  const files = item.files || [];
+  const candidates = files.map(f => (typeof f === "string" ? f : (f.path || f.name || "")));
+  if (item.filename) candidates.push(item.filename);
+
+  for (const p of candidates) {
+    if (!p) continue;
+    const ext = p.split(".").pop().toLowerCase();
+    if (["mp4", "mkv", "webm", "avi", "mov", "flv", "m4v"].includes(ext)) return "video";
+    if (["mp3", "m4a", "flac", "wav", "opus", "ogg", "aac"].includes(ext)) return "audio";
+    if (["jpg", "jpeg", "png", "webp", "gif", "zip"].includes(ext)) return "gallery";
+  }
+  if (item.tool === "yt-dlp") {
+    if (item.cfg?.format === "mp3" || item.cfg?.format === "m4a" || item.cfg?.format === "flac" || item.cfg?.format === "wav") return "audio";
+    return "video";
+  }
+  return "other";
+}
+
+function renderLibrary() {
+  const grid = $("library-grid");
+  const empty = $("library-empty");
+  const statsEl = $("library-stats-pill");
+  if (!grid) return;
+
+  const searchQ = ($("lib-search-input") ? $("lib-search-input").value.trim().toLowerCase() : "");
+  const doneItems = downloads.filter(i => i.state === "done");
+
+  let totalBytes = 0;
+  let totalFiles = 0;
+  doneItems.forEach(i => {
+    totalBytes += (i.sizeBytes || 0);
+    totalFiles += (i.files ? i.files.length : (i.itemsDone || 1));
+  });
+  if (statsEl) {
+    statsEl.textContent = `${totalFiles} file${totalFiles === 1 ? "" : "s"} · ${fmtBytes(totalBytes)}`;
+  }
+
+  const navBadge = $("nav-library-badge");
+  if (navBadge) {
+    if (doneItems.length > 0) {
+      navBadge.textContent = doneItems.length;
+      navBadge.style.display = "flex";
+    } else {
+      navBadge.style.display = "none";
+    }
+  }
+
+  const filtered = doneItems.filter(item => {
+    const cat = getMediaCategory(item);
+    if (currentLibFilter === "video" && cat !== "video") return false;
+    if (currentLibFilter === "audio" && cat !== "audio") return false;
+    if (currentLibFilter === "gallery" && cat !== "gallery") return false;
+
+    if (searchQ) {
+      const name = (item.filename || "").toLowerCase();
+      const url = (item.url || "").toLowerCase();
+      const matchesFiles = (item.files || []).some(f => {
+        const fn = typeof f === "string" ? f : (f.name || f.path || "");
+        return fn.toLowerCase().includes(searchQ);
+      });
+      if (!name.includes(searchQ) && !url.includes(searchQ) && !matchesFiles) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    grid.innerHTML = "";
+    if (empty) {
+      empty.style.display = "flex";
+      const span = empty.querySelector("span");
+      const btn = empty.querySelector("button");
+      if (doneItems.length === 0) {
+        if (span) span.textContent = "No media in library yet";
+        if (btn) {
+          btn.textContent = "Go to Downloader";
+          btn.onclick = () => switchView("downloader");
+        }
+      } else {
+        if (span) span.textContent = "No media matching current filter";
+        if (btn) {
+          btn.textContent = "Reset filters";
+          btn.onclick = () => {
+            if ($("lib-search-input")) $("lib-search-input").value = "";
+            setLibFilter("all");
+          };
+        }
+      }
+    }
+    return;
+  }
+  if (empty) empty.style.display = "none";
+
+  grid.innerHTML = filtered.map(item => {
+    const cat = getMediaCategory(item);
+    const title = item.filename || (item.url ? item.url.replace(/^https?:\/\/(www\.)?/, "") : "Downloaded item");
+    const dateStr = item.finishedAt ? fmtDate(item.finishedAt) : "";
+    const sizeStr = item.sizeBytes ? fmtBytes(item.sizeBytes) : "";
+    const playable = playableFilesFor(item);
+    const hasPlayable = playable.length > 0;
+    const isGallery = cat === "gallery" || (item.files && item.files.length > 1 && !hasPlayable);
+
+    let catIcon = '';
+    if (cat === "video") {
+      catIcon = '<svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor"><path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V1zm4 10.5a.5.5 0 0 0 .757.429l7-4.5a.5.5 0 0 0 0-.858l-7-4.5A.5.5 0 0 0 4 2.5v9z"/></svg>';
+    } else if (cat === "audio") {
+      catIcon = '<svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor"><path d="M9 13c0 1.105-1.12 2-2.5 2S4 14.105 4 13s1.12-2 2.5-2 2.5.895 2.5 2z"/><path fill-rule="evenodd" d="M9 3v10H8V3h1z"/><path d="M8 2.82a1 1 0 0 1 .804-.98l3-1A1 1 0 0 1 13 1.82V4a1 1 0 0 1-1.196.98l-3-1A1 1 0 0 1 8 3V2.82z"/></svg>';
+    } else {
+      catIcon = '<svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor"><path d="M4.502 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/><path d="M14.002 13a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5A2 2 0 0 1 2 3a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-1.998 2zM14 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/></svg>';
+    }
+
+    let playActionHtml = '';
+    if (hasPlayable) {
+      playActionHtml = `<button class="lib-btn primary" onclick="playDownloadItem('${escHtml(item.id)}')">▶ Play</button>`;
+    } else if (isGallery) {
+      playActionHtml = `<button class="lib-btn primary" onclick="openGallery('${escHtml(item.id)}')">🖼 Gallery</button>`;
+    }
+
+    const folderActionHtml = (item.outputDir || item.cfg?.output)
+      ? `<button class="lib-btn" onclick="openFolder('${escHtml(item.id)}')">📁 Folder</button>`
+      : '';
+
+    const hasFiles = (item.files && item.files.length > 0) || item.filename;
+    const extActionHtml = hasFiles
+      ? `<button class="lib-btn" onclick="openItemFile('${escHtml(item.id)}')">Open</button>`
+      : '';
+
+    return `
+      <div class="lib-card" data-id="${escHtml(item.id)}">
+        <div class="lib-thumb-wrap">
+          <div class="lib-thumb-icon">${catIcon}</div>
+          <span class="lib-badge">${escHtml(item.tool || "media")}</span>
+        </div>
+        <div class="lib-info">
+          <div class="lib-title" title="${escHtml(title)}">${escHtml(title)}</div>
+          <div class="lib-meta-row">
+            <span class="lib-tag">${escHtml(cat)}</span>
+            <span>${escHtml(sizeStr)}</span>
+            ${dateStr ? `<span style="margin-left:auto;">${escHtml(dateStr)}</span>` : ''}
+          </div>
+        </div>
+        <div class="lib-actions">
+          ${playActionHtml}
+          ${folderActionHtml}
+          ${extActionHtml}
+          <button class="lib-btn danger" onclick="deleteDownload('${escHtml(item.id)}')" title="Delete from history">✕</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+// ─────────────────────────────────────────────
+// SETTINGS PREFERENCES
+// ─────────────────────────────────────────────
+async function settingsBrowseFolder() {
+  if (!window.pywebview?.api?.pick_folder) return;
+  const p = await window.pywebview.api.pick_folder();
+  if (p) {
+    if ($("settings-output-input")) $("settings-output-input").value = p;
+    if ($("output-input")) $("output-input").value = p;
+    saveDefaultPreferences();
+  }
+}
+
+function saveDefaultPreferences() {
+  const prefs = {
+    output: $("settings-output-input") ? $("settings-output-input").value.trim() : "",
+    format: $("settings-format-select") ? $("settings-format-select").value : "auto",
+    rate_limit: $("settings-rate-limit-select") ? $("settings-rate-limit-select").value : "",
+    cookies: $("settings-cookies-select") ? $("settings-cookies-select").value : "",
+    on_finish: $("settings-on-finish-select") ? $("settings-on-finish-select").value : "nothing",
+    clip_autostart: $("settings-clip-autostart-select") ? $("settings-clip-autostart-select").value : "false",
+  };
+  try {
+    localStorage.setItem("md_default_prefs", JSON.stringify(prefs));
+    localStorage.setItem("md_on_finish", prefs.on_finish);
+    localStorage.setItem("md_clip_autostart", prefs.clip_autostart);
+  } catch(e) {}
+  if (prefs.output) $("output-input").value = prefs.output;
+  if (prefs.format) $("format-select").value = prefs.format;
+  if ($("rate-limit-select")) $("rate-limit-select").value = prefs.rate_limit;
+  if ($("cookies-select")) $("cookies-select").value = prefs.cookies;
+  if ($("queue-on-finish-select")) $("queue-on-finish-select").value = prefs.on_finish;
+  showToast("Preferences saved");
+}
+
+function loadDefaultPreferences() {
+  try {
+    const raw = localStorage.getItem("md_default_prefs");
+    const savedOnFinish = localStorage.getItem("md_on_finish");
+    const savedClipAutostart = localStorage.getItem("md_clip_autostart");
+
+    if (savedOnFinish) {
+      if ($("settings-on-finish-select")) $("settings-on-finish-select").value = savedOnFinish;
+      if ($("queue-on-finish-select")) $("queue-on-finish-select").value = savedOnFinish;
+    }
+    if (savedClipAutostart) {
+      if ($("settings-clip-autostart-select")) $("settings-clip-autostart-select").value = savedClipAutostart;
+      if (savedClipAutostart === "true") {
+        setTimeout(() => { if (!clipMonitorOn) toggleClipMonitor(true); }, 1000);
+      }
+    }
+
+    if (!raw) return;
+    const prefs = JSON.parse(raw);
+    if (prefs.output) {
+      if ($("settings-output-input")) $("settings-output-input").value = prefs.output;
+      if ($("output-input")) $("output-input").value = prefs.output;
+    }
+    if (prefs.format) {
+      if ($("settings-format-select")) $("settings-format-select").value = prefs.format;
+      if ($("format-select")) $("format-select").value = prefs.format;
+    }
+    if (prefs.rate_limit) {
+      if ($("settings-rate-limit-select")) $("settings-rate-limit-select").value = prefs.rate_limit;
+      if ($("rate-limit-select")) $("rate-limit-select").value = prefs.rate_limit;
+    }
+    if (prefs.cookies) {
+      if ($("settings-cookies-select")) $("settings-cookies-select").value = prefs.cookies;
+      if ($("cookies-select")) $("cookies-select").value = prefs.cookies;
+    }
+    if (prefs.on_finish) {
+      if ($("settings-on-finish-select")) $("settings-on-finish-select").value = prefs.on_finish;
+      if ($("queue-on-finish-select")) $("queue-on-finish-select").value = prefs.on_finish;
+    }
+    if (prefs.clip_autostart) {
+      if ($("settings-clip-autostart-select")) $("settings-clip-autostart-select").value = prefs.clip_autostart;
+    }
+  } catch(e) {}
+}
+
+// ─────────────────────────────────────────────
+// DRAG & DROP LINK OVERLAY
+// ─────────────────────────────────────────────
+let dragCounter = 0;
+
+function initDragAndDrop() {
+  const overlay = $("drag-drop-overlay");
+  if (!overlay) return;
+
+  window.addEventListener("dragenter", e => {
+    e.preventDefault();
+    dragCounter++;
+    overlay.classList.add("active");
+  });
+
+  window.addEventListener("dragover", e => {
+    e.preventDefault();
+  });
+
+  window.addEventListener("dragleave", e => {
+    e.preventDefault();
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      overlay.classList.remove("active");
+    }
+  });
+
+  window.addEventListener("drop", e => {
+    e.preventDefault();
+    dragCounter = 0;
+    overlay.classList.remove("active");
+
+    let text = e.dataTransfer.getData("text") || e.dataTransfer.getData("text/plain");
+    if (!text && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      text = e.dataTransfer.files[0].path || e.dataTransfer.files[0].name;
+    }
+    if (text) {
+      text = text.trim();
+      $("main-input").value = text;
+      switchView("downloader");
+      updateInputMode();
+      $("main-input").focus();
+      showToast("Link loaded");
+    }
+  });
+}
 
 // ─────────────────────────────────────────────
 // DETECTION — single input auto-detects link vs search
@@ -1484,7 +3016,13 @@ function showToast(msg, ok = true, duration = 2800) {
   t._t = setTimeout(() => t.classList.remove("show"), duration);
 }
 function escHtml(s) {
-  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 function shellQuote(s) {
   if (!s) return '""';
@@ -1505,7 +3043,12 @@ function fmtBytes(n) {
 }
 function fmtDate(ts) {
   if (!ts) return "—";
-  return new Date(ts * 1000).toLocaleString();
+  const ms = ts > 1e11 ? ts : ts * 1000;
+  try {
+    return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return new Date(ms).toLocaleDateString();
+  }
 }
 function fmtDuration(secs) {
   if (!secs) return "";
@@ -1519,31 +3062,6 @@ function fmtViews(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + "M views";
   if (n >= 1e3) return (n / 1e3).toFixed(1) + "K views";
   return n + " views";
-}
-const PLAYABLE_EXT = ["mp4","m4a","mp3","webm","mov","mkv","wav","ogg","flac","avi","m4v"];
-const AUDIO_EXT     = ["mp3","m4a","wav","ogg","flac"];
-const IMAGE_EXT     = ["jpg","jpeg","png","gif","webp","bmp","svg","tiff","heic","avif"];
-function isPlayable(name) {
-  const ext = (name.split(".").pop() || "").toLowerCase();
-  return PLAYABLE_EXT.includes(ext);
-}
-function isImage(name) {
-  const ext = (name.split(".").pop() || "").toLowerCase();
-  return IMAGE_EXT.includes(ext);
-}
-// Files worth showing in the gallery grid — images plus anything
-// video (audio-only files belong in the Play flow, not a visual gallery).
-function galleryFilesFor(item) {
-  return (item.files || []).filter(f => isImage(f.name) || (isPlayable(f.name) && !AUDIO_EXT.includes((f.name.split(".").pop() || "").toLowerCase())));
-}
-// Only show the Gallery button when it adds something Play doesn't already
-// cover: multi-file downloads of any kind, or a single image (Play has
-// nothing to offer for a lone image — there's no other way to view it in-app).
-function shouldShowGallery(item) {
-  const g = galleryFilesFor(item);
-  if (g.length > 1) return true;
-  if (g.length === 1) return isImage(g[0].name);
-  return false;
 }
 
 // ─────────────────────────────────────────────
@@ -1596,9 +3114,15 @@ let sessionTotal = 0;
 let clipMonitorOn = false;
 let clipMonitorId = null;
 let lastClipText  = "";
+let detectedClipUrl = "";
+let clipToastTimer = null;
+let clipToastAnimId = null;
 
+let isQueuePaused = false;
 let schedTimer  = null;
 let schedTarget = null;
+let shutdownCountdownTimer = null;
+let shutdownRemainingSeconds = 60;
 
 let previewReqId       = 0;
 let previewDebounceTimer = null;
@@ -1724,23 +3248,28 @@ window.onLinkPreview = function(reqId, result) {
   renderLinkPreview(result);
 };
 
+let selectedPreviewFormat = "auto";
+
 function showPreviewLoading() {
   sectionMode = "preview";
   $("search-section").classList.add("show");
-  $("search-section-title").textContent = "Preview";
+  $("search-section-title").textContent = "Link Inspector";
   $("search-result-count").textContent = "";
   $("search-results").innerHTML =
-    '<div class="sr-skeleton" style="max-width:280px">' +
-      '<div class="sk-thumb"></div>' +
-      '<div class="sk-line" style="width:90%"></div>' +
-      '<div class="sk-line short"></div>' +
+    '<div class="sr-skeleton preview-card" style="max-width:540px;display:flex;flex-direction:row;">' +
+      '<div class="sk-thumb" style="width:200px;aspect-ratio:auto;flex-shrink:0;"></div>' +
+      '<div style="flex:1;padding:14px;display:flex;flex-direction:column;gap:8px;">' +
+        '<div class="sk-line" style="width:90%"></div>' +
+        '<div class="sk-line short"></div>' +
+        '<div class="sk-line" style="width:65%;margin-top:10px;"></div>' +
+      '</div>' +
     '</div>';
 }
 
 function showPreviewUnavailable(msg) {
   sectionMode = "preview";
   $("search-section").classList.add("show");
-  $("search-section-title").textContent = "Preview";
+  $("search-section-title").textContent = "Link Inspector";
   $("search-result-count").textContent = "";
   $("search-results").innerHTML =
     '<div class="search-empty" style="padding:22px 20px;">' +
@@ -1754,29 +3283,54 @@ function showPreviewUnavailable(msg) {
 function renderLinkPreview(result) {
   sectionMode = "preview";
   $("search-section").classList.add("show");
-  $("search-section-title").textContent = "Preview";
+  $("search-section-title").textContent = "Link Inspector";
   $("search-result-count").textContent = "";
 
   const metaParts = [];
   if (result.channel) metaParts.push(result.channel);
   if (result.count)   metaParts.push(result.count + " item" + (result.count === 1 ? "" : "s"));
 
-  // Whatever best identifies "who/where this is from" — the channel for
-  // a video, or the site host (gallery-dl previews set title to the
-  // host already) for a gallery — used to seed the avatar circle, same
-  // visual language as the search-result cards.
   const identityLabel = result.channel || result.title || "?";
+  selectedPreviewFormat = $("format-select").value || "auto";
+
+  let qualitiesHtml = "";
+  if (result.available_qualities && result.available_qualities.length > 0) {
+    const pills = [
+      { id: "auto", label: "Auto (Best)" },
+      ...result.available_qualities
+    ];
+    qualitiesHtml =
+      '<div class="preview-qualities-wrap">' +
+        '<div class="preview-qualities-lbl">Format &amp; Quality</div>' +
+        '<div class="preview-pill-bar" id="preview-pill-bar">' +
+          pills.map(q => {
+            const isActive = q.id === selectedPreviewFormat;
+            return `<button type="button" class="preview-pill${isActive ? " active" : ""}" data-fmt="${q.id}" onclick="setPreviewQuality('${q.id}', '${escHtml(q.label)}')">${escHtml(q.label)}</button>`;
+          }).join("") +
+        '</div>' +
+      '</div>';
+  }
+
+  const btnLabel = selectedPreviewFormat === "auto" ? "Download" : `Download · ${selectedPreviewFormat}`;
+
+  let playlistBtn = "";
+  if (result.is_playlist) {
+    const plCount = result.playlist_count ? ` (${result.playlist_count})` : "";
+    playlistBtn = `<button type="button" class="btn-ghost" onclick="openPlaylistInspector()" style="font-size:11px;padding:6px 11px;color:var(--acc);border-color:var(--acc-border);background:var(--acc-dim);font-weight:600;display:inline-flex;align-items:center;gap:5px;"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/></svg>Inspect Tracks${plCount}</button>`;
+  }
 
   $("search-results").innerHTML =
     '<div class="sr-card preview-card">' +
-      '<div class="sr-thumb-wrap">' +
-        (result.thumbnail
-          ? `<img class="sr-thumb" src="${escHtml(result.thumbnail)}" alt="" onerror="this.style.display='none'">`
-          : '<div class="sr-thumb"></div>') +
-        '<div class="sr-thumb-scrim"></div>' +
-        (result.duration ? `<span class="sr-duration">${fmtDuration(result.duration)}</span>` : "") +
+      '<div class="preview-card-media">' +
+        '<div class="sr-thumb-wrap" style="width:100%;height:100%">' +
+          (result.thumbnail
+            ? `<img class="sr-thumb" src="${escHtml(result.thumbnail)}" alt="" onerror="this.style.display='none'">`
+            : '<div class="sr-thumb"></div>') +
+          '<div class="sr-thumb-scrim"></div>' +
+          (result.duration ? `<span class="sr-duration">${fmtDuration(result.duration)}</span>` : "") +
+        '</div>' +
       '</div>' +
-      '<div class="sr-info">' +
+      '<div class="sr-info preview-info">' +
         `<div class="sr-title" title="${escHtml(result.title || "")}">${escHtml(result.title || "")}</div>` +
         (metaParts.length
           ? '<div class="sr-channel-row">' +
@@ -1784,8 +3338,46 @@ function renderLinkPreview(result) {
               `<span class="sr-channel">${escHtml(metaParts.join(" · "))}</span>` +
             '</div>'
           : "") +
+        qualitiesHtml +
+        '<div class="preview-actions">' +
+          `<button class="preview-dl-btn" id="preview-dl-btn" onclick="previewDownload()"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1v9M4 7l4 4 4-4"/><rect x="2" y="13" width="12" height="1.5" rx=".75" fill="currentColor"/></svg><span id="preview-dl-label">${escHtml(btnLabel)}</span></button>` +
+          playlistBtn +
+          '<button class="btn-ghost" onclick="hideLinkPreview()" style="font-size:11px;padding:5px 9px;">Dismiss</button>' +
+        '</div>' +
       '</div>' +
     '</div>';
+}
+
+function setPreviewQuality(fmtId, label) {
+  selectedPreviewFormat = fmtId;
+  const pillBar = $("preview-pill-bar");
+  if (pillBar) {
+    pillBar.querySelectorAll(".preview-pill").forEach(p => {
+      p.classList.toggle("active", p.getAttribute("data-fmt") === fmtId);
+    });
+  }
+  const labelEl = $("preview-dl-label");
+  if (labelEl) {
+    labelEl.textContent = fmtId === "auto" ? "Download" : `Download · ${label}`;
+  }
+  // Sync the contextual format dropdown if the option exists
+  const sel = $("format-select");
+  if (sel) {
+    const hasOption = Array.from(sel.options).some(o => o.value === fmtId);
+    if (hasOption) sel.value = fmtId;
+  }
+}
+
+function previewDownload() {
+  const raw = $("main-input").value.trim();
+  if (!raw) return;
+  const url = normalizeUrl(raw);
+  const cfg = readCfg();
+  cfg.format = selectedPreviewFormat;
+  addDownload(url, cfg);
+  $("main-input").value = "";
+  hideLinkPreview();
+  updateInputMode();
 }
 
 function hideLinkPreview() {
@@ -1797,6 +3389,7 @@ function hideLinkPreview() {
     sectionMode = null;
   }
   lastPreviewedUrl = "";
+  selectedPreviewFormat = "auto";
 }
 
 function updatePrimaryButton() {
@@ -1881,18 +3474,21 @@ function onPrimaryAction() {
 // ─────────────────────────────────────────────
 function readCfg() {
   return {
-    output:   $("output-input").value.trim() || "~/Downloads/media",
-    limit:    parseInt($("limit-input").value)   || 0,
-    sleep:    parseFloat($("sleep-input").value) || 2,
-    cookies:  $("cookies-select").value,
-    username: $("username-input").value.trim(),
-    password: $("password-input").value,
-    filename: $("filename-input").value.trim(),
-    zip:      $("tog-zip").classList.contains("on"),
-    metadata: $("tog-metadata").classList.contains("on"),
-    verbose:  $("tog-verbose").classList.contains("on"),
-    dry_run:  $("tog-dryrun").classList.contains("on"),
-    format:   $("format-select").value,
+    output:       $("output-input").value.trim() || "~/Downloads/media",
+    limit:        parseInt($("limit-input").value)   || 0,
+    sleep:        parseFloat($("sleep-input").value) || 2,
+    cookies:      $("cookies-select").value,
+    rate_limit:   $("rate-limit-select") ? $("rate-limit-select").value : "",
+    sponsorblock: $("tog-sponsorblock") ? $("tog-sponsorblock").classList.contains("on") : false,
+    custom_args:  $("custom-args-input") ? $("custom-args-input").value.trim() : "",
+    username:     $("username-input").value.trim(),
+    password:     $("password-input").value,
+    filename:     $("filename-input").value.trim(),
+    zip:          $("tog-zip").classList.contains("on"),
+    metadata:     $("tog-metadata").classList.contains("on"),
+    verbose:      $("tog-verbose").classList.contains("on"),
+    dry_run:      $("tog-dryrun").classList.contains("on"),
+    format:       $("format-select").value,
   };
 }
 function readToolOverride() {
@@ -1919,6 +3515,7 @@ function buildCmd(url, cfg, toolOverride) {
     if (cfg.cookies)  parts.push("--cookies-from-browser", cfg.cookies);
     parts.push("-o", "sleep-request=" + (cfg.sleep || 2));
     parts.push("-o", "retries=5");
+    if (cfg.custom_args) parts.push(cfg.custom_args);
   } else {
     parts.push("yt-dlp");
     if (cfg.output) { parts.push("-P", shellQuote(cfg.output), "-o", shellQuote("%(title)s.%(ext)s")); }
@@ -1926,10 +3523,17 @@ function buildCmd(url, cfg, toolOverride) {
     if (cfg.limit)   parts.push("--playlist-end", String(cfg.limit));
     if (cfg.verbose) parts.push("--verbose");
     if (cfg.cookies) parts.push("--cookies-from-browser", cfg.cookies);
-    if      (cfg.format === "m4a")  { parts.push("-f", "bestaudio[ext=m4a]/bestaudio", "--audio-quality", "0", "--embed-thumbnail", "--add-metadata"); }
+    if (cfg.rate_limit) parts.push("--limit-rate", cfg.rate_limit);
+    if (cfg.sponsorblock) parts.push("--sponsorblock-remove", "all");
+    if (cfg.format && cfg.format.endsWith("p")) {
+      const h = cfg.format.slice(0, -1);
+      parts.push("-f", `bestvideo[height<=${h}]+bestaudio/best[height<=${h}]/best`, "--merge-output-format", "mp4");
+    } else if (cfg.format === "m4a")  { parts.push("-f", "bestaudio[ext=m4a]/bestaudio", "--audio-quality", "0", "--embed-thumbnail", "--add-metadata"); }
     else if (cfg.format === "mp3")  { parts.push("-x", "--audio-format", "mp3", "--embed-thumbnail", "--add-metadata"); }
+    else if (cfg.format === "flac" || cfg.format === "wav" || cfg.format === "opus") { parts.push("-x", "--audio-format", cfg.format, "--embed-thumbnail", "--add-metadata"); }
     else if (cfg.format === "best") { parts.push("-f", "bestvideo+bestaudio/best"); }
     else                            { parts.push("--merge-output-format", "mp4"); }
+    if (cfg.custom_args) parts.push(cfg.custom_args);
   }
   parts.push(shellQuote(url));
   return { tool, cmd: parts.join(" ") };
@@ -1943,6 +3547,9 @@ function buildCLIArgs(url, cfg, toolOverride) {
   if (cfg.zip)      parts.push("--zip");
   if (cfg.metadata) parts.push("--metadata");
   if (cfg.cookies)  parts.push("--cookies", cfg.cookies);
+  if (cfg.rate_limit) parts.push("--rate-limit", cfg.rate_limit);
+  if (cfg.sponsorblock) parts.push("--sponsorblock");
+  if (cfg.custom_args) parts.push("--custom-args", shellQuote(cfg.custom_args));
   if (toolOverride) parts.push("--tool", toolOverride);
   if (cfg.verbose)  parts.push("-v");
   if (cfg.sleep)    parts.push("--sleep", String(cfg.sleep));
@@ -1990,79 +3597,374 @@ async function browseFolder() {
 }
 
 // ─────────────────────────────────────────────
-// CLIPBOARD MONITOR
+// CLIPBOARD MONITOR & FLOATING ACTION TOAST
 // ─────────────────────────────────────────────
-function toggleClipMonitor() {
-  clipMonitorOn = !clipMonitorOn;
+function toggleClipMonitor(forceState) {
+  if (typeof forceState === "boolean") {
+    clipMonitorOn = forceState;
+  } else {
+    clipMonitorOn = !clipMonitorOn;
+  }
   $("clip-pill").classList.toggle("on", clipMonitorOn);
   $("clip-label").textContent = clipMonitorOn ? "Watching…" : "Clipboard";
   if (clipMonitorOn) {
     readClipboard().then(t => { lastClipText = t; });
-    clipMonitorId = setInterval(checkClipboard, 1500);
-    showToast("Clipboard monitor on — copy any URL to auto-fill");
+    if (!clipMonitorId) clipMonitorId = setInterval(checkClipboard, 1500);
+    showToast("Clipboard monitor active — floating action prompt will appear when links are copied");
   } else {
-    clearInterval(clipMonitorId);
+    if (clipMonitorId) clearInterval(clipMonitorId);
     clipMonitorId = null;
+    dismissClipActionToast();
     showToast("Clipboard monitor off");
   }
 }
+
 async function readClipboard() {
   if (window.pywebview?.api?.read_clipboard) {
     try { return await window.pywebview.api.read_clipboard(); } catch { return ""; }
   }
   try { return await navigator.clipboard.readText(); } catch { return ""; }
 }
+
 async function checkClipboard() {
   const text = (await readClipboard()).trim();
   if (!text || text === lastClipText) return;
   lastClipText = text;
   if (!isLikelyUrl(text)) return;
-  $("main-input").value = text;
+
+  detectedClipUrl = text;
+  showClipActionToast(text);
+}
+
+function showClipActionToast(url) {
+  const toast = $("clip-action-toast");
+  const urlEl = $("cat-url");
+  const fillEl = $("cat-progress-fill");
+  if (!toast || !urlEl) return;
+
+  urlEl.textContent = url;
+  urlEl.title = url;
+  toast.classList.add("show");
+
+  if (clipToastTimer) clearTimeout(clipToastTimer);
+  if (clipToastAnimId) cancelAnimationFrame(clipToastAnimId);
+
+  const duration = 12000;
+  const startTime = performance.now();
+
+  function step(now) {
+    const elapsed = now - startTime;
+    const remainingFraction = Math.max(0, 1 - (elapsed / duration));
+    if (fillEl) fillEl.style.transform = `scaleX(${remainingFraction})`;
+    if (elapsed < duration) {
+      clipToastAnimId = requestAnimationFrame(step);
+    } else {
+      dismissClipActionToast();
+    }
+  }
+  clipToastAnimId = requestAnimationFrame(step);
+
+  clipToastTimer = setTimeout(() => {
+    dismissClipActionToast();
+  }, duration);
+}
+
+function dismissClipActionToast() {
+  const toast = $("clip-action-toast");
+  if (toast) toast.classList.remove("show");
+  if (clipToastTimer) { clearTimeout(clipToastTimer); clipToastTimer = null; }
+  if (clipToastAnimId) { cancelAnimationFrame(clipToastAnimId); clipToastAnimId = null; }
+}
+
+function onClipQuickDownload() {
+  if (!detectedClipUrl) return;
+  const url = detectedClipUrl;
+  dismissClipActionToast();
+  switchView("downloader");
+  addDownload(url);
+}
+
+function onClipInspect() {
+  if (!detectedClipUrl) return;
+  const url = detectedClipUrl;
+  dismissClipActionToast();
+  switchView("downloader");
+  $("main-input").value = url;
   updateInputMode();
-  $("input-row").classList.add("is-running");
-  setTimeout(() => $("input-row").classList.remove("is-running"), 600);
-  showToast("Link detected from clipboard");
+  doInspectLink();
+}
+
+function onClipAddToBatch() {
+  if (!detectedClipUrl) return;
+  const url = detectedClipUrl;
+  dismissClipActionToast();
+  openBatchModal();
+  const ta = $("batch-textarea");
+  if (ta) {
+    ta.value = ta.value ? ta.value.trim() + "\n" + url : url;
+    updateBatchStats();
+  }
 }
 
 // ─────────────────────────────────────────────
-// SCHEDULER
+// NIGHT-OWL SCHEDULER & BANNER
 // ─────────────────────────────────────────────
-function setScheduler() {
-  const val = $("sched-input").value;
-  if (!val) { showToast("Pick a time first", false); return; }
+function openSchedulerModal() {
+  const modal = $("sched-modal-overlay");
+  if (modal) modal.classList.add("show");
+}
+
+function closeSchedulerModal() {
+  const modal = $("sched-modal-overlay");
+  if (modal) modal.classList.remove("show");
+}
+
+function scheduleRelative(minutes) {
+  const target = new Date(Date.now() + minutes * 60 * 1000);
+  activateScheduler(target, `in ${minutes >= 60 ? (minutes/60) + 'h' : minutes + 'm'}`);
+}
+
+function scheduleClockTime() {
+  const val = $("sched-clock-input") ? $("sched-clock-input").value : "";
+  if (!val) { showToast("Pick a clock time first", false); return; }
   const now = new Date();
   const [h, m] = val.split(":").map(Number);
   const target = new Date(now);
   target.setHours(h, m, 0, 0);
   if (target <= now) target.setDate(target.getDate() + 1);
+  activateScheduler(target, `at ${val}`);
+}
+
+function activateScheduler(target, labelDesc) {
   schedTarget = target;
   if (schedTimer) clearInterval(schedTimer);
   schedTimer = setInterval(tickScheduler, 1000);
   tickScheduler();
-  showToast("Scheduled for " + val);
+  closeSchedulerModal();
+
+  const banner = $("sched-banner");
+  if (banner) banner.style.display = "flex";
+
+  showToast(`Night-Owl schedule active (${labelDesc}) — queue paused until start time`);
 }
+
 function tickScheduler() {
   if (!schedTarget) return;
   const now = new Date();
   const diff = schedTarget - now;
   if (diff <= 0) {
-    cancelScheduler();
-    showToast("Scheduled download starting…");
-    onPrimaryAction();
+    cancelScheduler(false);
+    playNotificationChime();
+    showToast("🌙 Night-Owl schedule triggered — Starting queue downloads!");
+    if (!isRunning) runNext();
     return;
   }
-  const hh = String(Math.floor(diff / 3600000)).padStart(2,"0");
-  const mm = String(Math.floor((diff % 3600000) / 60000)).padStart(2,"0");
-  const ss = String(Math.floor((diff % 60000)   / 1000)).padStart(2,"0");
-  $("sched-label").textContent = "starts in " + hh + ":" + mm + ":" + ss;
-  $("sched-pill").classList.add("active");
-  $("sched-status").textContent = "→ " + hh + ":" + mm + ":" + ss + " remaining";
+  const hh = String(Math.floor(diff / 3600000)).padStart(2, "0");
+  const mm = String(Math.floor((diff % 3600000) / 60000)).padStart(2, "0");
+  const ss = String(Math.floor((diff % 60000) / 1000)).padStart(2, "0");
+
+  const countdownText = `Starts in ${hh}:${mm}:${ss}`;
+  const bannerCountdown = $("sched-banner-countdown");
+  if (bannerCountdown) bannerCountdown.textContent = countdownText;
+
+  const schedLabel = $("sched-label");
+  if (schedLabel) schedLabel.textContent = countdownText.toLowerCase();
+
+  $("sched-pill")?.classList.add("active");
+  if ($("sched-status")) $("sched-status").textContent = "→ " + hh + ":" + mm + ":" + ss + " remaining";
 }
-function cancelScheduler() {
+
+function startScheduleNow() {
+  cancelScheduler(false);
+  showToast("Starting queue immediately…");
+  if (!isRunning) runNext();
+}
+
+function cancelScheduler(notify = true) {
   if (schedTimer) clearInterval(schedTimer);
-  schedTimer = null; schedTarget = null;
-  $("sched-pill").classList.remove("active");
-  $("sched-status").textContent = "";
+  schedTimer = null;
+  schedTarget = null;
+
+  $("sched-pill")?.classList.remove("active");
+  if ($("sched-status")) $("sched-status").textContent = "";
+
+  const banner = $("sched-banner");
+  if (banner) banner.style.display = "none";
+
+  if (notify) showToast("Night-Owl schedule cancelled");
+}
+
+function playNotificationChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.45);
+  } catch(e) {}
+}
+
+// ─────────────────────────────────────────────
+// QUEUE PAUSE / RESUME & PRIORITIZATION
+// ─────────────────────────────────────────────
+function toggleQueuePause() {
+  isQueuePaused = !isQueuePaused;
+  const btn = $("queue-pause-btn");
+  const label = $("queue-pause-label");
+  if (btn && label) {
+    btn.classList.toggle("paused", isQueuePaused);
+    label.textContent = isQueuePaused ? "Resume" : "Pause";
+    const svgEl = btn.querySelector("svg");
+    if (svgEl) {
+      svgEl.innerHTML = isQueuePaused
+        ? '<path d="M4 3.5l8 4.5-8 4.5V3.5z"/>'
+        : '<path d="M4 3.5h3v9H4v-9zm5 0h3v9H9v-9z"/>';
+    }
+  }
+  if (!isQueuePaused && !isRunning && !schedTarget && downloads.some(i => i.state === "pending")) {
+    runNext();
+  }
+  showToast(isQueuePaused ? "Queue paused — current item will finish, next items will wait" : "Queue resumed");
+}
+
+function moveDownloadUp(id) {
+  const pendingIndices = [];
+  downloads.forEach((item, idx) => {
+    if (item.state === "pending") pendingIndices.push(idx);
+  });
+  const currentPendingPos = pendingIndices.findIndex(idx => downloads[idx].id === id);
+  if (currentPendingPos > 0) {
+    const fromIdx = pendingIndices[currentPendingPos];
+    const toIdx = pendingIndices[currentPendingPos - 1];
+    const temp = downloads[fromIdx];
+    downloads[fromIdx] = downloads[toIdx];
+    downloads[toIdx] = temp;
+    renderDownloads();
+    showToast("Moved up in queue");
+  }
+}
+
+function moveDownloadDown(id) {
+  const pendingIndices = [];
+  downloads.forEach((item, idx) => {
+    if (item.state === "pending") pendingIndices.push(idx);
+  });
+  const currentPendingPos = pendingIndices.findIndex(idx => downloads[idx].id === id);
+  if (currentPendingPos >= 0 && currentPendingPos < pendingIndices.length - 1) {
+    const fromIdx = pendingIndices[currentPendingPos];
+    const toIdx = pendingIndices[currentPendingPos + 1];
+    const temp = downloads[fromIdx];
+    downloads[fromIdx] = downloads[toIdx];
+    downloads[toIdx] = temp;
+    renderDownloads();
+    showToast("Moved down in queue");
+  }
+}
+
+function clearPendingDownloads() {
+  const pendingCount = downloads.filter(i => i.state === "pending").length;
+  if (!pendingCount) {
+    showToast("No waiting downloads in queue");
+    return;
+  }
+  showConfirm(
+    "Clear waiting queue?",
+    `Remove ${pendingCount} pending download${pendingCount > 1 ? "s" : ""} from the queue? Active downloads will not be interrupted.`,
+    `Clear ${pendingCount}`,
+    () => {
+      sessionTotal -= pendingCount;
+      downloads = downloads.filter(i => i.state !== "pending");
+      updateSessionStats();
+      renderDownloads();
+      showToast("Cleared waiting queue");
+    }
+  );
+}
+
+// ─────────────────────────────────────────────
+// POST-DOWNLOAD QUEUE COMPLETION AUTOMATION
+// ─────────────────────────────────────────────
+function onCompletionActionChanged(action) {
+  try {
+    localStorage.setItem("md_on_finish", action);
+  } catch(e) {}
+  const sel1 = $("queue-on-finish-select");
+  const sel2 = $("settings-on-finish-select");
+  if (sel1 && sel1.value !== action) sel1.value = action;
+  if (sel2 && sel2.value !== action) sel2.value = action;
+}
+
+async function handleQueueCompletion() {
+  let action = "nothing";
+  try {
+    action = localStorage.getItem("md_on_finish") || "nothing";
+  } catch(e) {}
+
+  if (!action || action === "nothing") return;
+
+  if (action === "exit") {
+    showToast("Queue finished. Closing Media Downloader…");
+    setTimeout(() => {
+      window.pywebview?.api?.close_app?.();
+    }, 1500);
+  } else if (action === "sleep") {
+    showToast("Queue finished. Putting computer to sleep in 10 seconds…");
+    setTimeout(() => {
+      window.pywebview?.api?.execute_completion_action?.("sleep");
+    }, 10000);
+  } else if (action === "shutdown") {
+    try {
+      await window.pywebview?.api?.execute_completion_action?.("shutdown");
+    } catch(e) {}
+    startShutdownWarningModal(60);
+  }
+}
+
+function startShutdownWarningModal(seconds = 60) {
+  shutdownRemainingSeconds = seconds;
+  const overlay = $("shutdown-modal-overlay");
+  const timerVal = $("shutdown-timer-val");
+  if (overlay) overlay.classList.add("show");
+  if (timerVal) timerVal.textContent = shutdownRemainingSeconds;
+
+  if (shutdownCountdownTimer) clearInterval(shutdownCountdownTimer);
+  shutdownCountdownTimer = setInterval(() => {
+    shutdownRemainingSeconds--;
+    if (timerVal) timerVal.textContent = Math.max(0, shutdownRemainingSeconds);
+    if (shutdownRemainingSeconds <= 0) {
+      clearInterval(shutdownCountdownTimer);
+      shutdownCountdownTimer = null;
+    }
+  }, 1000);
+}
+
+async function abortSystemShutdown() {
+  if (shutdownCountdownTimer) {
+    clearInterval(shutdownCountdownTimer);
+    shutdownCountdownTimer = null;
+  }
+  const overlay = $("shutdown-modal-overlay");
+  if (overlay) overlay.classList.remove("show");
+
+  try {
+    const res = await window.pywebview?.api?.cancel_shutdown?.();
+    if (res?.ok) {
+      showToast("System shutdown successfully aborted!");
+    } else {
+      showToast("Shutdown abort signal sent");
+    }
+  } catch(e) {
+    showToast("Shutdown abort signal sent");
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -2124,7 +4026,7 @@ function addDownload(url, overrideCfg) {
   updateSessionStats();
   renderDownloads();
   showToast(isRunning ? "Queued" : "Starting…");
-  if (!isRunning) runNext();
+  if (!isRunning && !isQueuePaused && !schedTarget) runNext();
 }
 
 function removeDownload(id) {
@@ -2251,7 +4153,7 @@ async function openLinkInBrowser(url) {
 function playDownloadItem(id) {
   const item = downloads.find(i => i.id === id);
   if (!item) return;
-  const playable = (item.files || []).filter(f => isPlayable(f.name));
+  const playable = playableFilesFor(item);
   if (!playable.length) { showToast("No playable file found for this download", false); return; }
   openPlayer(playable, item.filename || item.url.replace(/^https?:\/\/(www\.)?/, ""));
 }
@@ -2282,6 +4184,19 @@ const DOWNLOADS_PAGE_SIZE = 50;
 
 function renderDownloads() {
   $("dl-badge").textContent = downloads.length;
+
+  const doneItems = downloads.filter(i => i.state === "done");
+  const navBadge = $("nav-library-badge");
+  if (navBadge) {
+    if (doneItems.length > 0) {
+      navBadge.textContent = doneItems.length;
+      navBadge.style.display = "flex";
+    } else {
+      navBadge.style.display = "none";
+    }
+  }
+  if (currentAppView === "library") renderLibrary();
+
   const q = ($("dl-search-input").value || "").trim().toLowerCase();
 
   const filtered = downloads.filter(i => {
@@ -2368,7 +4283,7 @@ function renderRow(item) {
   const tagColor = item.tool === "yt-dlp" ? "var(--pink)"     : "var(--blue)";
   const shortUrl = (item.url || "").replace(/^https?:\/\/(www\.)?/, "");
   const displayName = item.filename || shortUrl;
-  const playable = (item.files || []).filter(f => isPlayable(f.name));
+  const playable = playableFilesFor(item);
 
   let host = item.url;
   try { host = new URL(item.url).hostname.replace(/^www\./, ""); } catch {}
@@ -2450,6 +4365,21 @@ function renderRow(item) {
       b.className = "dl-btn retry"; b.textContent = "Retry";
       b.onclick = () => retryDownload(item.id);
       acts.appendChild(b);
+    }
+    if (item.state === "pending") {
+      const upBtn = document.createElement("button");
+      upBtn.className = "dl-priority-btn";
+      upBtn.innerHTML = "▲";
+      upBtn.title = "Move up in queue";
+      upBtn.onclick = (e) => { e.stopPropagation(); moveDownloadUp(item.id); };
+      acts.appendChild(upBtn);
+
+      const downBtn = document.createElement("button");
+      downBtn.className = "dl-priority-btn";
+      downBtn.innerHTML = "▼";
+      downBtn.title = "Move down in queue";
+      downBtn.onclick = (e) => { e.stopPropagation(); moveDownloadDown(item.id); };
+      acts.appendChild(downBtn);
     }
     const rm = document.createElement("button");
     rm.className = "dl-btn rm"; rm.textContent = "✕";
@@ -2537,6 +4467,8 @@ function waitForApi(ms = 3000) {
 // ─────────────────────────────────────────────
 async function runNext() {
   if (isRunning) return;
+  if (isQueuePaused) return;
+  if (schedTarget) return;
   const item = downloads.find(i => i.state === "pending");
   if (!item) return;
 
@@ -2632,13 +4564,16 @@ function finishItem(item, ok, error, historyId) {
   renderDownloads();
 
   if (downloads.some(i => i.state === "pending")) {
-    setTimeout(runNext, 600);
+    if (!isQueuePaused && !schedTarget) {
+      setTimeout(runNext, 600);
+    }
   } else {
     const done   = downloads.filter(i => i.state === "done").length;
     const failed = downloads.filter(i => i.state === "error").length;
     if (done + failed > 1 && window.pywebview?.api?.notify) {
       window.pywebview.api.notify("Queue finished", done + " done" + (failed ? ", " + failed + " failed" : ""));
     }
+    handleQueueCompletion();
   }
 }
 
@@ -2764,6 +4699,8 @@ function resetInputs() {
   $("username-input").value  = "";
   $("password-input").value  = "";
   $("filename-input").value  = "";
+  $("rate-limit-select").value = "";
+  $("custom-args-input").value = "";
   $("sched-input").value     = "";
   document.querySelectorAll(".tog.on").forEach(el => { el.classList.remove("on"); el.setAttribute("aria-checked","false"); });
   $("dryrun-bar").classList.remove("show");
@@ -3028,6 +4965,10 @@ const MP_ICON_MUTE  = '<svg width="14" height="14" viewBox="0 0 16 16" fill="non
 const MP_ICON_NOTE  = '<svg width="34" height="34" viewBox="0 0 16 16" fill="#fff"><path d="M6 3v7.17A2.5 2.5 0 1 0 7 12V5.7l5-1.1V9.2a2.5 2.5 0 1 0 1 2V2L6 3z"/></svg>';
 const MP_ICON_FULLSCREEN      = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
 const MP_ICON_FULLSCREEN_EXIT = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v4H2M10 6h4V2M10 10h4v4M6 10H2v4"/></svg>';
+const MP_ICON_SKIP_BACK = '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 3v10l-6-5 6-5zm6 0v10l-6-5 6-5z"/></svg>';
+const MP_ICON_SKIP_FWD = '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3v10l6-5-6-5zm6 0v10l6-5-6-5z"/></svg>';
+const MP_ICON_LOOP = '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M11 1v3H4a2 2 0 0 0-2 2v3h2V6a0 0 0 1 0 0h7v3l4-4-4-4zm-6 14v-3h7a2 2 0 0 0 2-2V7h-2v3a0 0 0 1 0 0H5V7L1 11l4 4z"/></svg>';
+const MP_ICON_PIP = '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M0 3.5A1.5 1.5 0 0 1 1.5 2h13A1.5 1.5 0 0 1 16 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 12.5v-9zM1.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5h-13z"/><path d="M8 8.5A.5.5 0 0 1 8.5 8h6a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-6a.5.5 0 0 1-.5-.5v-4z"/></svg>';
 
 // Generic fullscreen toggle — used by both the player's control bar and
 // the lightbox chrome. Targets a whole container (not just the bare
@@ -3101,7 +5042,9 @@ function buildPlayerControls(mediaEl, onFatalError, onEnded, onPrev, onNext) {
   bar.className = "mp-controls";
   bar.innerHTML =
     '<button class="mp-btn mp-prev" title="Previous">' + MP_ICON_PREV + '</button>' +
+    '<button class="mp-ctrl-btn mp-skip-back" title="Rewind 10s">' + MP_ICON_SKIP_BACK + '</button>' +
     '<button class="mp-btn mp-playpause" title="Play/Pause (Space)">' + MP_ICON_PLAY + '</button>' +
+    '<button class="mp-ctrl-btn mp-skip-fwd" title="Skip 10s">' + MP_ICON_SKIP_FWD + '</button>' +
     '<button class="mp-btn mp-next" title="Next">' + MP_ICON_NEXT + '</button>' +
     '<span class="mp-time mp-time-current">0:00</span>' +
     '<div class="mp-seek-track"><div class="mp-seek-fill"></div><div class="mp-seek-handle"></div></div>' +
@@ -3111,23 +5054,35 @@ function buildPlayerControls(mediaEl, onFatalError, onEnded, onPrev, onNext) {
       '<input type="range" class="mp-volume" min="0" max="1" step="0.01" value="1">' +
     '</div>' +
     '<select class="mp-speed-select" title="Playback speed">' +
-      '<option value="0.5">0.5x</option><option value="1" selected>1x</option>' +
-      '<option value="1.5">1.5x</option><option value="2">2x</option>' +
+      '<option value="0.25">0.25x</option>' +
+      '<option value="0.5">0.5x</option>' +
+      '<option value="0.75">0.75x</option>' +
+      '<option value="1" selected>1x</option>' +
+      '<option value="1.25">1.25x</option>' +
+      '<option value="1.5">1.5x</option>' +
+      '<option value="1.75">1.75x</option>' +
+      '<option value="2">2x</option>' +
     '</select>' +
+    '<button class="mp-ctrl-btn mp-loop-btn" title="Toggle Loop">' + MP_ICON_LOOP + '</button>' +
+    '<button class="mp-ctrl-btn mp-pip-btn" title="Picture in Picture">' + MP_ICON_PIP + '</button>' +
     '<button class="mp-btn mp-fullscreen-btn" title="Fullscreen" style="width:28px;height:28px;background:var(--s2);color:var(--t2);">' + MP_ICON_FULLSCREEN + '</button>';
 
-  const prevBtn  = bar.querySelector(".mp-prev");
-  const playBtn  = bar.querySelector(".mp-playpause");
-  const nextBtn  = bar.querySelector(".mp-next");
-  const curEl    = bar.querySelector(".mp-time-current");
-  const durEl    = bar.querySelector(".mp-time-duration");
-  const track    = bar.querySelector(".mp-seek-track");
-  const fill     = bar.querySelector(".mp-seek-fill");
-  const handle   = bar.querySelector(".mp-seek-handle");
-  const volBtn   = bar.querySelector(".mp-vol-btn");
-  const volIn    = bar.querySelector(".mp-volume");
-  const speedEl  = bar.querySelector(".mp-speed-select");
-  const fsBtn    = bar.querySelector(".mp-fullscreen-btn");
+  const prevBtn     = bar.querySelector(".mp-prev");
+  const skipBackBtn = bar.querySelector(".mp-skip-back");
+  const playBtn     = bar.querySelector(".mp-playpause");
+  const skipFwdBtn  = bar.querySelector(".mp-skip-fwd");
+  const nextBtn     = bar.querySelector(".mp-next");
+  const curEl       = bar.querySelector(".mp-time-current");
+  const durEl       = bar.querySelector(".mp-time-duration");
+  const track       = bar.querySelector(".mp-seek-track");
+  const fill        = bar.querySelector(".mp-seek-fill");
+  const handle      = bar.querySelector(".mp-seek-handle");
+  const volBtn      = bar.querySelector(".mp-vol-btn");
+  const volIn       = bar.querySelector(".mp-volume");
+  const speedEl     = bar.querySelector(".mp-speed-select");
+  const loopBtn     = bar.querySelector(".mp-loop-btn");
+  const pipBtn      = bar.querySelector(".mp-pip-btn");
+  const fsBtn       = bar.querySelector(".mp-fullscreen-btn");
 
   function updateProgress() {
     if (!mediaEl.duration) return;
@@ -3167,6 +5122,31 @@ function buildPlayerControls(mediaEl, onFatalError, onEnded, onPrev, onNext) {
   nextBtn.addEventListener("click", () => onNext?.());
   prevBtn.disabled = !onPrev || mpPlaylistIndex <= 0;
   nextBtn.disabled = !onNext || mpPlaylistIndex < 0 || mpPlaylistIndex >= playerFiles.length - 1;
+
+  skipBackBtn.addEventListener("click", () => {
+    mediaEl.currentTime = Math.max(0, mediaEl.currentTime - 10);
+  });
+  skipFwdBtn.addEventListener("click", () => {
+    if (mediaEl.duration) mediaEl.currentTime = Math.min(mediaEl.duration, mediaEl.currentTime + 10);
+  });
+
+  loopBtn.addEventListener("click", () => {
+    mediaEl.loop = !mediaEl.loop;
+    loopBtn.classList.toggle("active", mediaEl.loop);
+    showToast(mediaEl.loop ? "Loop enabled" : "Loop disabled");
+  });
+
+  if (mediaEl.tagName.toLowerCase() !== "video" || !document.pictureInPictureEnabled) {
+    pipBtn.style.display = "none";
+  } else {
+    pipBtn.addEventListener("click", () => {
+      if (document.pictureInPictureElement) {
+        document.exitPictureInPicture().catch(() => {});
+      } else {
+        mediaEl.requestPictureInPicture?.().catch(() => {});
+      }
+    });
+  }
 
   const seekState = { track, fill, handle, mediaEl, curEl };
   track.addEventListener("mousedown", e => {
@@ -3304,11 +5284,19 @@ async function playMediaFile(file) {
   if (isAudio) {
     const visual = document.createElement("div");
     visual.className = "mp-audio-visual";
+
+    const canvasWrap = document.createElement("div");
+    canvasWrap.className = "mp-canvas-wrap";
+    const canvas = document.createElement("canvas");
+    canvas.className = "mp-visualizer-canvas";
+    canvasWrap.appendChild(canvas);
+    visual.appendChild(canvasWrap);
+
     const disc = document.createElement("div");
     disc.className = "mp-audio-disc";
     disc.innerHTML = MP_ICON_NOTE;
     visual.appendChild(disc);
-    mediaEl.style.display = "none"; // no visual surface of its own — the disc above is it
+    mediaEl.style.display = "none"; // no visual surface of its own — the disc and canvas above are it
     player.appendChild(visual);
     player.appendChild(mediaEl);
     wrap.appendChild(player); // in the DOM before buildPlayerControls calls safePlay()/wires fullscreen
@@ -3317,6 +5305,9 @@ async function playMediaFile(file) {
     controls.addEventListener("mp-play",  () => { disc.classList.add("playing"); updateMiniPlayer(); });
     controls.addEventListener("mp-pause", () => { disc.classList.remove("playing"); updateMiniPlayer(); });
     player.appendChild(controls);
+
+    // Initialize Web Audio API canvas visualizer
+    initAudioVisualizer(mediaEl, canvas);
 
     // Real embedded cover art (mp3 ID3 APIC / m4a covr atom), extracted
     // via the already-bundled ffmpeg — falls back to the generic note
@@ -3346,6 +5337,10 @@ async function playMediaFile(file) {
 function closePlayer() {
   $("player-overlay").classList.remove("show");
   $("player-media-wrap").innerHTML = "";
+  if (mpAnimFrameId) {
+    cancelAnimationFrame(mpAnimFrameId);
+    mpAnimFrameId = null;
+  }
   playerFiles = [];
   mpPlaylistIndex = -1;
   mpActiveSeek = null;
@@ -3669,33 +5664,55 @@ function lightboxShowingImage() {
 }
 
 window.addEventListener("keydown", e => {
+  // Global shortcut: Ctrl+B to open Batch Paste modal
+  if ((e.ctrlKey || e.metaKey) && (e.key === "b" || e.key === "B")) {
+    const tag = document.activeElement?.tagName;
+    if (tag !== "INPUT" && tag !== "TEXTAREA") {
+      e.preventDefault();
+      openBatchModal();
+      return;
+    }
+  }
+
+  // Escape key closes whichever overlay is visible
+  if (e.key === "Escape") {
+    if ($("sched-modal-overlay")?.classList.contains("show")) { closeSchedulerModal(); return; }
+    if ($("clip-action-toast")?.classList.contains("show")) { dismissClipActionToast(); return; }
+    if ($("playlist-drawer-overlay")?.classList.contains("show")) { closePlaylistDrawer(); return; }
+    if ($("batch-modal-overlay")?.classList.contains("show")) { closeBatchModal(); return; }
+    if ($("about-overlay")?.classList.contains("show")) { closeAboutModal(); return; }
+    if ($("lightbox-overlay")?.classList.contains("show")) { closeLightbox(); return; }
+    if ($("player-overlay")?.classList.contains("show")) { closePlayer(); return; }
+  }
+
   if (!isMediaModalOpen()) return;
-  // Defensive — shouldn't normally have text-input focus while a modal's
-  // open, but don't hijack typing if it somehow does.
   const tag = document.activeElement?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
-  if (e.key === " " || e.code === "Space") {
+  if (e.key === " " || e.code === "Space" || e.key === "k" || e.key === "K") {
     if (mpCurrentMediaEl) {
       e.preventDefault();
       mpCurrentMediaEl.paused ? mpCurrentMediaEl.play()?.catch(() => {}) : mpCurrentMediaEl.pause();
     }
-  } else if (e.key === "ArrowLeft") {
+  } else if (e.key === "ArrowLeft" || e.key === "j" || e.key === "J") {
     e.preventDefault();
     if (lightboxShowingImage()) lightboxPrev();
-    else if (mpCurrentMediaEl) mpCurrentMediaEl.currentTime = Math.max(0, mpCurrentMediaEl.currentTime - MP_SEEK_STEP);
-  } else if (e.key === "ArrowRight") {
+    else if (mpCurrentMediaEl) mpCurrentMediaEl.currentTime = Math.max(0, mpCurrentMediaEl.currentTime - 10);
+  } else if (e.key === "ArrowRight" || e.key === "l" || e.key === "L") {
     e.preventDefault();
     if (lightboxShowingImage()) lightboxNext();
-    else if (mpCurrentMediaEl) mpCurrentMediaEl.currentTime = Math.min(mpCurrentMediaEl.duration || Infinity, mpCurrentMediaEl.currentTime + MP_SEEK_STEP);
+    else if (mpCurrentMediaEl) mpCurrentMediaEl.currentTime = Math.min(mpCurrentMediaEl.duration || Infinity, mpCurrentMediaEl.currentTime + 10);
   } else if (e.key === "ArrowUp") {
     if (mpCurrentMediaEl) { e.preventDefault(); mpCurrentMediaEl.volume = Math.min(1, mpCurrentMediaEl.volume + MP_VOLUME_STEP); }
   } else if (e.key === "ArrowDown") {
     if (mpCurrentMediaEl) { e.preventDefault(); mpCurrentMediaEl.volume = Math.max(0, mpCurrentMediaEl.volume - MP_VOLUME_STEP); }
-  } else if (e.key === "Escape") {
-    if ($("about-overlay").classList.contains("show")) closeAboutModal();
-    else if ($("lightbox-overlay").classList.contains("show")) closeLightbox();
-    else if ($("player-overlay").classList.contains("show")) closePlayer();
+  } else if (e.key === "m" || e.key === "M") {
+    if (mpCurrentMediaEl) { e.preventDefault(); mpCurrentMediaEl.muted = !mpCurrentMediaEl.muted; }
+  } else if (e.key === "p" || e.key === "P") {
+    if (mpCurrentMediaEl && mpCurrentMediaEl.tagName.toLowerCase() === "video" && document.pictureInPictureEnabled) {
+      e.preventDefault();
+      document.pictureInPictureElement ? document.exitPictureInPicture().catch(() => {}) : mpCurrentMediaEl.requestPictureInPicture?.().catch(() => {});
+    }
   }
 });
 
@@ -4088,6 +6105,452 @@ function triggerApplyAppUpdate() {
 }
 
 // ─────────────────────────────────────────────
+// WEB AUDIO API AUDIO VISUALIZER
+// ─────────────────────────────────────────────
+let mpAudioCtx = null;
+let mpAnalyser = null;
+let mpAnimFrameId = null;
+let mpVisualizerMode = "bars"; // "bars" | "wave" | "off"
+
+function initAudioVisualizer(mediaEl, canvasEl) {
+  if (!canvasEl) return;
+  const ctx = canvasEl.getContext("2d");
+  if (!ctx) return;
+
+  if (mpAnimFrameId) {
+    cancelAnimationFrame(mpAnimFrameId);
+    mpAnimFrameId = null;
+  }
+
+  let isAudioConnected = false;
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass) {
+      if (!mpAudioCtx) {
+        mpAudioCtx = new AudioContextClass();
+      }
+      if (mpAudioCtx.state === "suspended") {
+        mpAudioCtx.resume();
+      }
+      if (!mpAnalyser) {
+        mpAnalyser = mpAudioCtx.createAnalyser();
+        mpAnalyser.fftSize = 128;
+      }
+      if (!mediaEl._audioSourceConnected) {
+        try {
+          const source = mpAudioCtx.createMediaElementSource(mediaEl);
+          source.connect(mpAnalyser);
+          mpAnalyser.connect(mpAudioCtx.destination);
+          mediaEl._audioSourceConnected = true;
+          isAudioConnected = true;
+        } catch {
+          isAudioConnected = false;
+        }
+      } else {
+        isAudioConnected = true;
+      }
+    }
+  } catch {
+    isAudioConnected = false;
+  }
+
+  const bufferLength = mpAnalyser ? mpAnalyser.frequencyBinCount : 32;
+  const dataArray = new Uint8Array(bufferLength);
+  let phase = 0;
+
+  function renderVisualizer() {
+    mpAnimFrameId = requestAnimationFrame(renderVisualizer);
+    const w = canvasEl.clientWidth || 600;
+    const h = canvasEl.clientHeight || 180;
+    if (canvasEl.width !== w || canvasEl.height !== h) {
+      canvasEl.width = w;
+      canvasEl.height = h;
+    }
+
+    ctx.clearRect(0, 0, w, h);
+    if (mpVisualizerMode === "off") return;
+
+    const isPlaying = mediaEl && !mediaEl.paused && !mediaEl.ended;
+
+    if (isAudioConnected && isPlaying) {
+      mpAnalyser.getByteFrequencyData(dataArray);
+    } else if (isPlaying) {
+      phase += 0.05;
+      for (let i = 0; i < bufferLength; i++) {
+        const v = Math.sin(phase + i * 0.28) * 0.4 + Math.cos(phase * 1.5 + i * 0.15) * 0.35 + 0.25;
+        dataArray[i] = Math.max(10, Math.min(255, Math.floor(v * 200)));
+      }
+    } else {
+      for (let i = 0; i < bufferLength; i++) {
+        dataArray[i] = Math.max(0, dataArray[i] * 0.9);
+      }
+    }
+
+    const computedStyle = getComputedStyle(document.documentElement);
+    const acc = computedStyle.getPropertyValue("--acc").trim() || "#7c6dfa";
+
+    if (mpVisualizerMode === "wave") {
+      ctx.beginPath();
+      const sliceWidth = w / bufferLength;
+      let x = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 255.0;
+        const y = h / 2 + (v - 0.5) * (h * 0.65);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+        x += sliceWidth;
+      }
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = acc;
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = acc;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    } else {
+      const numBars = 36;
+      const barSpacing = 4;
+      const totalSpacing = barSpacing * (numBars - 1);
+      const barWidth = Math.max(3, (w - 60 - totalSpacing) / numBars);
+      const startX = (w - (numBars * barWidth + totalSpacing)) / 2;
+
+      for (let i = 0; i < numBars; i++) {
+        const dataIdx = Math.floor((i / numBars) * bufferLength * 0.85);
+        const val = dataArray[dataIdx] || 0;
+        const barHeight = Math.max(4, (val / 255) * (h * 0.72));
+        const bx = startX + i * (barWidth + barSpacing);
+        const by = h - barHeight - 12;
+
+        const grad = ctx.createLinearGradient(0, by, 0, by + barHeight);
+        grad.addColorStop(0, acc);
+        grad.addColorStop(1, "rgba(244, 114, 182, 0.45)");
+
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        const radius = Math.min(barWidth / 2, 4);
+        if (ctx.roundRect) ctx.roundRect(bx, by, barWidth, barHeight, [radius, radius, 1, 1]);
+        else ctx.rect(bx, by, barWidth, barHeight);
+        ctx.fill();
+
+        if (val > 100) {
+          ctx.fillStyle = "#fff";
+          ctx.beginPath();
+          ctx.arc(bx + barWidth / 2, by + 2, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  renderVisualizer();
+}
+
+// ─────────────────────────────────────────────
+// PLAYLIST INSPECTOR DRAWER
+// ─────────────────────────────────────────────
+let playlistEntries = [];
+let playlistSelectedIndices = new Set();
+let playlistCurrentUrl = "";
+let playlistInspectorReqId = 0;
+
+async function openPlaylistInspector(targetUrl) {
+  const url = targetUrl || $("main-input").value.trim();
+  if (!url) {
+    showToast("Please enter a playlist URL first", false);
+    return;
+  }
+  playlistCurrentUrl = normalizeUrl(url);
+  playlistEntries = [];
+  playlistSelectedIndices.clear();
+
+  $("playlist-drawer-overlay").classList.add("show");
+  $("pl-drawer-title").textContent = "Inspecting Playlist…";
+  $("pl-drawer-uploader").textContent = "";
+  $("pl-drawer-count-badge").textContent = "Loading…";
+  $("pl-drawer-selected-badge").textContent = "0 selected";
+  $("pl-tracks-list").innerHTML = '<div style="text-align:center;padding:50px;color:var(--t3);font-size:12.5px;"><span class="spin" style="display:inline-block;margin-right:6px;">↻</span> Extracting playlist tracks…</div>';
+  updatePlaylistSelectionBadges();
+
+  if (!window.pywebview?.api?.inspect_playlist) {
+    $("pl-tracks-list").innerHTML = '<div style="text-align:center;padding:40px;color:var(--red);font-size:12px;">Desktop backend required to inspect playlists.</div>';
+    return;
+  }
+
+  const reqId = ++playlistInspectorReqId;
+  try {
+    await window.pywebview.api.inspect_playlist(playlistCurrentUrl, String(reqId));
+  } catch (err) {
+    $("pl-tracks-list").innerHTML = `<div style="text-align:center;padding:40px;color:var(--red);font-size:12px;">Failed to start playlist inspection: ${escHtml(String(err))}</div>`;
+  }
+}
+
+function closePlaylistDrawer() {
+  $("playlist-drawer-overlay").classList.remove("show");
+}
+
+window.onPlaylistPreview = function(reqId, result) {
+  if (String(reqId) !== String(playlistInspectorReqId)) return;
+  if (!result || !result.ok) {
+    $("pl-drawer-title").textContent = "Playlist Inspection Failed";
+    $("pl-tracks-list").innerHTML = `<div style="text-align:center;padding:40px;color:var(--red);font-size:12px;">${escHtml(result?.error || "Could not read playlist.")}</div>`;
+    return;
+  }
+
+  playlistEntries = result.entries || [];
+  playlistSelectedIndices = new Set(playlistEntries.map(e => e.index));
+
+  $("pl-drawer-title").textContent = result.title || "Playlist";
+  $("pl-drawer-uploader").textContent = result.uploader ? `By ${result.uploader}` : "";
+  $("pl-drawer-count-badge").textContent = `${playlistEntries.length} items`;
+  $("pl-range-end").value = Math.min(20, playlistEntries.length);
+  $("pl-range-end").max = playlistEntries.length;
+
+  renderPlaylistTracks();
+  updatePlaylistSelectionBadges();
+};
+
+function renderPlaylistTracks() {
+  const list = $("pl-tracks-list");
+  list.innerHTML = "";
+  const filter = ($("pl-search-input").value || "").trim().toLowerCase();
+
+  const filtered = playlistEntries.filter(t => !filter || t.title.toLowerCase().includes(filter));
+  if (!filtered.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3);font-size:12px;">No tracks match your search filter.</div>';
+    return;
+  }
+
+  filtered.forEach(t => {
+    const isSelected = playlistSelectedIndices.has(t.index);
+    const item = document.createElement("div");
+    item.className = "playlist-track" + (isSelected ? " selected" : "");
+    item.onclick = (e) => {
+      if (e.target.tagName !== "INPUT") {
+        playlistToggleEntry(t.index);
+      }
+    };
+
+    item.innerHTML = `
+      <input type="checkbox" class="playlist-track-cb" ${isSelected ? "checked" : ""} onchange="playlistToggleEntry(${t.index})">
+      <span class="playlist-track-idx">#${t.index}</span>
+      ${t.thumbnail ? `<img class="playlist-track-thumb" src="${escHtml(t.thumbnail)}" onerror="this.style.display='none'">` : '<div class="playlist-track-thumb"></div>'}
+      <div class="playlist-track-info">
+        <div class="playlist-track-title" title="${escHtml(t.title)}">${escHtml(t.title)}</div>
+        ${t.uploader ? `<div class="playlist-track-meta">${escHtml(t.uploader)}</div>` : ""}
+      </div>
+      ${t.duration ? `<span class="playlist-track-dur">${fmtDuration(t.duration)}</span>` : ""}
+    `;
+    list.appendChild(item);
+  });
+}
+
+function playlistToggleEntry(idx) {
+  if (playlistSelectedIndices.has(idx)) {
+    playlistSelectedIndices.delete(idx);
+  } else {
+    playlistSelectedIndices.add(idx);
+  }
+  renderPlaylistTracks();
+  updatePlaylistSelectionBadges();
+}
+
+function playlistSelectAll(selectAll) {
+  if (selectAll) {
+    playlistSelectedIndices = new Set(playlistEntries.map(e => e.index));
+  } else {
+    playlistSelectedIndices.clear();
+  }
+  renderPlaylistTracks();
+  updatePlaylistSelectionBadges();
+}
+
+function playlistInvertSelection() {
+  const next = new Set();
+  playlistEntries.forEach(e => {
+    if (!playlistSelectedIndices.has(e.index)) next.add(e.index);
+  });
+  playlistSelectedIndices = next;
+  renderPlaylistTracks();
+  updatePlaylistSelectionBadges();
+}
+
+function playlistApplyRange() {
+  const start = parseInt($("pl-range-start").value) || 1;
+  const end = parseInt($("pl-range-end").value) || playlistEntries.length;
+  const minIdx = Math.min(start, end);
+  const maxIdx = Math.max(start, end);
+
+  playlistEntries.forEach(e => {
+    if (e.index >= minIdx && e.index <= maxIdx) {
+      playlistSelectedIndices.add(e.index);
+    }
+  });
+  renderPlaylistTracks();
+  updatePlaylistSelectionBadges();
+  showToast(`Selected range #${minIdx} to #${maxIdx}`);
+}
+
+function filterPlaylistTracks() {
+  renderPlaylistTracks();
+}
+
+function updatePlaylistSelectionBadges() {
+  const count = playlistSelectedIndices.size;
+  $("pl-drawer-selected-badge").textContent = `${count} selected`;
+  $("pl-btn-count-indiv").textContent = count;
+  $("pl-btn-count-bundle").textContent = count;
+  $("pl-download-bundle-btn").disabled = count === 0;
+  $("pl-queue-individual-btn").disabled = count === 0;
+}
+
+function queuePlaylistSelected(individual) {
+  if (playlistSelectedIndices.size === 0) {
+    showToast("Please select at least one track", false);
+    return;
+  }
+
+  const selectedFormat = $("pl-format-select").value || "auto";
+  const baseCfg = readCfg();
+  baseCfg.format = selectedFormat;
+
+  if (individual) {
+    const selectedEntries = playlistEntries.filter(e => playlistSelectedIndices.has(e.index));
+    selectedEntries.forEach(e => {
+      const trackUrl = e.url || playlistCurrentUrl;
+      addDownload(trackUrl, { ...baseCfg });
+    });
+    showToast(`Added ${selectedEntries.length} individual items to queue`);
+  } else {
+    const sorted = Array.from(playlistSelectedIndices).sort((a, b) => a - b);
+    const ranges = [];
+    let rStart = sorted[0];
+    let rEnd = sorted[0];
+
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] === rEnd + 1) {
+        rEnd = sorted[i];
+      } else {
+        ranges.push(rStart === rEnd ? `${rStart}` : `${rStart}-${rEnd}`);
+        rStart = sorted[i];
+        rEnd = sorted[i];
+      }
+    }
+    ranges.push(rStart === rEnd ? `${rStart}` : `${rStart}-${rEnd}`);
+    const rangeStr = ranges.join(",");
+
+    addDownload(playlistCurrentUrl, {
+      ...baseCfg,
+      playlist_items: rangeStr
+    });
+    showToast(`Queued playlist download (${sorted.length} tracks)`);
+  }
+
+  closePlaylistDrawer();
+  switchView("downloader");
+}
+
+// ─────────────────────────────────────────────
+// BATCH URL PASTE MODAL
+// ─────────────────────────────────────────────
+let isBatchSponsorblock = false;
+
+function openBatchModal() {
+  $("batch-modal-overlay").classList.add("show");
+  $("batch-output-input").value = $("output-input").value || "~/Downloads/media";
+  $("batch-format-select").value = $("format-select").value || "auto";
+  $("batch-rate-select").value = $("rate-limit-select").value || "";
+  isBatchSponsorblock = $("tog-sponsorblock")?.classList.contains("on") || false;
+  const tog = $("batch-sponsorblock-tog");
+  if (tog) {
+    tog.classList.toggle("on", isBatchSponsorblock);
+    tog.setAttribute("aria-checked", isBatchSponsorblock ? "true" : "false");
+  }
+  updateBatchStats();
+  setTimeout(() => $("batch-textarea").focus(), 100);
+}
+
+function closeBatchModal() {
+  $("batch-modal-overlay").classList.remove("show");
+}
+
+function toggleBatchSponsorblock() {
+  isBatchSponsorblock = !isBatchSponsorblock;
+  const tog = $("batch-sponsorblock-tog");
+  if (tog) {
+    tog.classList.toggle("on", isBatchSponsorblock);
+    tog.setAttribute("aria-checked", isBatchSponsorblock ? "true" : "false");
+  }
+}
+
+function parseBatchUrls() {
+  const text = $("batch-textarea").value || "";
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const urls = [];
+  lines.forEach(line => {
+    if (line.startsWith("#")) return;
+    if (isLikelyUrl(line)) {
+      urls.push(normalizeUrl(line));
+    }
+  });
+  return { linesCount: lines.length, urls };
+}
+
+function updateBatchStats() {
+  const { linesCount, urls } = parseBatchUrls();
+  $("batch-stats-text").textContent = `${linesCount} line${linesCount === 1 ? "" : "s"} entered`;
+  $("batch-valid-count").textContent = `${urls.length} valid URL${urls.length === 1 ? "" : "s"} detected`;
+  const submitBtn = $("batch-submit-btn");
+  submitBtn.disabled = urls.length === 0;
+  submitBtn.textContent = `Queue ${urls.length} Download${urls.length === 1 ? "" : "s"}`;
+}
+
+function handleBatchFileImport(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const text = evt.target.result;
+    const existing = $("batch-textarea").value.trim();
+    $("batch-textarea").value = (existing ? existing + "\n" : "") + text;
+    updateBatchStats();
+    showToast(`Imported ${file.name}`);
+  };
+  reader.readAsText(file);
+}
+
+async function browseBatchFolder() {
+  if (!window.pywebview?.api?.pick_folder) return;
+  const path = await window.pywebview.api.pick_folder();
+  if (path) $("batch-output-input").value = path;
+}
+
+function submitBatchDownloads() {
+  const { urls } = parseBatchUrls();
+  if (!urls.length) {
+    showToast("Please enter at least one valid URL", false);
+    return;
+  }
+
+  const baseCfg = readCfg();
+  const batchCfg = {
+    ...baseCfg,
+    format: $("batch-format-select").value || "auto",
+    output: $("batch-output-input").value || baseCfg.output,
+    rate_limit: $("batch-rate-select").value || "",
+    sponsorblock: isBatchSponsorblock,
+  };
+
+  urls.forEach(u => {
+    addDownload(u, { ...batchCfg });
+  });
+
+  closeBatchModal();
+  $("batch-textarea").value = "";
+  updateBatchStats();
+  switchView("downloader");
+  showToast(`Added ${urls.length} downloads to queue`);
+}
+
+// ─────────────────────────────────────────────
 // PYWEBVIEW WIRING / INIT
 // ─────────────────────────────────────────────
 window.addEventListener("pywebviewready", () => {
@@ -4097,6 +6560,9 @@ window.addEventListener("pywebviewready", () => {
   refreshInstalledVersions();
 });
 
+initAccentTheme();
+loadDefaultPreferences();
+initDragAndDrop();
 updateSessionStats();
 updateInputMode();
 renderDownloads();

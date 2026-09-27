@@ -131,8 +131,9 @@ def get_tool_version(tool_name: str) -> str:
     try:
         from media_downloader import resolve_tool_path
         tool_exe = resolve_tool_path(tool_name)
+        flag = "-version" if tool_name == "ffmpeg" else "--version"
         result = subprocess.run(
-            [tool_exe, "--version"],
+            [tool_exe, flag],
             capture_output=True,
             text=True,
             timeout=5,
@@ -140,6 +141,10 @@ def get_tool_version(tool_name: str) -> str:
         )
         if result.returncode == 0:
             version_str = result.stdout.strip().splitlines()[0]
+            if tool_name == "ffmpeg":
+                m = re.search(r'ffmpeg version (\S+)', version_str)
+                if m:
+                    return m.group(1).split('-')[0]
             return version_str.strip()
     except Exception as e:
         logger.debug(f"Failed to query {tool_name} version: {e}")
@@ -163,6 +168,11 @@ def get_all_installed_versions() -> dict:
             "version": get_tool_version("gallery-dl"),
             "path": resolve_tool_path("gallery-dl"),
             "is_user_tool": os.path.dirname(resolve_tool_path("gallery-dl")) == str(USER_TOOLS_DIR),
+        },
+        "ffmpeg": {
+            "version": get_tool_version("ffmpeg"),
+            "path": resolve_tool_path("ffmpeg"),
+            "is_user_tool": False,
         },
     }
 

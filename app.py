@@ -21,6 +21,7 @@ import mimetypes
 import os
 import re
 import secrets
+import sys
 import threading
 import time
 import urllib.parse
@@ -41,6 +42,71 @@ try:
 except AttributeError:
     _FOLDER_DIALOG = webview.FOLDER_DIALOG
 
+import traceback
+import webview.util
+
+# Monkey-patch pywebview js_bridge_call to safely check callback existence before evaluating,
+# preventing unhandled JavascriptException: Cannot read properties of undefined in worker threads.
+_orig_js_bridge_call = getattr(webview.util, "js_bridge_call", None)
+if _orig_js_bridge_call:
+    def _patched_js_bridge_call(window, func_name: str, param, value_id: str):
+        if func_name in (
+            "pywebviewMoveWindow",
+            "pywebviewEventHandler",
+            "pywebviewAsyncCallback",
+            "pywebviewStateUpdate",
+            "pywebviewStateDelete",
+        ):
+            return _orig_js_bridge_call(window, func_name, param, value_id)
+
+        def get_nested_attribute(obj: object, attr_str: str):
+            attributes = attr_str.split(".")
+            for attr in attributes:
+                obj = getattr(obj, attr, None)
+                if obj is None:
+                    return None
+            return obj
+
+        func = window._functions.get(func_name) or get_nested_attribute(window._js_api, func_name)
+        if func is None:
+            return _orig_js_bridge_call(window, func_name, param, value_id)
+
+        def _safe_call():
+            try:
+                result = func(*param)
+                result = json.dumps(result).replace("\\", "\\\\").replace("'", "\\'")
+                retval = f"{{value: '{result}'}}"
+            except Exception as e:
+                error = {"message": str(e), "name": type(e).__name__, "stack": traceback.format_exc()}
+                result = json.dumps(error).replace("\\", "\\\\").replace("'", "\\'")
+                retval = f"{{isError: true, value: '{result}'}}"
+
+            try:
+                safe_js = (
+                    f"(function() {{"
+                    f"  try {{"
+                    f"    var cbs = window.pywebview && window.pywebview._returnValuesCallbacks;"
+                    f"    if (cbs && cbs['{func_name}'] && typeof cbs['{func_name}']['{value_id}'] === 'function') {{"
+                    f"      cbs['{func_name}']['{value_id}']({retval});"
+                    f"    }}"
+                    f"  }} catch (err) {{"
+                    f"    console.warn('Suppressed pywebview return callback error:', err);"
+                    f"  }}"
+                    f"}})();"
+                )
+                window.evaluate_js(safe_js)
+            except Exception:
+                pass
+
+        threading.Thread(target=_safe_call, daemon=True).start()
+
+    webview.util.js_bridge_call = _patched_js_bridge_call
+    try:
+        import webview.platforms.edgechromium as _ec
+        _ec.js_bridge_call = _patched_js_bridge_call
+    except Exception:
+        pass
+
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import download_history
@@ -55,6 +121,9 @@ from media_downloader import (
     cancel_job,
     job_status,
     extract_embedded_art,
+    extract_video_thumbnail,
+    get_default_download_dir,
+    resolve_existing_media_path,
 )
 from validators import (
     validate_url,
@@ -63,6 +132,7 @@ from validators import (
     validate_search_query,
     validate_job_id,
     validate_history_entry_id,
+    validate_completion_action,
     ValidationError,
 )
 
@@ -101,7 +171,8 @@ _KNOWN_MEDIA_MAX = 20000
 
 
 def _normalize_media_path(path: str) -> str:
-    return os.path.normpath(os.path.abspath(os.path.expanduser(path or "")))
+    p = os.path.normpath(os.path.abspath(os.path.expanduser(path or "")))
+    return os.path.normcase(p) if os.name == "nt" else p
 
 
 def _register_known_media_path(path: str) -> None:
@@ -116,6 +187,8 @@ def _register_known_media_path(path: str) -> None:
 
 
 def _is_known_media_path(path: str) -> bool:
+    if not path:
+        return False
     normalized = _normalize_media_path(path)
     with _KNOWN_MEDIA_LOCK:
         if normalized in _KNOWN_MEDIA_PATHS:
@@ -134,10 +207,59 @@ def _is_known_media_path(path: str) -> bool:
                 continue  # different drives on Windows, etc — definitely not contained
     except Exception:
         pass
+
+    # Allow any file in the default download directory or subfolders
+    try:
+        from media_downloader import get_default_download_dir
+        dl_dir = _normalize_media_path(get_default_download_dir())
+        if dl_dir and os.path.isdir(dl_dir):
+            try:
+                if os.path.commonpath([normalized, dl_dir]) == dl_dir:
+                    return True
+            except ValueError:
+                pass
+    except Exception:
+        pass
     return False
 
 # Initialize logger
 logger = get_logger(__name__)
+
+
+def resolve_entry_thumbnail_url(files: list, output_dir: str = None) -> str:
+    """
+    Resolve a thumbnail URL for a list of files produced by a download or bundle.
+    Inspects files to find the first image, video, or audio file, extracts a thumbnail
+    (or embedded cover art / video frame), registers the media path, and returns the
+    authenticated bridge /media URL.
+    """
+    if not files:
+        return None
+    for f in files:
+        fpath = f.get("path") if isinstance(f, dict) else str(f)
+        if not fpath:
+            continue
+        expanded = resolve_existing_media_path(fpath, output_dir=output_dir)
+        if not expanded or not os.path.isfile(expanded):
+            continue
+        ext = os.path.splitext(expanded)[1].lower()
+        if ext in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".jfif", ".avif"):
+            _register_known_media_path(expanded)
+            query = urllib.parse.urlencode({"token": BRIDGE_TOKEN, "path": expanded})
+            return f"http://127.0.0.1:{BRIDGE_PORT}/media?{query}"
+        elif ext in (".mp3", ".m4a", ".flac", ".ogg", ".opus", ".aac", ".wma", ".wav"):
+            cover_path = extract_embedded_art(expanded)
+            if cover_path and os.path.isfile(cover_path):
+                _register_known_media_path(cover_path)
+                query = urllib.parse.urlencode({"token": BRIDGE_TOKEN, "path": cover_path})
+                return f"http://127.0.0.1:{BRIDGE_PORT}/media?{query}"
+        elif ext in (".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v", ".flv", ".ts", ".wmv"):
+            vthumb = extract_video_thumbnail(expanded)
+            if vthumb and os.path.isfile(vthumb):
+                _register_known_media_path(vthumb)
+                query = urllib.parse.urlencode({"token": BRIDGE_TOKEN, "path": vthumb})
+                return f"http://127.0.0.1:{BRIDGE_PORT}/media?{query}"
+    return None
 
 
 class _BridgeHandler(BaseHTTPRequestHandler):
@@ -147,12 +269,15 @@ class _BridgeHandler(BaseHTTPRequestHandler):
         pass   # silence the default access log
 
     def _cors(self):
-        # Allow requests from any chrome-extension:// origin
+        # Allow requests from browser extensions and local app for media streaming/Web Audio API
         origin = self.headers.get("Origin", "")
         if origin.startswith("chrome-extension://") or origin.startswith("moz-extension://"):
             self.send_header("Access-Control-Allow-Origin", origin)
+        else:
+            self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Token")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Token, Range")
+        self.send_header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
 
     def do_OPTIONS(self):
         self.send_response(204)
@@ -197,9 +322,21 @@ class _BridgeHandler(BaseHTTPRequestHandler):
         if not secrets.compare_digest(token, BRIDGE_TOKEN):
             self.send_response(403); self.end_headers(); return
 
-        path = os.path.expanduser((qs.get("path") or [""])[0])
+        raw_path = (qs.get("path") or qs.get("p") or [""])[0]
+        path = resolve_existing_media_path(raw_path)
+
         if not path or not os.path.isfile(path):
             self.send_response(404); self.end_headers(); return
+
+        if not _is_known_media_path(path):
+            try:
+                from media_downloader import get_default_download_dir
+                dl_dir = _normalize_media_path(get_default_download_dir())
+                normalized = _normalize_media_path(path)
+                if dl_dir and os.path.commonpath([normalized, dl_dir]) == dl_dir:
+                    _register_known_media_path(path)
+            except Exception:
+                pass
 
         if not _is_known_media_path(path):
             # Valid token, but a path the app never actually produced —
@@ -209,7 +346,34 @@ class _BridgeHandler(BaseHTTPRequestHandler):
             self.send_response(404); self.end_headers(); return
 
         file_size = os.path.getsize(path)
-        content_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        ext = os.path.splitext(path)[1].lower()
+        content_type = {
+            ".m4a": "audio/mp4",
+            ".mp3": "audio/mpeg",
+            ".aac": "audio/aac",
+            ".flac": "audio/flac",
+            ".wav": "audio/wav",
+            ".ogg": "audio/ogg",
+            ".opus": "audio/ogg",
+            ".wma": "audio/x-ms-wma",
+            ".mp4": "video/mp4",
+            ".m4v": "video/mp4",
+            ".webm": "video/webm",
+            ".mkv": "video/x-matroska",
+            ".mov": "video/quicktime",
+            ".avi": "video/x-msvideo",
+            ".flv": "video/x-flv",
+            ".ts": "video/mp2t",
+            ".wmv": "video/x-ms-wmv",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+            ".bmp": "image/bmp",
+            ".jfif": "image/jpeg",
+            ".avif": "image/avif",
+        }.get(ext) or mimetypes.guess_type(path)[0] or "application/octet-stream"
 
         start, end, status = 0, file_size - 1, 200
         range_header = self.headers.get("Range")
@@ -338,6 +502,14 @@ class Api:
         """Return versions of app and installed tools."""
         return updater.get_all_installed_versions()
 
+    def get_installed_versions(self) -> dict:
+        """Alias for get_system_versions."""
+        return self.get_system_versions()
+
+    def update_tool(self, tool_name: str) -> dict:
+        """Alias for update_engine_async."""
+        return self.update_engine_async(tool_name)
+
     # ── update checks & operations ──
     def check_updates_async(self) -> dict:
         """Check for updates for app and tools in background thread."""
@@ -410,6 +582,10 @@ class Api:
         return {"tool": detect_tool(url), "hint": site_hint(url), "auth_hint": auth_hint(url)}
 
     # ── start a download in the background, return its job_id immediately ──
+    def start_download(self, url: str, cfg: dict, tool_override: str = "", client_job_id: str = "") -> dict:
+        """Alias for start_download_async."""
+        return self.start_download_async(url, cfg, tool_override, client_job_id)
+
     def start_download_async(self, url: str, cfg: dict, tool_override: str = "", client_job_id: str = "") -> dict:
         # Validate URL
         if not validate_url(url):
@@ -473,8 +649,12 @@ class Api:
 
             status = job_status(job_id)
             files = status.get("files", []) if status.get("ok") else []
+            if not files and result.get("files"):
+                files = result.get("files", [])
             for f in files:
-                _register_known_media_path(f.get("path") if isinstance(f, dict) else None)
+                fpath = f.get("path") if isinstance(f, dict) else str(f)
+                if fpath:
+                    _register_known_media_path(fpath)
             history_id = ""
 
             # Record history (skip dry-runs — nothing was actually downloaded).
@@ -489,9 +669,11 @@ class Api:
 
                     status_label = (
                         "done" if result.get("ok")
-                        else "cancelled" if result.get("error") == "Cancelled by user."
+                        else "cancelled" if (result.get("state") == "cancelled" or result.get("error") == "Cancelled by user." or status.get("state") == "cancelled")
                         else "error"
                     )
+                    thumb_url = resolve_entry_thumbnail_url(files, output_dir=result.get("output_dir"))
+
                     history_id = download_history.add_entry({
                         "url": url,
                         "tool": result.get("tool", ""),
@@ -501,6 +683,7 @@ class Api:
                         "size_bytes": sum((f.get("size") or 0) for f in files),
                         "status": status_label,
                         "error": result.get("error"),
+                        "thumbnail": thumb_url,
                         "started_at": status.get("started_at"),
                         "finished_at": status.get("finished_at"),
                     })
@@ -513,7 +696,8 @@ class Api:
                 f"{_js(result.get('error') or '')}, "
                 f"{_js(result.get('output_dir') or '')}, "
                 f"{_js(files)}, "
-                f"{_js(history_id)})"
+                f"{_js(history_id)}, "
+                f"{_js(thumb_url)})"
             )
 
         threading.Thread(target=run, daemon=True).start()
@@ -560,13 +744,53 @@ class Api:
         logger.debug("Folder picker cancelled")
         return ""
 
+    def get_default_output_dir(self) -> str:
+        """Return the default media download folder (~/Downloads/media)."""
+        return get_default_download_dir()
+
     # ── clipboard read (for clipboard monitor feature) ──
     def read_clipboard(self) -> str:
         """Return current clipboard text, or empty string on any failure."""
+        if os.name == "nt":
+            try:
+                import ctypes
+                from ctypes import wintypes
+                user32 = ctypes.windll.user32
+                kernel32 = ctypes.windll.kernel32
+                user32.OpenClipboard.argtypes = [wintypes.HWND]
+                user32.OpenClipboard.restype = wintypes.BOOL
+                user32.CloseClipboard.restype = wintypes.BOOL
+                user32.GetClipboardData.argtypes = [wintypes.UINT]
+                user32.GetClipboardData.restype = wintypes.HANDLE
+                kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+                kernel32.GlobalLock.restype = wintypes.LPVOID
+                kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+                kernel32.GlobalUnlock.restype = wintypes.BOOL
+
+                # Try opening clipboard with retries in case another process holds it momentarily
+                for _ in range(3):
+                    if user32.OpenClipboard(None):
+                        try:
+                            # 13 = CF_UNICODETEXT
+                            h = user32.GetClipboardData(13)
+                            if h:
+                                p = kernel32.GlobalLock(h)
+                                if p:
+                                    try:
+                                        val = ctypes.c_wchar_p(p).value
+                                        return (val or "").strip()
+                                    finally:
+                                        kernel32.GlobalUnlock(h)
+                            return ""
+                        finally:
+                            user32.CloseClipboard()
+                    time.sleep(0.02)
+            except Exception as e:
+                logger.debug(f"Direct ctypes clipboard read failed, using fallback: {e}")
+
         try:
             import subprocess as _sp
-            # Use PowerShell to read clipboard — works reliably in packaged
-            # Windows apps where tkinter/pyperclip aren't available.
+            # Fallback to PowerShell if ctypes unavailable
             result = _sp.run(
                 ["powershell", "-NoProfile", "-Command",
                  "[System.Windows.Forms.Clipboard]::GetText()"],
@@ -574,7 +798,6 @@ class Api:
                 creationflags=0x08000000  # CREATE_NO_WINDOW
             )
             clipboard_text = (result.stdout or "").strip()
-            logger.debug(f"Clipboard read: {len(clipboard_text)} characters")
             return clipboard_text
         except Exception as e:
             logger.error(f"Failed to read clipboard: {e}")
@@ -650,37 +873,216 @@ class Api:
         except Exception as e:
             logger.error(f"Failed to show notification: {e}")
             return {"ok": False, "error": str(e)}
-    def open_output_folder(self, path: str) -> dict:
-        if not path:
-            logger.warning("No path provided for opening folder")
-            return {"ok": False, "error": "No path provided."}
-        
-        if not validate_path(path, must_exist=True, must_be_dir=True):
-            logger.warning(f"Invalid path for opening folder: {path}")
-            return {"ok": False, "error": f"Invalid directory path: {path}"}
-        
-        try:
+
+    # ── post-download queue completion automation ──
+    def close_app(self) -> dict:
+        """Gracefully closes the application window and terminates the process."""
+        logger.info("Application close requested")
+        def _delayed_exit():
+            time.sleep(0.5)
+            if self._window:
+                try:
+                    self._window.destroy()
+                except Exception:
+                    pass
+            os._exit(0)
+        threading.Thread(target=_delayed_exit, daemon=True).start()
+        return {"ok": True}
+
+    def execute_completion_action(self, action: str) -> dict:
+        """
+        Execute post-download completion action.
+        Allowed actions: 'nothing', 'exit', 'sleep', 'shutdown'.
+        """
+        if not action or action == "nothing":
+            return {"ok": True, "action": "nothing"}
+
+        if not validate_completion_action(action):
+            logger.warning(f"Invalid completion action requested: {action}")
+            return {"ok": False, "error": f"Invalid action: {action}"}
+
+        logger.info(f"Executing post-download completion action: {action}")
+        if action == "exit":
+            return self.close_app()
+        elif action == "sleep":
+            if os.name == "nt":
+                import subprocess as _sp
+                try:
+                    _sp.Popen(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])
+                    return {"ok": True, "action": "sleep"}
+                except Exception as e:
+                    logger.error(f"Failed to sleep system: {e}")
+                    return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": "Sleep only supported on Windows"}
+        elif action == "shutdown":
+            if os.name == "nt":
+                import subprocess as _sp
+                try:
+                    # 60s countdown with custom notification message
+                    _sp.run(
+                        ["shutdown", "/s", "/t", "60", "/c", "Media Downloader queue finished. Shutting down system in 60s."],
+                        check=False,
+                        creationflags=0x08000000
+                    )
+                    return {"ok": True, "action": "shutdown", "timeout": 60}
+                except Exception as e:
+                    logger.error(f"Failed to schedule system shutdown: {e}")
+                    return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": "Shutdown only supported on Windows"}
+        return {"ok": False, "error": f"Unsupported action: {action}"}
+
+    def cancel_shutdown(self) -> dict:
+        """Aborts a pending Windows shutdown initiated by queue completion."""
+        if os.name == "nt":
             import subprocess as _sp
-            import os
-            expanded = os.path.expanduser(path)
-            _sp.Popen(["explorer", os.path.normpath(expanded)])
-            logger.info(f"Opened folder: {expanded}")
+            try:
+                _sp.run(["shutdown", "/a"], check=False, creationflags=0x08000000)
+                logger.info("Pending system shutdown aborted successfully")
+                return {"ok": True}
+            except Exception as e:
+                logger.warning(f"Failed to abort shutdown: {e}")
+                return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": "Not applicable on non-Windows"}
+
+    def open_output_folder(self, path: str) -> dict:
+        """Open the directory containing the file (with file selected if possible),
+        or the directory itself, in Windows File Explorer."""
+        try:
+            target = (path or "").strip() or get_default_download_dir()
+            expanded = resolve_existing_media_path(target) or os.path.expanduser(target)
+            
+            import subprocess as _sp
+            if os.path.isfile(expanded):
+                norm = os.path.normpath(expanded)
+                _sp.Popen(["explorer", f"/select,{norm}"])
+                logger.info(f"Opened containing folder with item selected: {norm}")
+                return {"ok": True}
+
+            folder_to_open = expanded
+            if not os.path.isdir(folder_to_open):
+                parent = os.path.dirname(folder_to_open)
+                if os.path.isdir(parent):
+                    folder_to_open = parent
+
+            if not os.path.isdir(folder_to_open):
+                try:
+                    os.makedirs(folder_to_open, exist_ok=True)
+                except Exception:
+                    folder_to_open = get_default_download_dir()
+
+            norm = os.path.normpath(folder_to_open)
+            _sp.Popen(["explorer", norm])
+            logger.info(f"Opened folder: {norm}")
             return {"ok": True}
         except Exception as e:
             logger.error(f"Failed to open folder {path}: {e}")
+            return {"ok": False, "error": str(e)}
+
+    def open_extension_folder(self) -> dict:
+        """Open the browser_extension directory in Windows File Explorer."""
+        try:
+            base_dir = _app_base_dir()
+            ext_dir = os.path.join(base_dir, "browser_extension")
+            if not os.path.isdir(ext_dir):
+                ext_dir = os.path.join(os.getcwd(), "browser_extension")
+            if os.path.isdir(ext_dir):
+                import subprocess as _sp
+                _sp.Popen(["explorer", os.path.normpath(ext_dir)])
+                logger.info(f"Opened browser extension folder: {ext_dir}")
+                return {"ok": True, "path": ext_dir}
+            return {"ok": False, "error": "Extension folder not found."}
+        except Exception as e:
+            logger.error(f"Failed to open extension folder: {e}")
             return {"ok": False, "error": str(e)}
 
     # ── download history ──
     def list_history(self) -> dict:
         try:
             entries = download_history.list_entries()
+            history_modified = False
             for e in entries:
-                for f in (e.get("files") or []):
-                    _register_known_media_path(f.get("path") if isinstance(f, dict) else None)
-            logger.debug(f"Retrieved {len(entries)} history entries")
+                files = e.get("files") or []
+                for f in files:
+                    if isinstance(f, dict):
+                        fpath = f.get("path")
+                        real_path = resolve_existing_media_path(fpath, output_dir=e.get("output_dir"))
+                        if real_path and os.path.isfile(real_path):
+                            if fpath != real_path or not f.get("size"):
+                                f["path"] = real_path
+                                f["name"] = os.path.basename(real_path)
+                                f["size"] = os.path.getsize(real_path)
+                                history_modified = True
+                            _register_known_media_path(real_path)
+                    else:
+                        _register_known_media_path(f)
+
+                # Resolve thumbnail URL for the entry (embedded audio art, video frame, or image)
+                thumb_url = e.get("thumbnail")
+                valid_thumb = False
+                if thumb_url and "/media?" in thumb_url:
+                    try:
+                        parsed = urllib.parse.urlsplit(thumb_url)
+                        qs = urllib.parse.parse_qs(parsed.query)
+                        old_p = (qs.get("path") or qs.get("p") or [""])[0]
+                        if old_p and os.path.isfile(old_p):
+                            _register_known_media_path(old_p)
+                            query = urllib.parse.urlencode({"token": BRIDGE_TOKEN, "path": old_p})
+                            thumb_url = f"http://127.0.0.1:{BRIDGE_PORT}/media?{query}"
+                            valid_thumb = True
+                    except Exception:
+                        pass
+
+                if not valid_thumb and files:
+                    thumb_url = resolve_entry_thumbnail_url(files, output_dir=e.get("output_dir"))
+
+                if thumb_url != e.get("thumbnail"):
+                    e["thumbnail"] = thumb_url
+                    history_modified = True
+
+            if history_modified:
+                try:
+                    download_history._save(entries)
+                except Exception:
+                    pass
+
+            logger.debug(f"Retrieved {len(entries)} history entries with thumbnails")
             return {"ok": True, "entries": entries}
         except Exception as e:
             logger.error(f"Failed to list history: {e}")
+            return {"ok": False, "error": str(e)}
+
+    def get_item_thumbnail_url(self, path: str) -> dict:
+        """Resolve a thumbnail URL for any media file (audio cover art, video frame, or image)."""
+        if not path:
+            return {"ok": False}
+        expanded = resolve_existing_media_path(path)
+        if not expanded:
+            return {"ok": False}
+
+        if os.path.isdir(expanded):
+            for root, _, fnames in os.walk(expanded):
+                for fn in fnames:
+                    fext = os.path.splitext(fn)[1].lower()
+                    if fext in (
+                        ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".jfif", ".avif",
+                        ".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v", ".flv", ".ts", ".wmv",
+                        ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".aac", ".wma", ".wav"
+                    ):
+                        return self.get_item_thumbnail_url(os.path.join(root, fn))
+            return {"ok": False}
+
+        if not validate_path(expanded, must_exist=True, must_be_file=True):
+            return {"ok": False}
+        try:
+            ext = os.path.splitext(expanded)[1].lower()
+            if ext in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".jfif", ".avif"):
+                return self.get_media_url(expanded)
+            elif ext in (".mp3", ".m4a", ".flac", ".ogg", ".opus", ".aac", ".wma", ".wav"):
+                return self.get_cover_art_url(expanded)
+            elif ext in (".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v", ".flv", ".ts", ".wmv"):
+                return self.get_video_thumbnail_url(expanded)
+            return {"ok": False}
+        except Exception as e:
             return {"ok": False, "error": str(e)}
 
     def delete_history_entry(self, entry_id: str) -> dict:
@@ -724,15 +1126,16 @@ class Api:
         token-gated, same one used by the browser extension) avoids that
         and also gives us Range support for seeking.
         """
-        if not validate_path(path, must_exist=True, must_be_file=True):
-            logger.warning(f"Invalid path for media URL: {path}")
-            return {"ok": False, "error": "File not found or invalid path."}
+        if not path:
+            return {"ok": False, "error": "No path provided."}
+
+        expanded = resolve_existing_media_path(path)
+        if not expanded or not os.path.isfile(expanded):
+            logger.warning(f"File not found for media URL: {path}")
+            return {"ok": False, "error": f"File not found: {os.path.basename(path)}"}
 
         try:
-            expanded = os.path.expanduser(path)
-            if not _is_known_media_path(expanded):
-                logger.warning(f"Media URL requested for unregistered path: {expanded}")
-                return {"ok": False, "error": "This file isn't recognized by the app."}
+            _register_known_media_path(expanded)
             query = urllib.parse.urlencode({"token": BRIDGE_TOKEN, "path": expanded})
             return {"ok": True, "url": f"http://127.0.0.1:{BRIDGE_PORT}/media?{query}"}
         except Exception as e:
@@ -746,13 +1149,20 @@ class Api:
         call per image. Missing/unreadable files are simply omitted from
         the result rather than failing the whole batch."""
         urls = {}
+        from media_downloader import get_default_download_dir
+        dl_dir = get_default_download_dir()
         for path in paths or []:
             try:
-                if validate_path(path, must_exist=True, must_be_file=True):
-                    expanded = os.path.expanduser(path)
-                    if not _is_known_media_path(expanded):
-                        logger.warning(f"Media URL requested for unregistered path: {expanded}")
-                        continue
+                expanded = os.path.expanduser(path)
+                if not os.path.isfile(expanded):
+                    candidate = os.path.join(dl_dir, path)
+                    if os.path.isfile(candidate):
+                        expanded = candidate
+                    elif os.path.isfile(os.path.join(dl_dir, os.path.basename(path))):
+                        expanded = os.path.join(dl_dir, os.path.basename(path))
+
+                if os.path.isfile(expanded):
+                    _register_known_media_path(expanded)
                     query = urllib.parse.urlencode({"token": BRIDGE_TOKEN, "path": expanded})
                     urls[path] = f"http://127.0.0.1:{BRIDGE_PORT}/media?{query}"
             except Exception as e:
@@ -767,12 +1177,14 @@ class Api:
         Returns ok:False (not an error toast — just "no art") whenever
         there's genuinely no embedded art, so the player can fall back to
         its generic note-icon disc without alarming anyone."""
-        if not validate_path(path, must_exist=True, must_be_file=True):
+        if not path:
+            return {"ok": False}
+        expanded = resolve_existing_media_path(path)
+        if not expanded or not validate_path(expanded, must_exist=True, must_be_file=True):
             logger.warning(f"Invalid path for cover art extraction: {path}")
             return {"ok": False}
         
         try:
-            expanded = os.path.expanduser(path)
             cover_path = extract_embedded_art(expanded)
             if not cover_path:
                 return {"ok": False}
@@ -790,13 +1202,15 @@ class Api:
         ok:False without an error message — "no thumbnail" isn't
         something to alarm the user about, the gallery just falls back
         to its generic video-tile icon."""
-        if not validate_path(path, must_exist=True, must_be_file=True):
+        if not path:
+            return {"ok": False}
+        expanded = resolve_existing_media_path(path)
+        if not expanded or not validate_path(expanded, must_exist=True, must_be_file=True):
             logger.warning(f"Invalid path for video thumbnail extraction: {path}")
             return {"ok": False}
 
         try:
             from media_downloader import extract_video_thumbnail
-            expanded = os.path.expanduser(path)
             thumb_path = extract_video_thumbnail(expanded)
             if not thumb_path:
                 return {"ok": False}
@@ -807,12 +1221,14 @@ class Api:
 
     # ── open a single file with the OS default app (non-playable files) ──
     def open_file(self, path: str) -> dict:
-        if not validate_path(path, must_exist=True, must_be_file=True):
+        if not path:
+            return {"ok": False, "error": "No path provided."}
+        expanded = resolve_existing_media_path(path)
+        if not expanded or not validate_path(expanded, must_exist=True, must_be_file=True):
             logger.warning(f"Invalid path for opening file: {path}")
             return {"ok": False, "error": "File not found or invalid path."}
         
         try:
-            expanded = os.path.expanduser(path)
             os.startfile(expanded)  # Windows-only, matches this app's target platform
             logger.info(f"Opened file: {expanded}")
             return {"ok": True}
@@ -966,42 +1382,228 @@ class Api:
                         thumb = first.get("thumbnail") or (thumbs[-1].get("url") if thumbs else "")
                         channel = first.get("channel") or first.get("uploader") or ""
                         duration = first.get("duration")
+                        views = first.get("view_count")
+                        description = first.get("description") or ""
                     else:
                         title = info.get("title") or ""
                         thumbs = info.get("thumbnails") or []
                         thumb = info.get("thumbnail") or (thumbs[-1].get("url") if thumbs else "")
                         channel = info.get("channel") or info.get("uploader") or ""
                         duration = info.get("duration")
+                        views = info.get("view_count")
+                        description = info.get("description") or ""
+
+                    available_qualities = []
+                    formats = info.get("formats") or []
+                    if formats:
+                        video_heights = set()
+                        format_sizes = {}
+                        has_audio = False
+                        for f in formats:
+                            h = f.get("height")
+                            vc = f.get("vcodec")
+                            ac = f.get("acodec")
+                            fs = f.get("filesize") or f.get("filesize_approx")
+                            if h and vc and vc != "none":
+                                try:
+                                    ih = int(h)
+                                    video_heights.add(ih)
+                                    if fs and (ih not in format_sizes or fs > format_sizes[ih]):
+                                        format_sizes[ih] = fs
+                                except (ValueError, TypeError):
+                                    pass
+                            if ac and ac != "none":
+                                has_audio = True
+
+                        known_res = [
+                            (2160, "2160p", "4K (Ultra HD)"),
+                            (1440, "1440p", "1440p (QHD)"),
+                            (1080, "1080p", "1080p (Full HD)"),
+                            (720, "720p", "720p (HD)"),
+                            (480, "480p", "480p (SD)"),
+                            (360, "360p", "360p"),
+                        ]
+                        for target_h, fmt_key, label in known_res:
+                            matching = [h for h in video_heights if abs(h - target_h) <= 20]
+                            if matching:
+                                match_h = matching[0]
+                                size_bytes = format_sizes.get(match_h)
+                                available_qualities.append({
+                                    "id": fmt_key,
+                                    "label": label,
+                                    "height": match_h,
+                                    "type": "video",
+                                    "ext": "MP4",
+                                    "size_bytes": size_bytes,
+                                })
+                        if not available_qualities and video_heights:
+                            max_h = max(video_heights)
+                            available_qualities.append({
+                                "id": f"{max_h}p",
+                                "label": f"{max_h}p",
+                                "height": max_h,
+                                "type": "video",
+                                "ext": "MP4",
+                                "size_bytes": format_sizes.get(max_h),
+                            })
+
+                        if has_audio:
+                            available_qualities.append({"id": "mp3", "label": "MP3", "type": "audio", "ext": "MP3"})
+                            available_qualities.append({"id": "m4a", "label": "M4A", "type": "audio", "ext": "M4A"})
+
+                    is_playlist = (
+                        info.get("_type") == "playlist"
+                        or bool(info.get("entries"))
+                        or "list=" in url.lower()
+                        or "/playlist" in url.lower()
+                        or "/sets/" in url.lower()
+                        or "/album" in url.lower()
+                    )
+                    playlist_count = len(info.get("entries") or []) if info.get("entries") else None
+
                     result = {
                         "ok": True, "tool": "yt-dlp", "title": title,
                         "thumbnail": thumb, "channel": channel, "duration": duration,
+                        "views": views, "description": description[:180] if description else "",
+                        "available_qualities": available_qualities,
+                        "is_playlist": is_playlist,
+                        "playlist_count": playlist_count,
+                        "url": url,
                     }
                 else:
                     gallerydl = resolve_tool_path("gallery-dl")
-                    proc = subprocess.run(
-                        [gallerydl, "-j", "--no-input", url],
-                        capture_output=True, text=True, timeout=20, creationflags=CREATE_NO_WINDOW,
-                    )
-                    data = _json.loads(proc.stdout)
-                    thumb, count = _extract_gallery_preview(data)
+                    cmd = [gallerydl, "--range", "1-2", "-o", "retries=0", "-j", "--no-input", url]
+                    thumb = None
+                    count = 0
+                    try:
+                        proc = subprocess.run(
+                            cmd,
+                            capture_output=True, text=True, timeout=6, creationflags=CREATE_NO_WINDOW,
+                        )
+                        parsed_items = []
+                        for line in proc.stdout.splitlines():
+                            line = line.strip()
+                            if line:
+                                try:
+                                    parsed_items.append(_json.loads(line))
+                                except Exception:
+                                    pass
+                        if parsed_items:
+                            thumb, count = _extract_gallery_preview(parsed_items)
+                    except Exception as ge:
+                        logger.warning(f"Gallery preview probe warning for {url}: {ge}")
+
                     host = _urlparse.urlparse(url).hostname or url
-                    # Previously gated on `if thumb:` alone, which threw
-                    # away a perfectly good "found 47 items" result
-                    # whenever _extract_gallery_preview's best-effort JSON
-                    # walk couldn't pin down a thumbnail URL specifically
-                    # (which varies a lot by extractor — see that
-                    # function's docstring). A text-only preview (no
-                    # image, just a count) is still far better than no
-                    # preview at all, and the frontend already handles a
-                    # missing thumbnail gracefully.
-                    if thumb or count:
-                        result = {"ok": True, "tool": "gallery-dl", "title": host, "thumbnail": thumb or "", "count": count}
+                    path_parts = [p for p in _urlparse.urlparse(url).path.split("/") if p]
+                    title_hint = f"{host} (Gallery)"
+                    if len(path_parts) >= 2 and path_parts[0] in ("users", "u", "user", "r", "channel", "c"):
+                        title_hint = f"{path_parts[1]} on {host}"
+                    elif path_parts:
+                        title_hint = f"{path_parts[-1]} on {host}"
+
+                    result = {
+                        "ok": True,
+                        "tool": "gallery-dl",
+                        "type": "gallery",
+                        "title": title_hint,
+                        "thumbnail": thumb or "",
+                        "count": count or 0,
+                        "url": url,
+                    }
             except subprocess.TimeoutExpired:
-                result = {"ok": False, "reason": "timeout"}
+                host = _urlparse.urlparse(url).hostname or url
+                tool = detect_tool(url)
+                result = {
+                    "ok": True,
+                    "tool": tool,
+                    "type": "gallery" if tool == "gallery-dl" else "video",
+                    "title": host,
+                    "thumbnail": "",
+                    "url": url,
+                    "fallback": True,
+                }
             except Exception as e:
-                result = {"ok": False, "reason": "error", "error": str(e)}
+                logger.warning(f"Link preview exception for {url}: {e}")
+                host = _urlparse.urlparse(url).hostname or url
+                tool = detect_tool(url)
+                result = {
+                    "ok": True,
+                    "tool": tool,
+                    "type": "gallery" if tool == "gallery-dl" else "video",
+                    "title": host,
+                    "thumbnail": "",
+                    "url": url,
+                    "fallback": True,
+                }
 
             self._push_js(f"window.onLinkPreview?.({_js(request_id)}, {_js(result)})")
+
+        threading.Thread(target=run, daemon=True).start()
+        return {"ok": True, "started": True}
+
+    # ── playlist inspector (extract tracks/videos from a playlist without downloading) ──
+    def inspect_playlist(self, url: str, request_id: str = "") -> dict:
+        """
+        Extract playlist / album entries using yt-dlp --flat-playlist -J.
+        Non-blocking background thread that calls window.onPlaylistPreview(request_id, result).
+        """
+        if not validate_url(url):
+            logger.warning(f"Invalid URL for playlist inspection: {url}")
+            return {"ok": False, "error": "Invalid URL"}
+
+        def run():
+            from media_downloader import resolve_tool_path, CREATE_NO_WINDOW, _ytdlp_extra_headers
+            import subprocess, json as _json
+
+            ytdlp = resolve_tool_path("yt-dlp")
+            cmd = [ytdlp, "--flat-playlist", "-J", "--no-warnings"]
+            cmd += _ytdlp_extra_headers(url)
+            cmd.append(url)
+
+            try:
+                proc = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=35, creationflags=CREATE_NO_WINDOW
+                )
+                if proc.returncode != 0 and not proc.stdout:
+                    err = (proc.stderr or "").strip() or "Failed to extract playlist entries"
+                    self._push_js(f"window.onPlaylistPreview?.({_js(request_id)}, {_js({'ok': False, 'error': err})})")
+                    return
+
+                data = _json.loads(proc.stdout)
+                raw_entries = data.get("entries") or []
+                entries = []
+                for idx, entry in enumerate(raw_entries, start=1):
+                    if not entry:
+                        continue
+                    vid_id = entry.get("id", "")
+                    entry_url = entry.get("url") or (f"https://www.youtube.com/watch?v={vid_id}" if vid_id else "")
+                    thumbs = entry.get("thumbnails") or []
+                    thumb = entry.get("thumbnail") or (thumbs[-1].get("url") if thumbs else (f"https://i.ytimg.com/vi/{vid_id}/hqdefault.jpg" if vid_id else ""))
+                    entries.append({
+                        "index": idx,
+                        "id": vid_id,
+                        "title": entry.get("title") or f"Track #{idx}",
+                        "duration": entry.get("duration"),
+                        "uploader": entry.get("uploader") or entry.get("channel") or "",
+                        "thumbnail": thumb,
+                        "url": entry_url,
+                    })
+
+                playlist_title = data.get("title") or "Playlist"
+                playlist_uploader = data.get("uploader") or data.get("channel") or ""
+                result = {
+                    "ok": True,
+                    "title": playlist_title,
+                    "uploader": playlist_uploader,
+                    "count": len(entries),
+                    "entries": entries,
+                    "url": url,
+                }
+                self._push_js(f"window.onPlaylistPreview?.({_js(request_id)}, {_js(result)})")
+            except subprocess.TimeoutExpired:
+                self._push_js(f"window.onPlaylistPreview?.({_js(request_id)}, {_js({'ok': False, 'error': 'Playlist inspection timed out'})})")
+            except Exception as e:
+                self._push_js(f"window.onPlaylistPreview?.({_js(request_id)}, {_js({'ok': False, 'error': str(e)})})")
 
         threading.Thread(target=run, daemon=True).start()
         return {"ok": True, "started": True}
@@ -1029,21 +1631,26 @@ def _extract_gallery_preview(data):
     """
     Best-effort walk of gallery-dl's `-j` dump looking for the first
     downloadable file URL to use as a preview thumbnail, plus a rough
-    item count. The exact shape of this output varies by extractor
-    (nested lists tagged with a numeric level — 3 generally means "an
-    actual file" — but it isn't identical everywhere), so this
-    deliberately doesn't try to be a canonical parser. It just needs to
-    find something reasonable for a live preview; if it comes up empty,
-    the caller simply shows no thumbnail rather than treating it as an error.
+    item count. Supports both nested lists and dicts.
     """
     from media_downloader import _SCANNABLE_EXTENSIONS
-    IMG_EXT = tuple(_SCANNABLE_EXTENSIONS)  # broader than a hand-rolled list — stays in sync with the gallery scanner's own definition
+    IMG_EXT = tuple(_SCANNABLE_EXTENSIONS)
     found = {"url": None, "count": 0}
 
     def walk(node):
-        if isinstance(node, list):
+        if isinstance(node, dict):
+            for k in ("thumbnail", "thumbnail_url", "preview", "poster", "file_url", "url"):
+                v = node.get(k)
+                if isinstance(v, str) and v.startswith("http"):
+                    if any(v.lower().split("?")[0].endswith(ext) for ext in IMG_EXT) or k in ("thumbnail", "poster", "preview"):
+                        if found["url"] is None:
+                            found["url"] = v
+                        break
+            for val in node.values():
+                walk(val)
+        elif isinstance(node, list):
             if (len(node) >= 2 and isinstance(node[0], int) and isinstance(node[1], str)
-                    and node[1].lower().split("?")[0].endswith(IMG_EXT)):
+                    and (node[1].lower().split("?")[0].endswith(IMG_EXT) or node[1].startswith("http"))):
                 found["count"] += 1
                 if found["url"] is None:
                     found["url"] = node[1]
@@ -1150,14 +1757,36 @@ def _startup_update_check(api):
 def main():
     _start_bridge_server()
     api = Api()
+
+    if getattr(sys, "frozen", False):
+        here = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(sys.executable)))
+    else:
+        here = os.path.dirname(os.path.abspath(__file__))
+    react_dist = os.path.join(here, "frontend", "dist", "index.html")
+    dev_server_url = "http://localhost:5173"
+
+    # Priority:
+    # 1. Dev server if VITE_DEV=1
+    # 2. Modern React bundle if frontend/dist/index.html exists
+    # 3. Fallback to index.html
+    if os.environ.get("VITE_DEV") == "1":
+        url_target = dev_server_url
+        logger.info(f"Loading Vite dev server from {url_target}")
+    elif os.path.isfile(react_dist):
+        url_target = react_dist
+        logger.info(f"Loading modern React frontend from {url_target}")
+    else:
+        url_target = os.path.join(here, "index.html")
+        logger.info(f"Loading legacy frontend from {url_target}")
+
     window = webview.create_window(
         "Media Downloader",
-        "index.html",
+        url_target,
         js_api=api,
         width=1280,
         height=860,
         min_size=(900, 600),
-        background_color="#0a0a0b",
+        background_color="#090a0f",
     )
     api.set_window(window)
     window.events.closing += api.cancel_all_active

@@ -4,226 +4,342 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Media Downloader</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: 'Inter', system-ui, sans-serif;
-    background: #0c0c0f;
-    color: #eaeaf2;
-    width: 300px;
-    min-height: 160px;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background: #0b0d13;
+    color: #f1f5f9;
+    width: 320px;
     padding: 16px;
     -webkit-font-smoothing: antialiased;
+    user-select: none;
   }
 
+  /* ── Header ── */
   .header {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 10px;
     margin-bottom: 14px;
     padding-bottom: 12px;
-    border-bottom: 1px solid #2c2c38;
+    border-bottom: 1px solid #1e2433;
   }
-  .logo {
-    width: 28px; height: 28px;
-    background: #7c6dfa;
-    border-radius: 7px;
-    display: flex; align-items: center; justify-content: center;
+  .logo-box {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #00e599 0%, #00b377 100%);
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #05070a;
+    box-shadow: 0 4px 12px rgba(0, 229, 153, 0.25);
     flex-shrink: 0;
   }
-  .app-name  { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
-  .app-sub   { font-size: 11px; color: #44445a; margin-top: 1px; }
+  .app-name {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: #f8fafc;
+  }
+  .app-sub {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 500;
+    margin-top: 1px;
+  }
 
-  /* status dot */
+  /* ── Connection Status ── */
   .status-row {
     display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 8px 11px;
-    border-radius: 8px;
-    background: #18181d;
-    border: 1px solid #2c2c38;
-    margin-bottom: 12px;
+    gap: 8px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: #131722;
+    border: 1px solid #202738;
+    margin-bottom: 14px;
     font-size: 12px;
+    transition: all 0.2s ease;
   }
   .dot {
-    width: 7px; height: 7px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
   }
-  .dot.connected    { background: #3ecf8e; box-shadow: 0 0 6px #3ecf8e88; }
-  .dot.disconnected { background: #f26d6d; }
-  .dot.checking     { background: #f0a04b; animation: pulse 1.2s ease infinite; }
+  .dot.connected {
+    background: #00e599;
+    box-shadow: 0 0 8px rgba(0, 229, 153, 0.7);
+  }
+  .dot.disconnected {
+    background: #f43f5e;
+    box-shadow: 0 0 6px rgba(244, 63, 94, 0.5);
+  }
+  .dot.checking {
+    background: #f59e0b;
+    animation: pulse 1.2s ease infinite;
+  }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-  .status-text { color: #8a8a9e; }
-  .status-text b { color: #eaeaf2; font-weight: 500; }
-
-  /* current page */
-  .page-section { margin-bottom: 12px; }
-  .section-lbl {
-    font-size: 10px; font-weight: 600;
-    color: #44445a;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    margin-bottom: 5px;
-  }
-  .page-url {
-    font-size: 11px;
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
-    color: #8a8a9e;
-    background: #18181d;
-    border: 1px solid #2c2c38;
-    border-radius: 7px;
-    padding: 7px 9px;
+  .status-text {
+    color: #94a3b8;
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .supported-badge {
+  .status-text b {
+    color: #f1f5f9;
+    font-weight: 600;
+  }
+
+  /* ── Current Page Card ── */
+  .page-card {
+    background: #131722;
+    border: 1px solid #202738;
+    border-radius: 10px;
+    padding: 11px 12px;
+    margin-bottom: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .card-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .page-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #e2e8f0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .page-url {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', Consolas, monospace;
+    color: #828fa3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .badge-row {
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .badge {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    margin-top: 5px;
     font-size: 10.5px;
     font-weight: 600;
-    padding: 2px 7px;
+    padding: 2.5px 8px;
     border-radius: 99px;
   }
-  .supported-badge.yes { background: rgba(62,207,142,.12); color: #3ecf8e; }
-  .supported-badge.no  { background: rgba(138,138,158,.10); color: #44445a; }
+  .badge.supported {
+    background: rgba(0, 229, 153, 0.12);
+    color: #00e599;
+    border: 1px solid rgba(0, 229, 153, 0.25);
+  }
+  .badge.generic {
+    background: rgba(148, 163, 184, 0.1);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+  }
 
-  /* buttons */
+  /* ── Send Button ── */
   .btn-send {
     width: 100%;
-    padding: 9px;
-    background: #7c6dfa;
-    color: #fff;
+    padding: 10px;
+    background: linear-gradient(135deg, #00e599 0%, #00b377 100%);
+    color: #05070a;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    transition: opacity .15s, transform .1s;
+    gap: 7px;
+    transition: all 0.15s ease;
+    box-shadow: 0 4px 14px rgba(0, 229, 153, 0.22);
     font-family: inherit;
-    letter-spacing: -.01em;
+    letter-spacing: -0.01em;
   }
-  .btn-send:hover:not(:disabled)  { opacity: .88; transform: translateY(-1px); }
-  .btn-send:disabled { opacity: .35; cursor: not-allowed; }
+  .btn-send:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0, 229, 153, 0.35);
+    background: linear-gradient(135deg, #0fe8a0 0%, #00c482 100%);
+  }
+  .btn-send:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  .btn-send:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  .btn-send.success {
+    background: rgba(0, 229, 153, 0.15);
+    color: #00e599;
+    border: 1px solid rgba(0, 229, 153, 0.4);
+    box-shadow: none;
+  }
+  .btn-send.error {
+    background: rgba(244, 63, 94, 0.15);
+    color: #f43f5e;
+    border: 1px solid rgba(244, 63, 94, 0.4);
+    box-shadow: none;
+  }
 
-  .btn-send.success { background: rgba(62,207,142,.14); color: #3ecf8e; border: 1px solid rgba(62,207,142,.35); }
-  .btn-send.error   { background: rgba(242,109,109,.14); color: #f26d6d; border: 1px solid rgba(242,109,109,.35); }
-
+  /* ── Footer ── */
   .footer {
-    margin-top: 11px;
-    font-size: 10.5px;
-    color: #44445a;
+    margin-top: 13px;
+    font-size: 11px;
+    color: #64748b;
     text-align: center;
-    line-height: 1.5;
+    line-height: 1.45;
   }
-  .footer a { color: #7c6dfa; text-decoration: none; }
+  .footer b {
+    color: #94a3b8;
+  }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <div class="logo">
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M8 1v9M4 7l4 4 4-4"/>
-      <rect x="2" y="13" width="12" height="1.5" rx=".75" fill="#fff" stroke="none"/>
+  <div class="logo-box">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 2v8M4 7l4 4 4-4"/>
+      <rect x="2.5" y="13" width="11" height="1.5" rx=".75" fill="currentColor" stroke="none"/>
     </svg>
   </div>
   <div>
     <div class="app-name">Media Downloader</div>
-    <div class="app-sub">Browser Extension</div>
+    <div class="app-sub">v0.3.0 · Companion Extension</div>
   </div>
 </div>
 
 <!-- connection status -->
 <div class="status-row">
   <div class="dot checking" id="dot"></div>
-  <span class="status-text" id="status-text">Checking app status…</span>
+  <span class="status-text" id="status-text">Checking desktop app…</span>
 </div>
 
-<!-- current page info -->
-<div class="page-section">
-  <div class="section-lbl">Current page</div>
+<!-- current page card -->
+<div class="page-card">
+  <div class="card-label">Current Page</div>
+  <div class="page-title" id="page-title">—</div>
   <div class="page-url" id="page-url">—</div>
-  <div id="badge-wrap"></div>
+  <div class="badge-row" id="badge-wrap"></div>
 </div>
 
 <!-- send button -->
 <button class="btn-send" id="btn-send" disabled>
-  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8 1v9M4 7l4 4 4-4"/>
-    <rect x="2" y="13" width="12" height="1.5" rx=".75" fill="white" stroke="none"/>
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 2v8M4 7l4 4 4-4"/>
+    <rect x="2.5" y="13" width="11" height="1.5" rx=".75" fill="currentColor" stroke="none"/>
   </svg>
   <span id="btn-label">Send to Downloader</span>
 </button>
 
 <div class="footer">
-  Media Downloader must be running to receive URLs.<br>
-  Supported: YouTube, Reddit, Imgur, Pixiv + more.
+  <b>Tip:</b> Right-click any link, video, audio, or image to download directly.
 </div>
 
 <script>
-const YTDLP_HOSTS    = ["youtube.com","youtu.be","vimeo.com","tiktok.com","twitch.tv","dailymotion.com","bilibili.com"];
-const GALLERY_HOSTS  = ["reddit.com","imgur.com","twitter.com","x.com","instagram.com","pixiv.net","tumblr.com","flickr.com","deviantart.com","pinterest.com","cyberdrop.me","erome.com","e621.net","gelbooru.com"];
+// Known site engine routing
+const YTDLP_HOSTS = [
+  "youtube.com", "youtu.be", "vimeo.com", "tiktok.com",
+  "twitch.tv", "dailymotion.com", "bilibili.com", "soundcloud.com",
+  "bandcamp.com", "facebook.com", "fb.watch", "pornhub.com",
+  "xvideos.com", "xhamster.com", "xnxx.com", "spankbang.com", "1flex.org"
+];
+
+const GALLERY_HOSTS = [
+  "redgifs.com", "reddit.com", "imgur.com", "twitter.com", "x.com",
+  "instagram.com", "pixiv.net", "tumblr.com", "flickr.com",
+  "deviantart.com", "pinterest.com", "cyberdrop.me", "erome.com",
+  "e621.net", "gelbooru.com", "rule34.xxx", "danbooru.donmai.us",
+  "kemono.party", "kemono.su", "coomer.party", "coomer.su", "artstation.com"
+];
 
 function detectTool(url) {
   try {
-    const h = new URL(url).hostname.replace(/^www\./,"").toLowerCase();
-    for (const s of YTDLP_HOSTS)   if (h.includes(s)) return "yt-dlp";
-    for (const s of GALLERY_HOSTS) if (h.includes(s)) return "gallery-dl";
+    const h = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    for (const s of GALLERY_HOSTS) {
+      if (h.includes(s)) return "gallery-dl";
+    }
+    for (const s of YTDLP_HOSTS) {
+      if (h.includes(s)) return "yt-dlp";
+    }
   } catch {}
   return null;
 }
 
 const dot        = document.getElementById("dot");
 const statusText = document.getElementById("status-text");
+const pageTitle  = document.getElementById("page-title");
 const pageUrl    = document.getElementById("page-url");
 const badgeWrap  = document.getElementById("badge-wrap");
 const btnSend    = document.getElementById("btn-send");
 const btnLabel   = document.getElementById("btn-label");
 
 let currentUrl   = "";
+let currentTitle = "";
 let appRunning   = false;
 let toolDetected = null;
 
 async function init() {
-  // Get current tab URL
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab?.url) {
-    currentUrl = tab.url;
-    const display = currentUrl.replace(/^https?:\/\/(www\.)?/, "");
-    pageUrl.textContent = display.length > 40 ? display.slice(0, 40) + "…" : display;
-    toolDetected = detectTool(currentUrl);
+  // Query active tab
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.url) {
+      currentUrl = tab.url;
+      currentTitle = tab.title || "Web Page";
+      pageTitle.textContent = currentTitle;
 
-    if (toolDetected) {
-      badgeWrap.innerHTML = `<span class="supported-badge yes">✓ Supported · ${toolDetected}</span>`;
-    } else if (currentUrl.startsWith("http")) {
-      badgeWrap.innerHTML = `<span class="supported-badge no">Not a recognised site — may still work</span>`;
+      const display = currentUrl.replace(/^https?:\/\/(www\.)?/, "");
+      pageUrl.textContent = display.length > 40 ? display.slice(0, 40) + "…" : display;
+      toolDetected = detectTool(currentUrl);
+
+      if (toolDetected) {
+        badgeWrap.innerHTML = `<span class="badge supported">✓ Supported · ${toolDetected}</span>`;
+      } else if (currentUrl.startsWith("http")) {
+        badgeWrap.innerHTML = `<span class="badge generic">Media Page · Auto-detect</span>`;
+      }
     }
+  } catch (err) {
+    pageTitle.textContent = "Unable to read tab";
   }
 
-  // Check if app is running
-  const res = await chrome.runtime.sendMessage({ type: "CHECK_APP" });
-  appRunning = res?.running ?? false;
+  // Check desktop app connection
+  try {
+    const res = await chrome.runtime.sendMessage({ type: "CHECK_APP" });
+    appRunning = res?.running ?? false;
+  } catch {
+    appRunning = false;
+  }
 
   if (appRunning) {
-    dot.className        = "dot connected";
-    statusText.innerHTML = "<b>App connected</b> — ready to receive URLs";
+    dot.className = "dot connected";
+    statusText.innerHTML = "<b>App connected</b> · Port 6789";
     if (currentUrl.startsWith("http")) {
       btnSend.disabled = false;
     }
   } else {
-    dot.className        = "dot disconnected";
-    statusText.innerHTML = "App not running — <b>open Media Downloader first</b>";
+    dot.className = "dot disconnected";
+    statusText.innerHTML = "App offline — <b>open Media Downloader</b>";
   }
 }
 
@@ -232,16 +348,15 @@ btnSend.addEventListener("click", async () => {
   btnSend.disabled = true;
   btnLabel.textContent = "Sending…";
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const res = await chrome.runtime.sendMessage({
     type:  "SEND_URL",
     url:   currentUrl,
-    title: tab?.title || "",
+    title: currentTitle,
   });
 
   if (res?.ok) {
     btnSend.classList.add("success");
-    btnLabel.textContent = "Sent ✓";
+    btnLabel.textContent = "Sent to Queue ✓";
     setTimeout(() => {
       btnSend.classList.remove("success");
       btnLabel.textContent = "Send to Downloader";
@@ -249,7 +364,7 @@ btnSend.addEventListener("click", async () => {
     }, 2000);
   } else {
     btnSend.classList.add("error");
-    btnLabel.textContent = "Failed — is the app open?";
+    btnLabel.textContent = "Failed — App Offline";
     setTimeout(() => {
       btnSend.classList.remove("error");
       btnLabel.textContent = "Send to Downloader";

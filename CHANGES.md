@@ -5,7 +5,24 @@ This document summarizes the high priority improvements implemented to enhance t
 
 ## Completed Improvements
 
-### 0. ✅ Dual-Tier Auto-Update System (v0.2.6)
+### 0. ✅ Modern React 19 Frontend, Universal Thumbnails & Enhanced Downloader (v0.3.0)
+**Status:** Completed
+
+**Changes:**
+- Replaced legacy UI with a responsive React 19 + Tailwind CSS frontend featuring 5 dedicated workspaces (Home, Downloader, Library, Explore, Settings) and 5 accent themes.
+- Cleaned up Home view by removing supported sites section/modal to prioritize Recent Downloads.
+- Implemented universal media thumbnail extraction for bulk/album downloads (resolving first media thumbnail while preserving bundle count badges).
+- Added `.m4v`, `.flv`, `.ts`, `.wmv` thumbnail extraction support with frame 0 fallback for short clips.
+- Fixed token expiration issues by re-signing history media URLs on app restart.
+- Fixed "Open in Folder" button to trigger `explorer /select,"<filepath>"`, opening Windows File Explorer with the item selected instead of opening in Windows Media Player.
+- Added YouTube quality preset selector (dropdown and quick-chip pills) directly on the download bar.
+- Added Downloader queue filtering tabs (`All`, `Active`, `Completed`, `Failed`, `Cancelled`).
+- Enhanced in-app media player with multi-video playlist drawers, fullscreen queue hiding, and smart single-song queue suppression.
+- Bundled compiled React distribution into `frontend/dist/` for zero-setup execution.
+
+---
+
+### 0.1. ✅ Dual-Tier Auto-Update System (v0.2.6)
 **Status:** Completed
 
 **Changes:**

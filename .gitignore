@@ -9,9 +9,10 @@ venv/
 ENV/
 env/
 
-# Build outputs
-build/
-dist/
+# Build outputs (PyInstaller)
+/build/
+/dist/
+!frontend/dist/
 *.spec
 *.msi
 
