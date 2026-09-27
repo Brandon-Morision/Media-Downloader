@@ -15,8 +15,10 @@ env/
 !frontend/dist/
 *.spec
 *.msi
+*.exe
 
-# Installer outputs (keep the folder but ignore temp files)
+# Installer outputs (keep the folder but ignore executables and temp files)
+installer/*.exe
 installer/*.log
 installer/*.tmp
 
