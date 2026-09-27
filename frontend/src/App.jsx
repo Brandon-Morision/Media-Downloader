@@ -18,7 +18,7 @@ import { detectTool } from './lib/formatters';
 
 export default function App() {
   const [currentView, setCurrentView] = useState(() => localStorage.getItem('md_current_view') || 'home');
-  const [themeAccent, setThemeAccent] = useState(() => localStorage.getItem('md_theme_accent') || 'emerald');
+  const [themeAccent, setThemeAccent] = useState(() => localStorage.getItem('md_theme_accent') || 'violet');
   const [outputDir, setOutputDir] = useState(() => localStorage.getItem('md_output_folder') || '~/Downloads/media');
   const [defaultFormat, setDefaultFormat] = useState(() => localStorage.getItem('md_default_format') || 'auto');
   const [onFinishAction, setOnFinishAction] = useState(() => localStorage.getItem('md_on_finish') || 'nothing');

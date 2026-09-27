@@ -3,8 +3,8 @@ import { Folder } from 'lucide-react';
 import { api } from '../lib/api';
 
 const ACCENT_OPTIONS = [
-  { id: 'emerald', label: 'Emerald Mint', color: '#00e599' },
   { id: 'violet', label: 'Violet Glow', color: '#7c6dfa' },
+  { id: 'emerald', label: 'Emerald Mint', color: '#00e599' },
   { id: 'ocean', label: 'Ocean Blue', color: '#38bdf8' },
   { id: 'amber', label: 'Solar Amber', color: '#f59e0b' },
   { id: 'rose', label: 'Crimson Rose', color: '#f43f5e' },

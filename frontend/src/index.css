@@ -3,12 +3,12 @@
 @tailwind utilities;
 
 :root {
-  /* Default: Emerald theme matching MediaDown design */
-  --acc: #00e599;
-  --acc-dim: rgba(0, 229, 153, 0.12);
-  --acc-glow: rgba(0, 229, 153, 0.35);
-  --acc-border: rgba(0, 229, 153, 0.40);
-  --acc-gradient: linear-gradient(135deg, #00e599 0%, #10b981 100%);
+  /* Default: Violet Glow theme */
+  --acc: #7c6dfa;
+  --acc-dim: rgba(124, 109, 250, 0.12);
+  --acc-glow: rgba(124, 109, 250, 0.35);
+  --acc-border: rgba(124, 109, 250, 0.40);
+  --acc-gradient: linear-gradient(135deg, #7c6dfa 0%, #a78bfa 100%);
 }
 
 [data-theme="emerald"] {
