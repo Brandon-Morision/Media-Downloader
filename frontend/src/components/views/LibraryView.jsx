@@ -217,7 +217,7 @@ export default function LibraryView({
           {onRefreshHistory && (
             <button
               onClick={onRefreshHistory}
-              className="p-2 rounded-xl bg-surface-2 hover:bg-surface-3 text-slate-400 hover:text-emerald-400 border border-border-subtle transition-colors shrink-0"
+              className="p-2 rounded-xl bg-surface-2 hover:bg-surface-3 text-slate-400 hover:text-brand-acc border border-border-subtle transition-colors shrink-0"
               title="Refresh library history from disk"
             >
               <RotateCcw className="w-4 h-4" />
@@ -229,7 +229,7 @@ export default function LibraryView({
             <button
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-lg transition-colors ${
-                viewMode === 'grid' ? 'bg-surface-3 text-emerald-400' : 'text-slate-400 hover:text-white'
+                viewMode === 'grid' ? 'bg-surface-3 text-brand-acc' : 'text-slate-400 hover:text-white'
               }`}
               title="Grid View"
             >
@@ -238,7 +238,7 @@ export default function LibraryView({
             <button
               onClick={() => setViewMode('list')}
               className={`p-1.5 rounded-lg transition-colors ${
-                viewMode === 'list' ? 'bg-surface-3 text-emerald-400' : 'text-slate-400 hover:text-white'
+                viewMode === 'list' ? 'bg-surface-3 text-brand-acc' : 'text-slate-400 hover:text-white'
               }`}
               title="List View"
             >
@@ -278,7 +278,7 @@ export default function LibraryView({
       {/* ── EMPTY STATE ── */}
       {filteredItems.length === 0 && (
         <div className="py-20 border border-dashed border-border-subtle rounded-2xl flex flex-col items-center justify-center text-slate-500 gap-3">
-          <Folder className="w-10 h-10 opacity-30 text-emerald-400" />
+          <Folder className="w-10 h-10 opacity-30 text-brand-acc" />
           <div className="flex flex-col items-center gap-1">
             <p className="text-sm font-semibold text-slate-300">No media found in Library</p>
             <p className="text-xs text-slate-500">
@@ -323,7 +323,7 @@ export default function LibraryView({
                 onClick={() => handleCardClick(item)}
                 className={`bg-surface-1 border border-border-subtle hover:border-border rounded-2xl p-2.5 flex flex-col gap-2.5 cursor-pointer hover:bg-surface-2 transition-all duration-150 group shadow-sm hover:shadow-lg relative ${
                   isImageBundle
-                    ? 'hover:border-emerald-500/40'
+                    ? 'hover:border-brand-border'
                     : isVideoBundle
                     ? 'hover:border-sky-500/40'
                     : isAudioBundle
@@ -341,8 +341,8 @@ export default function LibraryView({
 
                   {/* Album Layer Indicator: Top-left badge for Image Albums */}
                   {isImageBundle && (
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-md border border-emerald-500/40 text-[10.5px] font-bold text-emerald-300 flex items-center gap-1.5 shadow-lg z-10">
-                      <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-md border border-brand-border text-[10.5px] font-bold text-brand-acc flex items-center gap-1.5 shadow-lg z-10">
+                      <Layers className="w-3.5 h-3.5 text-brand-acc" />
                       <span>{count} Photos</span>
                     </div>
                   )}
@@ -424,14 +424,14 @@ export default function LibraryView({
 
                 {/* Card Info */}
                 <div className="flex flex-col px-1 pb-1">
-                  <span className="text-xs font-semibold text-slate-100 truncate group-hover:text-emerald-400 transition-colors">
+                  <span className="text-xs font-semibold text-slate-100 truncate group-hover:text-brand-acc transition-colors">
                     {item.filename}
                   </span>
                   <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1 font-medium">
                     <span>{fmtBytes(item.sizeBytes)}</span>
                     <span className="font-mono text-[11px]">
                       {isImageBundle ? (
-                        <span className="text-emerald-400 font-semibold">{count} Photos · Album</span>
+                        <span className="text-brand-acc font-semibold">{count} Photos · Album</span>
                       ) : isVideoBundle ? (
                         <span className="text-sky-400 font-semibold">{count} Videos · Bundle</span>
                       ) : isAudioBundle ? (
@@ -486,7 +486,7 @@ export default function LibraryView({
                     />
                     {(isImageBundle || isVideoBundle || isAudioBundle || isMixedBundle) && (
                       <div className="absolute bottom-0.5 right-0.5 px-1 py-0.2 rounded bg-black/85 backdrop-blur-xs text-[9px] font-bold flex items-center gap-0.5 shadow-sm border border-white/10">
-                        {isImageBundle && <Layers className="w-2.5 h-2.5 text-emerald-400" />}
+                        {isImageBundle && <Layers className="w-2.5 h-2.5 text-brand-acc" />}
                         {isVideoBundle && <ListVideo className="w-2.5 h-2.5 text-sky-400" />}
                         {isAudioBundle && <ListMusic className="w-2.5 h-2.5 text-purple-400" />}
                         {isMixedBundle && <Layers className="w-2.5 h-2.5 text-amber-400" />}
@@ -495,7 +495,7 @@ export default function LibraryView({
                     )}
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <span className="text-sm font-semibold text-slate-100 truncate group-hover:text-emerald-400 transition-colors">
+                    <span className="text-sm font-semibold text-slate-100 truncate group-hover:text-brand-acc transition-colors">
                       {item.filename}
                     </span>
                     <span className="text-xs text-slate-400 font-mono">

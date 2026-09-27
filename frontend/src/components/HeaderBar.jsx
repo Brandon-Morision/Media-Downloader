@@ -32,7 +32,7 @@ export default function HeaderBar({ currentView, themeAccent, setThemeAccent, ou
           <span>{titles[currentView] || 'MediaDown'}</span>
         </h1>
         {runningCount > 0 && (
-          <span className="px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded-full animate-pulse">
+          <span className="px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase bg-brand-dim text-brand-acc border border-brand-border rounded-full animate-pulse">
             {runningCount} downloading
           </span>
         )}

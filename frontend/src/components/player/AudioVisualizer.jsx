@@ -196,7 +196,7 @@ export default function AudioVisualizer({ mediaRef, isPlaying, coverArtUrl, titl
           className="px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 text-slate-300 hover:text-white bg-surface-3 transition-colors"
           title={`Switch to ${displayStyle === 'card' ? 'Vinyl Disc' : 'Modern Album Card'}`}
         >
-          {displayStyle === 'card' ? <Disc className="w-3.5 h-3.5 text-emerald-400" /> : <Image className="w-3.5 h-3.5 text-emerald-400" />}
+          {displayStyle === 'card' ? <Disc className="w-3.5 h-3.5 text-brand-acc" /> : <Image className="w-3.5 h-3.5 text-brand-acc" />}
           <span className="hidden sm:inline">{displayStyle === 'card' ? 'Card' : 'Vinyl'}</span>
         </button>
 

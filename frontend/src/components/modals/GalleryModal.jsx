@@ -140,15 +140,15 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
             {viewMode === 'full' && totalCount > 1 ? (
               <button
                 onClick={() => setViewMode('grid')}
-                className="px-3 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-2 border border-border-subtle hover:border-emerald-500/40 text-xs font-semibold text-slate-200 hover:text-emerald-400 flex items-center gap-2 transition-all shadow-sm group"
+                className="px-3 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-2 border border-border-subtle hover:border-brand-border text-xs font-semibold text-slate-200 hover:text-brand-acc flex items-center gap-2 transition-all shadow-sm group"
                 title="Return to Gallery Grid View (Esc)"
               >
-                <LayoutGrid className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                <LayoutGrid className="w-4 h-4 text-brand-acc group-hover:scale-110 transition-transform" />
                 <span>Gallery View ({totalCount})</span>
               </button>
             ) : (
               <div className="flex items-center gap-2.5 truncate">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-brand-dim border border-brand-border flex items-center justify-center text-brand-acc shrink-0">
                   <Images className="w-4 h-4" />
                 </div>
                 <div className="flex flex-col min-w-0">
@@ -188,7 +188,7 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
                   setCurrentIndex(0);
                   setViewMode('full');
                 }}
-                className="px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-xs font-semibold text-emerald-400 flex items-center gap-1.5 transition-all shadow-sm"
+                className="px-3 py-1.5 rounded-xl bg-brand-dim hover:bg-brand-dim border border-brand-border text-xs font-semibold text-brand-acc flex items-center gap-1.5 transition-all shadow-sm"
                 title="View Fullscreen"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
@@ -231,7 +231,7 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
                       setCurrentIndex(i);
                       setViewMode('full');
                     }}
-                    className="group relative aspect-square rounded-2xl overflow-hidden bg-surface-2 border border-border-subtle hover:border-emerald-500/60 cursor-pointer shadow-sm hover:shadow-xl transition-all duration-200 hover:-translate-y-1"
+                    className="group relative aspect-square rounded-2xl overflow-hidden bg-surface-2 border border-border-subtle hover:border-brand-border cursor-pointer shadow-sm hover:shadow-xl transition-all duration-200 hover:-translate-y-1"
                   >
                     <img
                       src={u}
@@ -247,7 +247,7 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
 
                     {/* Hover Overlay with View action & filename */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent opacity-0 group-hover:opacity-100 flex flex-col justify-between p-2.5 transition-opacity">
-                      <div className="self-end p-1.5 rounded-full bg-emerald-400 text-slate-950 shadow-glow">
+                      <div className="self-end p-1.5 rounded-full bg-brand-acc text-slate-950 shadow-glow">
                         <Eye className="w-3.5 h-3.5" />
                       </div>
                       <span className="text-[11px] font-semibold text-white truncate drop-shadow-md">
@@ -266,7 +266,7 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
             <div className="flex-1 flex items-center justify-center p-4 relative overflow-hidden select-none">
               {isLoading ? (
                 <div className="flex flex-col items-center gap-2 text-slate-400 font-mono text-xs">
-                  <div className="w-8 h-8 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
+                  <div className="w-8 h-8 rounded-full border-2 border-brand-acc border-t-transparent animate-spin" />
                   <span>Loading full resolution photo…</span>
                 </div>
               ) : (
@@ -283,14 +283,14 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
                 <>
                   <button
                     onClick={handlePrev}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/70 hover:bg-emerald-400 hover:text-slate-950 text-white flex items-center justify-center border border-white/15 transition-all shadow-xl hover:scale-105 active:scale-95 group"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/70 hover:bg-brand-acc hover:text-slate-950 text-white flex items-center justify-center border border-white/15 transition-all shadow-xl hover:scale-105 active:scale-95 group"
                     title="Previous Photo (Left Arrow)"
                   >
                     <ChevronLeft className="w-6 h-6 group-hover:-translate-x-0.5 transition-transform" />
                   </button>
                   <button
                     onClick={handleNext}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/70 hover:bg-emerald-400 hover:text-slate-950 text-white flex items-center justify-center border border-white/15 transition-all shadow-xl hover:scale-105 active:scale-95 group"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/70 hover:bg-brand-acc hover:text-slate-950 text-white flex items-center justify-center border border-white/15 transition-all shadow-xl hover:scale-105 active:scale-95 group"
                     title="Next Photo (Right Arrow)"
                   >
                     <ChevronRight className="w-6 h-6 group-hover:translate-x-0.5 transition-transform" />
@@ -305,7 +305,7 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
                 <span className="font-semibold text-slate-200 truncate">
                   {currentFile?.name || 'Photo'}
                 </span>
-                <span className="font-mono text-[11px] text-emerald-400 shrink-0">
+                <span className="font-mono text-[11px] text-brand-acc shrink-0">
                   {currentIndex + 1} of {totalCount}
                 </span>
               </div>
@@ -322,7 +322,7 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
                         onClick={() => setCurrentIndex(i)}
                         className={`h-12 w-12 rounded-xl overflow-hidden shrink-0 border-2 transition-all ${
                           isActive
-                            ? 'border-emerald-400 scale-105 shadow-glow opacity-100'
+                            ? 'border-brand-acc scale-105 shadow-glow opacity-100'
                             : 'border-transparent opacity-50 hover:opacity-90'
                         }`}
                         title={`Jump to photo #${i + 1}`}

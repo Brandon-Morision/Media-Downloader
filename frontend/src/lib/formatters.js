@@ -159,7 +159,7 @@ export function getToolDetails(url = "") {
     tool: "gallery-dl",
     label: "Gallery",
     engine: "gallery-dl",
-    badgeColor: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
+    badgeColor: "bg-brand-dim text-brand-acc border border-brand-border",
     description: "Image & gallery extractor",
   };
 }

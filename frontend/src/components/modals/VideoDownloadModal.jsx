@@ -39,7 +39,7 @@ export default function VideoDownloadModal({
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-2 border-b border-border-subtle">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-md bg-emerald-500 flex items-center justify-center text-slate-950 font-black text-xs">
+            <div className="w-5 h-5 rounded-md bg-brand-acc flex items-center justify-center text-slate-950 font-black text-xs">
               V
             </div>
             <span className="font-bold text-sm text-slate-100">Video Download</span>
@@ -66,7 +66,7 @@ export default function VideoDownloadModal({
               <Film className="w-8 h-8 text-slate-500" />
             )}
             <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-              <div className="w-8 h-8 rounded-full bg-emerald-400 text-slate-950 flex items-center justify-center shadow-glow">
+              <div className="w-8 h-8 rounded-full bg-brand-acc text-slate-950 flex items-center justify-center shadow-glow">
                 <Play className="w-4 h-4 ml-0.5 fill-current" />
               </div>
             </div>
@@ -90,7 +90,7 @@ export default function VideoDownloadModal({
               onClick={() => setSelectedFormat('video')}
               className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
                 selectedFormat === 'video'
-                  ? 'bg-emerald-500 text-slate-950 shadow-glow font-bold'
+                  ? 'bg-brand-acc text-slate-950 shadow-glow font-bold'
                   : 'bg-surface-2 text-slate-300 border border-border-subtle hover:bg-surface-3'
               }`}
             >
@@ -101,7 +101,7 @@ export default function VideoDownloadModal({
               onClick={() => setSelectedFormat('audio')}
               className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
                 selectedFormat === 'audio'
-                  ? 'bg-emerald-500 text-slate-950 shadow-glow font-bold'
+                  ? 'bg-brand-acc text-slate-950 shadow-glow font-bold'
                   : 'bg-surface-2 text-slate-300 border border-border-subtle hover:bg-surface-3'
               }`}
             >
@@ -123,14 +123,14 @@ export default function VideoDownloadModal({
                   onClick={() => setSelectedQuality(opt.id)}
                   className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
                     isSelected
-                      ? 'bg-emerald-500/10 border-emerald-500/50'
+                      ? 'bg-brand-dim border-brand-border'
                       : 'bg-surface-2 border-border-subtle hover:bg-surface-3'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <div
                       className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                        isSelected ? 'border-emerald-400 bg-emerald-400' : 'border-slate-500'
+                        isSelected ? 'border-brand-acc bg-brand-acc' : 'border-slate-500'
                       }`}
                     >
                       {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
@@ -171,7 +171,7 @@ export default function VideoDownloadModal({
         {/* Big Emerald Download CTA */}
         <button
           onClick={handleDownloadClick}
-          className="w-full h-11 rounded-xl bg-emerald-500 hover:opacity-95 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-glow transition-transform active:scale-[0.99] mt-1"
+          className="w-full h-11 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-glow transition-transform active:scale-[0.99] mt-1"
         >
           <Download className="w-4 h-4" />
           <span>Download</span>

@@ -124,7 +124,7 @@ export default function SettingsView({
 
       {/* ── TOP USER / BRAND PROFILE BANNER (Screen 6) ── */}
       <div className="bg-surface-1 border border-border-subtle rounded-2xl p-6 flex flex-col items-center justify-center text-center gap-3 shadow-md">
-        <div className="w-16 h-16 rounded-full bg-emerald-500/15 border-2 border-emerald-400 text-emerald-400 font-extrabold text-2xl flex items-center justify-center shadow-glow">
+        <div className="w-16 h-16 rounded-full bg-brand-dim border-2 border-brand-acc text-brand-acc font-extrabold text-2xl flex items-center justify-center shadow-glow">
           M
         </div>
         <div>
@@ -143,7 +143,7 @@ export default function SettingsView({
           >
             <div className="flex items-center gap-3.5">
               <div className="w-9 h-9 rounded-xl bg-surface-3 flex items-center justify-center text-slate-300">
-                <Folder className="w-4 h-4 text-emerald-400" />
+                <Folder className="w-4 h-4 text-brand-acc" />
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-slate-100">Download Settings</span>
@@ -152,7 +152,7 @@ export default function SettingsView({
             </div>
             <ChevronRight
               className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
-                activeSection === 'downloads' ? 'rotate-90 text-emerald-400' : ''
+                activeSection === 'downloads' ? 'rotate-90 text-brand-acc' : ''
               }`}
             />
           </div>
@@ -203,7 +203,7 @@ export default function SettingsView({
                     onChange={(e) => setClipAutostart(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-surface-3 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500" />
+                  <div className="w-9 h-5 bg-surface-3 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-acc" />
                 </label>
               </div>
             </div>
@@ -218,7 +218,7 @@ export default function SettingsView({
           >
             <div className="flex items-center gap-3.5">
               <div className="w-9 h-9 rounded-xl bg-surface-3 flex items-center justify-center text-slate-300">
-                <Bell className="w-4 h-4 text-emerald-400" />
+                <Bell className="w-4 h-4 text-brand-acc" />
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-slate-100">Notifications</span>
@@ -227,7 +227,7 @@ export default function SettingsView({
             </div>
             <ChevronRight
               className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
-                activeSection === 'notifications' ? 'rotate-90 text-emerald-400' : ''
+                activeSection === 'notifications' ? 'rotate-90 text-brand-acc' : ''
               }`}
             />
           </div>
@@ -236,11 +236,11 @@ export default function SettingsView({
             <div className="p-4 pt-1 border-t border-border-subtle/60 flex flex-col gap-3 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 font-medium">Show desktop notification when complete</span>
-                <span className="text-emerald-400 font-semibold">Enabled</span>
+                <span className="text-brand-acc font-semibold">Enabled</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 font-medium">Show clipboard prompt toasts</span>
-                <span className="text-emerald-400 font-semibold">Enabled</span>
+                <span className="text-brand-acc font-semibold">Enabled</span>
               </div>
             </div>
           )}
@@ -254,7 +254,7 @@ export default function SettingsView({
           >
             <div className="flex items-center gap-3.5">
               <div className="w-9 h-9 rounded-xl bg-surface-3 flex items-center justify-center text-slate-300">
-                <Palette className="w-4 h-4 text-emerald-400" />
+                <Palette className="w-4 h-4 text-brand-acc" />
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-slate-100">Appearance</span>
@@ -263,7 +263,7 @@ export default function SettingsView({
             </div>
             <ChevronRight
               className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
-                activeSection === 'appearance' ? 'rotate-90 text-emerald-400' : ''
+                activeSection === 'appearance' ? 'rotate-90 text-brand-acc' : ''
               }`}
             />
           </div>
@@ -302,7 +302,7 @@ export default function SettingsView({
           >
             <div className="flex items-center gap-3.5">
               <div className="w-9 h-9 rounded-xl bg-surface-3 flex items-center justify-center text-slate-300">
-                <HardDrive className="w-4 h-4 text-emerald-400" />
+                <HardDrive className="w-4 h-4 text-brand-acc" />
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-slate-100">Storage</span>
@@ -311,7 +311,7 @@ export default function SettingsView({
             </div>
             <ChevronRight
               className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
-                activeSection === 'storage' ? 'rotate-90 text-emerald-400' : ''
+                activeSection === 'storage' ? 'rotate-90 text-brand-acc' : ''
               }`}
             />
           </div>
@@ -322,7 +322,7 @@ export default function SettingsView({
                 <span className="text-slate-400">Download Directory</span>
                 <button
                   onClick={() => api.openOutputFolder(outputDir)}
-                  className="text-emerald-400 hover:underline"
+                  className="text-brand-acc hover:underline"
                 >
                   Open in Explorer
                 </button>
@@ -351,7 +351,7 @@ export default function SettingsView({
           >
             <div className="flex items-center gap-3.5">
               <div className="w-9 h-9 rounded-xl bg-surface-3 flex items-center justify-center text-slate-300">
-                <Puzzle className="w-4 h-4 text-emerald-400" />
+                <Puzzle className="w-4 h-4 text-brand-acc" />
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-slate-100">Browser Extension</span>
@@ -360,7 +360,7 @@ export default function SettingsView({
             </div>
             <ChevronRight
               className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
-                activeSection === 'extension' ? 'rotate-90 text-emerald-400' : ''
+                activeSection === 'extension' ? 'rotate-90 text-brand-acc' : ''
               }`}
             />
           </div>
@@ -369,8 +369,8 @@ export default function SettingsView({
             <div className="p-4 pt-1 border-t border-border-subtle/60 flex flex-col gap-3.5 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 font-medium">Bridge Server</span>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold font-mono text-[11px]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-brand-acc bg-brand-dim border border-brand-border font-semibold font-mono text-[11px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-acc animate-pulse" />
                   Active · 127.0.0.1:6789
                 </span>
               </div>
@@ -395,7 +395,7 @@ export default function SettingsView({
                       onShowToast(`Failed to open folder: ${e.message}`, false);
                     }
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:opacity-95 text-slate-950 font-bold text-xs shadow-glow flex items-center gap-1.5 transition-all"
+                  className="px-3 py-1.5 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-xs shadow-glow flex items-center gap-1.5 transition-all"
                 >
                   <Folder className="w-3.5 h-3.5" />
                   <span>Open Extension Folder</span>
@@ -413,7 +413,7 @@ export default function SettingsView({
           >
             <div className="flex items-center gap-3.5">
               <div className="w-9 h-9 rounded-xl bg-surface-3 flex items-center justify-center text-slate-300">
-                <Info className="w-4 h-4 text-emerald-400" />
+                <Info className="w-4 h-4 text-brand-acc" />
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-slate-100">About</span>
@@ -422,7 +422,7 @@ export default function SettingsView({
             </div>
             <ChevronRight
               className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
-                activeSection === 'about' ? 'rotate-90 text-emerald-400' : ''
+                activeSection === 'about' ? 'rotate-90 text-brand-acc' : ''
               }`}
             />
           </div>
@@ -431,7 +431,7 @@ export default function SettingsView({
             <div className="p-4 pt-1 border-t border-border-subtle/60 flex flex-col gap-3 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">Media Downloader</span>
-                <span className="font-mono text-emerald-400 font-semibold">v0.3.0</span>
+                <span className="font-mono text-brand-acc font-semibold">v0.3.0</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">yt-dlp Engine</span>
@@ -450,7 +450,7 @@ export default function SettingsView({
                 <button
                   type="button"
                   onClick={() => api.openUrlExternal('https://github.com/Brandon-Morision/Media-Downloader')}
-                  className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1 font-medium transition-colors"
+                  className="text-brand-acc hover:text-brand-acc flex items-center gap-1 font-medium transition-colors"
                   title="Open GitHub repository in browser"
                 >
                   <span>GitHub</span>
@@ -461,7 +461,7 @@ export default function SettingsView({
                 <button
                   onClick={handleCheckUpdates}
                   disabled={isCheckingUpdates}
-                  className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:opacity-95 disabled:opacity-50 text-slate-950 font-bold text-xs shadow-glow flex items-center gap-1.5 transition-all"
+                  className="px-3.5 py-1.5 rounded-xl bg-brand-acc hover:opacity-95 disabled:opacity-50 text-slate-950 font-bold text-xs shadow-glow flex items-center gap-1.5 transition-all"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdates ? 'animate-spin' : ''}`} />
                   <span>{isCheckingUpdates ? 'Checking…' : 'Check for Updates'}</span>

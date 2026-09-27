@@ -268,7 +268,8 @@ export default function MediaPlayerModal({ isOpen, onClose, files = [], title = 
               max={duration || 100}
               value={currentTime}
               onChange={handleSeek}
-              className="flex-1 h-1.5 rounded-lg bg-surface-4 accent-brand-acc cursor-pointer"
+              className="flex-1 h-1.5 rounded-lg bg-surface-4 cursor-pointer"
+              style={{ accentColor: 'var(--acc)' }}
             />
             <span className="text-[11px] font-mono text-slate-400 min-w-[36px]">
               {fmtTime((duration || 0) * 1000)}
@@ -322,7 +323,8 @@ export default function MediaPlayerModal({ isOpen, onClose, files = [], title = 
                   step={0.05}
                   value={isMuted ? 0 : volume}
                   onChange={handleVolume}
-                  className="w-16 h-1.5 bg-surface-4 accent-brand-acc cursor-pointer"
+                  className="w-16 h-1.5 bg-surface-4 cursor-pointer"
+                  style={{ accentColor: 'var(--acc)' }}
                 />
               </div>
             </div>

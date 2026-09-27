@@ -7,8 +7,6 @@ import {
   fmtBytes,
   playableFilesFor,
   isLikelyUrl,
-  normalizeUrl,
-  detectTool,
   getToolDetails,
   toolLabel,
   getBundleInfo
@@ -87,20 +85,9 @@ export default function HomeView({
     e.preventDefault();
     const clean = urlInput.trim();
     if (!clean) return;
-    if (isLikelyUrl(clean)) {
-      const norm = normalizeUrl(clean);
-      const tool = detectTool(norm);
-      if (onAddDownload) {
-        onAddDownload(norm, { tool });
-        setUrlInput('');
-        if (onSwitchToDownloader) onSwitchToDownloader();
-        if (onShowToast) onShowToast(`Queued ${toolLabel(tool)} download (${tool})`);
-      } else {
-        onAnalyzeUrl(clean);
-      }
-    } else {
-      onAnalyzeUrl(clean);
-    }
+    // Always route through the Downloader: URLs trigger link-preview, text does YouTube search
+    onAnalyzeUrl(clean);
+    setUrlInput('');
   };
 
   const handleCategoryClick = (category) => {
@@ -121,7 +108,7 @@ export default function HomeView({
       {/* ── 1. HERO SECTION ── */}
       <div className="flex flex-col items-center text-center mt-2 gap-2">
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-          Download <span className="text-emerald-400">Anything</span>
+          Download <span className="text-brand-acc">Anything</span>
         </h1>
         <p className="text-sm sm:text-base text-slate-400 font-medium">
           Videos, Images, Music — from almost anywhere.
@@ -244,7 +231,7 @@ export default function HomeView({
           <h2 className="text-base font-bold text-slate-100 tracking-tight">Recent Downloads</h2>
           <button
             onClick={onSwitchToLibrary}
-            className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition-colors"
+            className="text-xs font-semibold text-brand-acc hover:opacity-75 flex items-center gap-1 transition-colors"
           >
             <span>View all</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -270,8 +257,8 @@ export default function HomeView({
 
                   {/* Album / Bundle Indicator: Top-left badge */}
                   {bundleInfo.isImageBundle && (
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-md border border-emerald-500/40 text-[10px] font-bold text-emerald-300 flex items-center gap-1.5 shadow-lg z-10">
-                      <Layers className="w-3 h-3 text-emerald-400" />
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-md border border-brand-border text-[10px] font-bold flex items-center gap-1.5 shadow-lg z-10" style={{color: 'var(--acc)'}}>
+                      <Layers className="w-3 h-3" style={{color: 'var(--acc)'}} />
                       <span>{bundleInfo.count} Photos</span>
                     </div>
                   )}
@@ -314,7 +301,7 @@ export default function HomeView({
 
                 {/* Info Text */}
                 <div className="flex flex-col px-1 pb-1">
-                  <span className="text-xs font-semibold text-slate-100 truncate group-hover:text-emerald-400 transition-colors">
+                  <span className="text-xs font-semibold text-slate-100 truncate group-hover:text-brand-acc transition-colors">
                     {item.filename}
                   </span>
                   <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1 font-medium">

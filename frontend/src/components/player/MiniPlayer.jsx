@@ -254,7 +254,7 @@ export default function MiniPlayer({
           }`}
         >
           <div
-            className={`w-10 h-10 rounded-full bg-emerald-400 text-slate-950 flex items-center justify-center shadow-glow transition-all duration-200 pointer-events-none ${
+            className={`w-10 h-10 rounded-full bg-brand-acc text-slate-950 flex items-center justify-center shadow-glow transition-all duration-200 pointer-events-none ${
               isPlaying
                 ? 'opacity-0 group-hover:opacity-100 scale-90 group-hover:scale-100'
                 : 'opacity-90 scale-100'
@@ -282,7 +282,7 @@ export default function MiniPlayer({
         {/* Progress bar at bottom of video */}
         <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/10 pointer-events-none">
           <div
-            className="h-full bg-emerald-400 transition-all duration-300"
+            className="h-full bg-brand-acc transition-all duration-300"
             style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
           />
         </div>
@@ -315,7 +315,7 @@ export default function MiniPlayer({
 
           <button
             onClick={onTogglePlay}
-            className="w-7 h-7 rounded-full bg-emerald-400 text-slate-950 flex items-center justify-center hover:opacity-90 shadow-glow transition-transform active:scale-95"
+            className="w-7 h-7 rounded-full bg-brand-acc text-slate-950 flex items-center justify-center hover:opacity-90 shadow-glow transition-transform active:scale-95"
             title={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying

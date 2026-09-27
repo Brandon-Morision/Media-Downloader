@@ -14,7 +14,7 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
       {/* Brand Header: Logo + "MediaDown" */}
       <div className="px-2 mb-7 flex items-center gap-2.5 cursor-pointer" onClick={() => setView('home')}>
         {/* Emerald 'V' Logo Icon */}
-        <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center shadow-sm shrink-0">
+        <div className="w-7 h-7 rounded-lg bg-brand-acc flex items-center justify-center shadow-sm shrink-0">
           <svg
             className="w-4 h-4 text-slate-950 font-black"
             viewBox="0 0 24 24"

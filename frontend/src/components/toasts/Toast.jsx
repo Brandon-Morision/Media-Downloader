@@ -16,7 +16,7 @@ export function Toast({ message, isSuccess = true, onClose, duration = 3000 }) {
     <div className="fixed bottom-6 right-6 z-50 animate-fade-in">
       <div className="glass-panel-elevated rounded-xl px-4 py-3 flex items-center gap-3 border border-border shadow-2xl text-xs font-medium text-slate-100">
         {isSuccess ? (
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <CheckCircle2 className="w-4 h-4 text-brand-acc shrink-0" />
         ) : (
           <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
         )}

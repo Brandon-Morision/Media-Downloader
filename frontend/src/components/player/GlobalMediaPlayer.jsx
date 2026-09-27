@@ -303,9 +303,9 @@ export default function GlobalMediaPlayer({
           <div className="h-11 px-4 bg-surface-2 border-b border-border-subtle flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2 truncate">
               {isAudio ? (
-                <Music className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <Music className="w-3.5 h-3.5 text-brand-acc shrink-0" />
               ) : (
-                <Film className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <Film className="w-3.5 h-3.5 text-brand-acc shrink-0" />
               )}
               <span className="text-xs font-semibold text-slate-300 truncate">
                 {isAudio
@@ -321,12 +321,12 @@ export default function GlobalMediaPlayer({
                   onClick={() => setShowVideoQueue((prev) => !prev)}
                   className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border ${
                     showVideoQueue
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      ? 'bg-brand-dim text-brand-acc border-brand-border'
                       : 'text-slate-400 border-white/5 hover:text-white hover:bg-surface-3'
                   }`}
                   title="Toggle Album Video Queue"
                 >
-                  <ListVideo className="w-3.5 h-3.5 text-emerald-400" />
+                  <ListVideo className="w-3.5 h-3.5 text-brand-acc" />
                   <span className="hidden sm:inline">Queue ({safeFiles.length})</span>
                 </button>
               )}
@@ -345,7 +345,7 @@ export default function GlobalMediaPlayer({
                 className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-surface-3 transition-colors flex items-center gap-1.5 border border-white/5"
                 title="Minimize to mini-player (Esc)"
               >
-                <Minimize2 className="w-3.5 h-3.5 text-emerald-400" />
+                <Minimize2 className="w-3.5 h-3.5 text-brand-acc" />
                 <span className="hidden sm:inline">Minimize</span>
               </button>
               <button
@@ -413,7 +413,7 @@ export default function GlobalMediaPlayer({
                 />
                 {!isPlaying && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none transition-opacity">
-                    <div className="w-16 h-16 rounded-full bg-emerald-400 text-slate-950 flex items-center justify-center shadow-glow transition-transform group-hover:scale-105">
+                    <div className="w-16 h-16 rounded-full bg-brand-acc text-slate-950 flex items-center justify-center shadow-glow transition-transform group-hover:scale-105">
                       <Play className="w-8 h-8 ml-0.5 fill-current" />
                     </div>
                   </div>
@@ -456,7 +456,8 @@ export default function GlobalMediaPlayer({
               step={0.1}
               value={currentTime}
               onChange={handleSeek}
-              className="flex-1 h-1.5 rounded-lg bg-surface-3 accent-emerald-400 cursor-pointer"
+              className="flex-1 h-1.5 rounded-lg bg-surface-3 cursor-pointer"
+              style={{ accentColor: 'var(--acc)' }}
             />
             <span className="text-[11px] font-mono text-slate-400 min-w-[34px]">
               {fmtTime((duration || 0) * 1000)}
@@ -471,7 +472,7 @@ export default function GlobalMediaPlayer({
                 <button
                   onClick={toggleShuffle}
                   className={`p-2 rounded-xl transition-colors ${
-                    isShuffling ? 'text-emerald-400' : 'text-slate-400 hover:text-white'
+                    isShuffling ? 'text-brand-acc' : 'text-slate-400 hover:text-white'
                   }`}
                   title={isShuffling ? 'Shuffle On' : 'Shuffle Off'}
                 >
@@ -498,7 +499,8 @@ export default function GlobalMediaPlayer({
                   step={0.01}
                   value={isMuted ? 0 : volume}
                   onChange={handleVolumeChange}
-                  className="w-16 sm:w-20 h-1.5 rounded-lg bg-surface-3 accent-emerald-400 cursor-pointer"
+                  className="w-16 sm:w-20 h-1.5 rounded-lg bg-surface-3 cursor-pointer"
+                  style={{ accentColor: 'var(--acc)' }}
                   title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
                 />
               </div>
@@ -518,7 +520,7 @@ export default function GlobalMediaPlayer({
 
               <button
                 onClick={togglePlay}
-                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-emerald-400 text-slate-950 flex items-center justify-center hover:opacity-95 shadow-glow transition-transform active:scale-95 shrink-0"
+                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-brand-acc text-slate-950 flex items-center justify-center hover:opacity-95 shadow-glow transition-transform active:scale-95 shrink-0"
                 title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
               >
                 {isPlaying ? (
@@ -544,7 +546,7 @@ export default function GlobalMediaPlayer({
               <button
                 onClick={toggleLoop}
                 className={`p-2 rounded-xl transition-colors ${
-                  isLooping ? 'text-emerald-400' : 'text-slate-400 hover:text-white'
+                  isLooping ? 'text-brand-acc' : 'text-slate-400 hover:text-white'
                 }`}
                 title={isLooping ? 'Repeat On' : 'Repeat Off'}
               >
@@ -558,7 +560,7 @@ export default function GlobalMediaPlayer({
             <div className="px-6 py-3 border-t border-border-subtle bg-surface-2/60 flex flex-col gap-2 max-h-48 overflow-y-auto">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-300 tracking-tight flex items-center gap-1.5">
-                  <ListVideo className="w-3.5 h-3.5 text-emerald-400" />
+                  <ListVideo className="w-3.5 h-3.5 text-brand-acc" />
                   <span>Up Next in Album ({safeFiles.length} videos)</span>
                 </span>
                 <span className="text-[11px] text-slate-400 font-mono">
@@ -575,7 +577,7 @@ export default function GlobalMediaPlayer({
                       onClick={() => setCurrentIndex(idx)}
                       className={`p-2 rounded-xl flex items-center justify-between cursor-pointer transition-all ${
                         isActive
-                          ? 'bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-semibold shadow-sm'
+                          ? 'bg-brand-dim border border-brand-border text-brand-acc font-semibold shadow-sm'
                           : 'hover:bg-surface-2 text-slate-300 border border-transparent hover:border-white/5'
                       }`}
                     >
@@ -583,7 +585,7 @@ export default function GlobalMediaPlayer({
                         <div
                           className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
                             isActive
-                              ? 'bg-emerald-400 text-slate-950 shadow-glow'
+                              ? 'bg-brand-acc text-slate-950 shadow-glow'
                               : 'bg-surface-3 text-slate-400'
                           }`}
                         >
@@ -627,7 +629,7 @@ export default function GlobalMediaPlayer({
                       onClick={() => setCurrentIndex(idx)}
                       className={`p-2 rounded-xl flex items-center justify-between cursor-pointer transition-colors ${
                         isActive
-                          ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-semibold'
+                          ? 'bg-brand-dim border border-brand-border text-brand-acc font-semibold'
                           : 'hover:bg-surface-2 text-slate-300'
                       }`}
                     >

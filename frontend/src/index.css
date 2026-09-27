@@ -43,6 +43,14 @@
   --acc-gradient: linear-gradient(135deg, #f43f5e 0%, #fb7185 100%);
 }
 
+[data-theme="violet"] {
+  --acc: #7c6dfa;
+  --acc-dim: rgba(124, 109, 250, 0.12);
+  --acc-glow: rgba(124, 109, 250, 0.35);
+  --acc-border: rgba(124, 109, 250, 0.40);
+  --acc-gradient: linear-gradient(135deg, #7c6dfa 0%, #a78bfa 100%);
+}
+
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
