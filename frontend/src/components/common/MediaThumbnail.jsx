@@ -4,7 +4,6 @@ import { api } from '../../lib/api';
 
 // Module-level caches to avoid redundant or duplicate IPC calls across re-renders
 const _thumbCache = new Map();
-const _failedPaths = new Set();
 const _inFlight = new Set();
 
 /**
@@ -14,6 +13,7 @@ function getFirstMediaFilePath(item, propPath) {
   if (propPath && typeof propPath === 'string') return propPath;
   if (!item) return '';
 
+  const outDir = item.outputDir || item.output_dir || '';
   const files = Array.isArray(item.files) ? item.files : [];
   if (files.length > 0) {
     const mediaExtensions = [
@@ -25,16 +25,25 @@ function getFirstMediaFilePath(item, propPath) {
       const p = typeof f === 'string' ? f : f?.path || f?.name || '';
       const lower = p.toLowerCase();
       if (mediaExtensions.some((ext) => lower.endsWith(ext))) {
-        return typeof f === 'string' ? f : f?.path || '';
+        let fullPath = typeof f === 'string' ? f : f?.path || '';
+        if (fullPath && !fullPath.includes('/') && !fullPath.includes('\\') && outDir) {
+          const sep = outDir.includes('/') ? '/' : '\\';
+          fullPath = `${outDir.replace(/[\\/]$/, '')}${sep}${fullPath}`;
+        }
+        return fullPath;
       }
     }
     const first = files[0];
-    return typeof first === 'string' ? first : first?.path || '';
+    let fullFirst = typeof first === 'string' ? first : first?.path || '';
+    if (fullFirst && !fullFirst.includes('/') && !fullFirst.includes('\\') && outDir) {
+      const sep = outDir.includes('/') ? '/' : '\\';
+      fullFirst = `${outDir.replace(/[\\/]$/, '')}${sep}${fullFirst}`;
+    }
+    return fullFirst;
   }
 
   if (item.filePath) return item.filePath;
   if (item.path) return item.path;
-  const outDir = item.outputDir || item.output_dir;
   if (outDir && item.filename) {
     const sep = outDir.includes('/') ? '/' : '\\';
     return `${outDir.replace(/[\\/]$/, '')}${sep}${item.filename}`;
@@ -69,7 +78,7 @@ export default function MediaThumbnail({
     }
 
     const filePath = getFirstMediaFilePath(item, path);
-    if (!filePath || _failedPaths.has(filePath)) {
+    if (!filePath) {
       return;
     }
 
@@ -83,8 +92,9 @@ export default function MediaThumbnail({
       return;
     }
 
+    const outDir = item?.outputDir || item?.output_dir || '';
     _inFlight.add(filePath);
-    api.getItemThumbnailUrl(filePath)
+    api.getItemThumbnailUrl(filePath, outDir)
       .then((res) => {
         _inFlight.delete(filePath);
         if (res?.ok && res.url) {
@@ -92,25 +102,24 @@ export default function MediaThumbnail({
           setThumbUrl(res.url);
           setHasError(false);
         } else {
-          _failedPaths.add(filePath);
           setHasError(true);
         }
       })
       .catch(() => {
         _inFlight.delete(filePath);
-        _failedPaths.add(filePath);
         setHasError(true);
       });
   }, [item?.thumbnail, item?.id, path]);
 
   const handleImgError = () => {
     const filePath = getFirstMediaFilePath(item, path);
+    const outDir = item?.outputDir || item?.output_dir || '';
     // If the image failed (e.g. stale bridge token after app restart) and we haven't retried yet:
     if (!retried && filePath) {
       setRetried(true);
-      api.getItemThumbnailUrl(filePath)
+      api.getItemThumbnailUrl(filePath, outDir)
         .then((res) => {
-          if (res?.ok && res.url && res.url !== thumbUrl) {
+          if (res?.ok && res.url) {
             _thumbCache.set(filePath, res.url);
             setThumbUrl(res.url);
             setHasError(false);

@@ -220,6 +220,9 @@ export const api = {
   },
 
   async getCoverArtUrl(path) {
+    if (!isDesktopApp()) {
+      await waitForApi(6000);
+    }
     if (!isDesktopApp()) return { ok: false };
     try {
       return (await window.pywebview.api.get_cover_art_url?.(path)) || { ok: false };
@@ -229,14 +232,24 @@ export const api = {
   },
 
   async getVideoThumbnailUrl(path) {
-    if (!isDesktopApp()) return { ok: false };
-    return window.pywebview.api.get_video_thumbnail_url(path);
-  },
-
-  async getItemThumbnailUrl(path) {
+    if (!isDesktopApp()) {
+      await waitForApi(6000);
+    }
     if (!isDesktopApp()) return { ok: false };
     try {
-      return (await window.pywebview.api.get_item_thumbnail_url?.(path)) || { ok: false };
+      return (await window.pywebview.api.get_video_thumbnail_url?.(path)) || { ok: false };
+    } catch {
+      return { ok: false };
+    }
+  },
+
+  async getItemThumbnailUrl(path, outputDir = "") {
+    if (!isDesktopApp()) {
+      await waitForApi(6000);
+    }
+    if (!isDesktopApp()) return { ok: false };
+    try {
+      return (await window.pywebview.api.get_item_thumbnail_url?.(path, outputDir)) || { ok: false };
     } catch {
       return { ok: false };
     }

@@ -70,6 +70,32 @@ def add_entry(entry: dict) -> str:
     return entry_id
 
 
+def update_entry(entry_id: str, updates: dict) -> bool:
+    """Update fields on an existing history entry by ID. Returns True if found."""
+    if not entry_id:
+        return False
+    with _LOCK:
+        entries = _load()
+        for e in entries:
+            if e.get("id") == entry_id:
+                e.update(updates)
+                _save(entries)
+                return True
+        return False
+
+
+def get_entry(entry_id: str) -> dict:
+    """Retrieve a single history entry by ID, or None if not found."""
+    if not entry_id:
+        return None
+    with _LOCK:
+        entries = _load()
+        for e in entries:
+            if e.get("id") == entry_id:
+                return dict(e)
+        return None
+
+
 def list_entries() -> list:
     with _LOCK:
         return _load()

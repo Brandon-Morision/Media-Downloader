@@ -187,27 +187,34 @@ def _register_known_media_path(path: str) -> None:
             _KNOWN_MEDIA_PATHS.popitem(last=False)
 
 
-def _is_known_media_path(path: str) -> bool:
+def _is_app_cache_path(path: str) -> bool:
+    """Check if path is inside the app's own generated art_cache or thumb_cache directory."""
     if not path:
         return False
-    normalized = _normalize_media_path(path)
-    with _KNOWN_MEDIA_LOCK:
-        if normalized in _KNOWN_MEDIA_PATHS:
-            return True
-    # Anything inside the app's own generated-cache directories (audio
-    # cover art, video-frame thumbnails) is safe to serve unconditionally
-    # — these are entirely app-produced files, never user-supplied paths.
     try:
         from media_downloader import _art_cache_dir, _thumb_cache_dir
+        normalized = _normalize_media_path(path)
         for cache_dir_fn in (_art_cache_dir, _thumb_cache_dir):
             cache_dir = _normalize_media_path(cache_dir_fn())
             try:
                 if os.path.commonpath([normalized, cache_dir]) == cache_dir:
                     return True
             except ValueError:
-                continue  # different drives on Windows, etc — definitely not contained
+                continue
     except Exception:
         pass
+    return False
+
+
+def _is_known_media_path(path: str) -> bool:
+    if not path:
+        return False
+    if _is_app_cache_path(path):
+        return True
+    normalized = _normalize_media_path(path)
+    with _KNOWN_MEDIA_LOCK:
+        if normalized in _KNOWN_MEDIA_PATHS:
+            return True
 
     # Allow any file in the default download directory or subfolders
     try:
@@ -234,6 +241,20 @@ def resolve_entry_thumbnail_url(files: list, output_dir: str = None) -> str:
     (or embedded cover art / video frame), registers the media path, and returns the
     authenticated bridge /media URL.
     """
+    if not files and output_dir and os.path.isdir(output_dir):
+        try:
+            for root, _, fnames in os.walk(output_dir):
+                for fn in fnames:
+                    fext = os.path.splitext(fn)[1].lower()
+                    if fext in (
+                        ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".jfif", ".avif",
+                        ".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v", ".flv", ".ts", ".wmv",
+                        ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".aac", ".wma", ".wav"
+                    ):
+                        return resolve_entry_thumbnail_url([os.path.join(root, fn)], output_dir=output_dir)
+        except Exception:
+            pass
+
     if not files:
         return None
     for f in files:
@@ -320,16 +341,20 @@ class _BridgeHandler(BaseHTTPRequestHandler):
     def _serve_media(self, parsed):
         qs = urllib.parse.parse_qs(parsed.query)
         token = (qs.get("token") or [""])[0]
-        if not secrets.compare_digest(token, BRIDGE_TOKEN):
-            self.send_response(403); self.end_headers(); return
-
         raw_path = (qs.get("path") or qs.get("p") or [""])[0]
         path = resolve_existing_media_path(raw_path)
+
+        # Allow if valid session token, OR if path is an app-generated thumbnail cache file
+        is_cache_thumb = _is_app_cache_path(path or raw_path)
+        token_valid = secrets.compare_digest(token, BRIDGE_TOKEN)
+
+        if not token_valid and not is_cache_thumb:
+            self.send_response(403); self.end_headers(); return
 
         if not path or not os.path.isfile(path):
             self.send_response(404); self.end_headers(); return
 
-        if not _is_known_media_path(path):
+        if not is_cache_thumb and not _is_known_media_path(path):
             try:
                 from media_downloader import get_default_download_dir
                 dl_dir = _normalize_media_path(get_default_download_dir())
@@ -339,7 +364,7 @@ class _BridgeHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-        if not _is_known_media_path(path):
+        if not is_cache_thumb and not _is_known_media_path(path):
             # Valid token, but a path the app never actually produced —
             # don't serve it. 404 rather than 403 so this doesn't act as
             # an existence oracle for arbitrary filesystem paths.
@@ -459,16 +484,34 @@ class _BridgeHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+_bridge_server_ref = None
+
+
 def _start_bridge_server():
     """Start the bridge HTTP server on a daemon thread — never blocks the UI."""
+    global _bridge_server_ref
     try:
         server = ThreadingHTTPServer(("127.0.0.1", BRIDGE_PORT), _BridgeHandler)
+        _bridge_server_ref = server
         t = threading.Thread(target=server.serve_forever, daemon=True)
         t.start()
         logger.info(f"Bridge server started on port {BRIDGE_PORT}")
     except OSError as e:
         # Port already in use — another instance may be running, ignore.
         logger.warning(f"Bridge server port {BRIDGE_PORT} already in use: {e}")
+
+
+def _stop_bridge_server():
+    """Cleanly shut down the bridge server and release port 6789."""
+    global _bridge_server_ref
+    if _bridge_server_ref:
+        try:
+            _bridge_server_ref.shutdown()
+            _bridge_server_ref.server_close()
+        except Exception:
+            pass
+        _bridge_server_ref = None
+        logger.info("Bridge server stopped and port released")
 
 
 class Api:
@@ -481,8 +524,27 @@ class Api:
     def __init__(self):
         self._window = None
         self._active_job_ids = set()
+        self._active_job_history = {}  # job_id -> history_id
         self._jobs_lock = threading.Lock()
         logger.info(f"Media Downloader {get_version_string()} initialized")
+        self._recover_interrupted_history()
+
+    def _recover_interrupted_history(self):
+        """Transition any leftover 'running' downloads from an earlier abnormal app exit to 'cancelled'."""
+        try:
+            entries = download_history.list_entries()
+            changed = False
+            for e in entries:
+                if e.get("status") == "running":
+                    e["status"] = "cancelled"
+                    e["error"] = "Interrupted when application closed."
+                    e["finished_at"] = e.get("finished_at") or time.time()
+                    changed = True
+            if changed:
+                download_history._save(entries)
+                logger.info("Recovered previous interrupted download(s) in history")
+        except Exception as e:
+            logger.debug(f"History recovery check error: {e}")
 
     def set_window(self, window):
         global _bridge_api_ref
@@ -613,8 +675,38 @@ class Api:
             job_id = client_job_id
         else:
             job_id = str(uuid.uuid4())
+
+        # Pre-seed history entry immediately so mid-download closures or crashes are never lost
+        url_path = urllib.parse.urlsplit(url).path
+        initial_name = cfg.get("title") or (os.path.basename(url_path) if url_path else "") or url
+        out_dir = cfg.get("output_dir") or get_default_download_dir()
+        tool = tool_override or detect_tool(url)
+        initial_thumb = cfg.get("thumbnail") or None
+
+        history_id = ""
+        if not cfg.get("dry_run"):
+            try:
+                history_id = download_history.add_entry({
+                    "url": url,
+                    "tool": tool,
+                    "output_dir": out_dir,
+                    "filename": initial_name,
+                    "files": [],
+                    "size_bytes": 0,
+                    "status": "running",
+                    "job_id": job_id,
+                    "error": None,
+                    "thumbnail": initial_thumb,
+                    "started_at": time.time(),
+                    "finished_at": None,
+                })
+            except Exception as e:
+                logger.error(f"Failed to pre-seed download history: {e}")
+
         with self._jobs_lock:
             self._active_job_ids.add(job_id)
+            if history_id:
+                self._active_job_history[job_id] = history_id
         
         logger.info(f"Starting download job {job_id} for URL: {url}")
 
@@ -656,9 +748,9 @@ class Api:
                 fpath = f.get("path") if isinstance(f, dict) else str(f)
                 if fpath:
                     _register_known_media_path(fpath)
-            history_id = ""
 
-            # Record history (skip dry-runs — nothing was actually downloaded).
+            # Record/update history (skip dry-runs — nothing was actually downloaded).
+            thumb_url = None
             if not cfg.get("dry_run"):
                 try:
                     if len(files) == 1:
@@ -666,19 +758,19 @@ class Api:
                     elif len(files) > 1:
                         display_name = f"{len(files)} files"
                     else:
-                        display_name = os.path.basename(urllib.parse.urlparse(url).path) or url
+                        display_name = initial_name
 
                     status_label = (
                         "done" if result.get("ok")
                         else "cancelled" if (result.get("state") == "cancelled" or result.get("error") == "Cancelled by user." or status.get("state") == "cancelled")
                         else "error"
                     )
-                    thumb_url = resolve_entry_thumbnail_url(files, output_dir=result.get("output_dir"))
+                    thumb_url = resolve_entry_thumbnail_url(files, output_dir=result.get("output_dir") or out_dir) or initial_thumb
 
-                    history_id = download_history.add_entry({
+                    hist_payload = {
                         "url": url,
-                        "tool": result.get("tool", ""),
-                        "output_dir": result.get("output_dir", ""),
+                        "tool": result.get("tool", tool),
+                        "output_dir": result.get("output_dir", out_dir),
                         "filename": display_name,
                         "files": files,
                         "size_bytes": sum((f.get("size") or 0) for f in files),
@@ -686,10 +778,18 @@ class Api:
                         "error": result.get("error"),
                         "thumbnail": thumb_url,
                         "started_at": status.get("started_at"),
-                        "finished_at": status.get("finished_at"),
-                    })
+                        "finished_at": status.get("finished_at") or time.time(),
+                    }
+
+                    if history_id and download_history.update_entry(history_id, hist_payload):
+                        pass
+                    else:
+                        download_history.add_entry(hist_payload)
                 except Exception as e:
-                    logger.error(f"Failed to record download history: {e}")
+                    logger.error(f"Failed to record/update download history: {e}")
+                finally:
+                    with self._jobs_lock:
+                        self._active_job_history.pop(job_id, None)
 
             self._push_js(
                 f"window.onDownloadDone?.({_js(job_id)}, "
@@ -1052,11 +1152,11 @@ class Api:
             logger.error(f"Failed to list history: {e}")
             return {"ok": False, "error": str(e)}
 
-    def get_item_thumbnail_url(self, path: str) -> dict:
+    def get_item_thumbnail_url(self, path: str, output_dir: str = "") -> dict:
         """Resolve a thumbnail URL for any media file (audio cover art, video frame, or image)."""
         if not path:
             return {"ok": False}
-        expanded = resolve_existing_media_path(path)
+        expanded = resolve_existing_media_path(path, output_dir=output_dir)
         if not expanded:
             return {"ok": False}
 
@@ -1069,7 +1169,7 @@ class Api:
                         ".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v", ".flv", ".ts", ".wmv",
                         ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".aac", ".wma", ".wav"
                     ):
-                        return self.get_item_thumbnail_url(os.path.join(root, fn))
+                        return self.get_item_thumbnail_url(os.path.join(root, fn), output_dir=output_dir)
             return {"ok": False}
 
         if not validate_path(expanded, must_exist=True, must_be_file=True):
@@ -1613,11 +1713,28 @@ class Api:
     def cancel_all_active(self):
         with self._jobs_lock:
             ids = list(self._active_job_ids)
+            history_map = dict(self._active_job_history)
         for jid in ids:
             try:
                 cancel_job(jid)
             except Exception:
                 pass
+            hid = history_map.get(jid)
+            if hid:
+                try:
+                    st = job_status(jid)
+                    files = st.get("files", []) if st.get("ok") else []
+                    download_history.update_entry(hid, {
+                        "status": "cancelled",
+                        "error": "Interrupted when application closed.",
+                        "files": files,
+                        "finished_at": time.time(),
+                    })
+                except Exception:
+                    pass
+        with self._jobs_lock:
+            self._active_job_ids.clear()
+            self._active_job_history.clear()
 
     # ── internal ──
     def _push_js(self, code: str):
@@ -1789,10 +1906,17 @@ def main():
         background_color="#090a0f",
     )
     api.set_window(window)
-    window.events.closing += api.cancel_all_active
+
+    def _on_closing():
+        api.cancel_all_active()
+        _stop_bridge_server()
+
+    window.events.closing += _on_closing
     window.events.loaded += _apply_window_icon
     threading.Thread(target=_startup_update_check, args=(api,), daemon=True).start()
     webview.start(debug=False)
+    _on_closing()
+    os._exit(0)
 
 
 if __name__ == "__main__":
