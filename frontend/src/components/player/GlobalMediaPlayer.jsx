@@ -273,6 +273,9 @@ export default function GlobalMediaPlayer({
         currentIndex={currentIndex}
         totalFiles={safeFiles.length}
         isAudio={isAudio}
+        currentTime={currentTime}
+        duration={duration}
+        mediaRef={mediaRef}
         onTogglePlay={togglePlay}
         onPrev={handlePrev}
         onNext={handleNext}
