@@ -112,6 +112,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import download_history
 import search_history
 from media_downloader import (
+    _app_base_dir,
     download_from_ui,
     detect_tool,
     site_hint,
@@ -1679,7 +1680,6 @@ def _find_icon_file() -> str:
     MediaDownloader.spec and installer.iss) — packaged installs get
     icon.ico copied to {app}\\icon.ico by the installer; dev-mode runs
     read it straight from build_assets/."""
-    from media_downloader import _app_base_dir
     base = _app_base_dir()
     for candidate in (
         os.path.join(base, "icon.ico"),
