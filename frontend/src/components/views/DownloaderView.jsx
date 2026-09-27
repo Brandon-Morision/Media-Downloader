@@ -296,9 +296,9 @@ export default function DownloaderView({
       ];
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto px-6 py-6 gap-6 max-w-5xl mx-auto w-full select-none">
-      {/* ── TOP SEARCH & ANALYZE BAR (Dual-Mode: URL Download & YouTube Search) ── */}
-      <div className="w-full shrink-0 flex flex-col gap-2">
+    <div className="flex-1 flex flex-col min-h-0 select-none">
+      {/* ── STICKY TOP AREA: search bar + inline panels ── */}
+      <div className="shrink-0 px-6 pt-6 pb-0 flex flex-col gap-6 w-full">
         <form
           onSubmit={handleFormSubmit}
           className="flex items-center gap-2 bg-surface-2/90 border border-border-subtle hover:border-border rounded-xl p-1.5 pl-3.5 shadow-md focus-within:border-brand-acc focus-within:shadow-glow transition-all"
@@ -496,6 +496,10 @@ export default function DownloaderView({
           </div>
         )}
       </div>
+
+      {/* Scrollable area: search results, analysis panels, and downloads queue */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+      <div className="px-6 pb-6 pt-4 flex flex-col gap-6 w-full">
 
       {/* ── YOUTUBE SEARCH RESULTS SECTION ── */}
       {(isSearching || searchResults.length > 0 || searchError) && !analyzedData && !isAnalyzing && (
@@ -941,8 +945,9 @@ export default function DownloaderView({
         </div>
       )}
 
+
       {/* ── SCREEN 3: DOWNLOADS QUEUE (Active & Completed Tabs) ── */}
-      <div className="flex flex-col gap-5 mt-2 shrink-0">
+      <div className="flex flex-col gap-5 shrink-0">
         {/* Header Row */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -1070,6 +1075,9 @@ export default function DownloaderView({
             )}
           </div>
         </div>
+
+        {/* Animated content area — re-mounts on tab change */}
+        <div key={queueTab} className="flex flex-col gap-5 animate-tab-enter">
 
         {/* ── 1. ACTIVE DOWNLOADS SECTION ── */}
         {(queueTab === 'all' || queueTab === 'active') && activeDownloads.length > 0 && (
@@ -1445,7 +1453,10 @@ export default function DownloaderView({
             )}
           </div>
         )}
-      </div>
+        </div>{/* end keyed tab-enter wrapper */}
+      </div>{/* end Screen 3 */}
+      </div>{/* end scrollable inner */}
+      </div>{/* end overflow-y-auto */}
     </div>
   );
 }

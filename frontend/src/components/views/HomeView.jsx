@@ -26,7 +26,7 @@ export default function HomeView({
 
   // Extract recent completed downloads
   const completedDownloads = downloads.filter((d) => d.state === 'done');
-  const recentItems = completedDownloads.slice(0, 4);
+  const recentItems = completedDownloads.slice(0, 8);
 
   // Fallback demo items if library is empty yet
   const displayItems = recentItems.length > 0 ? recentItems : [
@@ -70,6 +70,46 @@ export default function HomeView({
       type: 'video',
       thumbnail: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
     },
+    {
+      id: 'demo-5',
+      filename: 'City Skyline.jpg',
+      sizeBytes: 3100000,
+      duration: null,
+      res: '4K',
+      timeAgo: '8h ago',
+      type: 'image',
+      thumbnail: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      id: 'demo-6',
+      filename: 'Lofi Study Beats.mp3',
+      sizeBytes: 6400000,
+      duration: '1:02:15',
+      res: '320 kbps',
+      timeAgo: '10h ago',
+      type: 'audio',
+      thumbnail: null,
+    },
+    {
+      id: 'demo-7',
+      filename: 'Ocean Waves 4K.mp4',
+      sizeBytes: 312000000,
+      duration: '30:00',
+      res: '4K',
+      timeAgo: '1d ago',
+      type: 'video',
+      thumbnail: 'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=600&auto=format&fit=crop&q=80',
+    },
+    {
+      id: 'demo-8',
+      filename: 'Sunset Drive.mp4',
+      sizeBytes: 48000000,
+      duration: '5:11',
+      res: '1080p',
+      timeAgo: '1d ago',
+      type: 'video',
+      thumbnail: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80',
+    },
   ];
 
   const handlePasteClick = async () => {
@@ -104,7 +144,7 @@ export default function HomeView({
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto px-8 py-8 gap-8 max-w-6xl mx-auto w-full select-none">
+    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto px-8 py-8 gap-8 w-full select-none">
       {/* ── 1. HERO SECTION ── */}
       <div className="flex flex-col items-center text-center mt-2 gap-2">
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
@@ -116,7 +156,7 @@ export default function HomeView({
       </div>
 
       {/* ── 2. SEARCH & PASTE INPUT PILL ── */}
-      <form onSubmit={handleInputSubmit} className="w-full max-w-2xl mx-auto">
+      <form onSubmit={handleInputSubmit} className="w-full max-w-4xl mx-auto">
         <div className="relative flex items-center bg-surface-2/90 border border-border-subtle hover:border-border rounded-full p-1.5 pl-4 shadow-xl transition-all focus-within:border-brand-acc focus-within:shadow-glow">
           {urlInput.trim() && !isLikelyUrl(urlInput) ? (
             <Search className="w-4 h-4 text-sky-400 shrink-0 mr-3 pointer-events-none" />

@@ -10,8 +10,8 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
   ];
 
   return (
-    <aside className="w-52 md:w-56 bg-surface-1 border-r border-border-subtle flex flex-col py-5 px-3 select-none shrink-0 z-20 transition-all duration-200">
-      {/* Brand Header: Logo + "MediaDown" */}
+    <aside className="w-52 md:w-56 lg:w-60 xl:w-64 bg-surface-1 border-r border-border-subtle flex flex-col py-5 px-3 select-none shrink-0 z-20 transition-all duration-200">
+      {/* Brand Header: Logo + "MediaDownloader" */}
       <div className="px-2 mb-7 flex items-center gap-2.5 cursor-pointer" onClick={() => setView('home')}>
         {/* Emerald 'V' Logo Icon */}
         <div className="w-7 h-7 rounded-lg bg-brand-acc flex items-center justify-center shadow-sm shrink-0">
@@ -28,7 +28,7 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
           </svg>
         </div>
         <span className="font-bold text-base tracking-tight text-white flex items-center gap-1">
-          MediaDown
+          MediaDownloader
         </span>
       </div>
 
@@ -84,7 +84,7 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
               <Moon className="w-3.5 h-3.5 animate-pulse" />
             </div>
           )}
-          <span className="text-[10px] font-mono text-slate-500 tracking-wider">v0.3.0</span>
+          <span className="text-[10px] font-mono text-slate-500 tracking-wider">v0.3.5</span>
         </div>
       </div>
     </aside>

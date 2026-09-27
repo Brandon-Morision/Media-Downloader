@@ -6,7 +6,7 @@
 
 ; Version is managed centrally in version.py - update that file to change versions
 #define AppName      "Media Downloader"
-#define AppVersion   "0.3.0"
+#define AppVersion   "0.3.5"
 #define AppPublisher "Brandon"
 #define AppExeName   "MediaDownloader.exe"
 #define SourceDir    "dist\MediaDownloader"

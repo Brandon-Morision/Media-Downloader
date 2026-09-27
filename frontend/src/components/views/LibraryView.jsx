@@ -195,9 +195,9 @@ export default function LibraryView({
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto px-6 py-6 gap-6 max-w-6xl mx-auto w-full select-none">
-      {/* ── TOP SEARCH & CONTROLS BAR ── */}
-      <div className="flex flex-col gap-3">
+    <div className="flex-1 flex flex-col min-h-0 select-none">
+      {/* ── STICKY TOP: Library header + search + category pills ── */}
+      <div className="shrink-0 px-6 pt-6 pb-4 flex flex-col gap-3 w-full">
         <h1 className="text-xl font-extrabold text-slate-100 tracking-tight">Library</h1>
 
         <div className="flex items-center gap-3">
@@ -275,6 +275,14 @@ export default function LibraryView({
         </div>
       </div>
 
+      {/* ── SCROLLABLE CONTENT: empty state + media cards ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="px-6 pb-6 flex flex-col gap-6 w-full">
+
+      {/* key-animated wrapper: replays on filter/search change */}
+      <div key={filter + String(search)} className="flex flex-col gap-6 animate-tab-enter">
+
+
       {/* ── EMPTY STATE ── */}
       {filteredItems.length === 0 && (
         <div className="py-20 border border-dashed border-border-subtle rounded-2xl flex flex-col items-center justify-center text-slate-500 gap-3">
@@ -298,7 +306,7 @@ export default function LibraryView({
 
       {/* ── MEDIA CARDS VIEW ── */}
       {filteredItems.length > 0 && viewMode === 'grid' && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {filteredItems.map((item) => {
             const info = getBundleInfo(item);
             const {
@@ -549,6 +557,9 @@ export default function LibraryView({
           })}
         </div>
       )}
+      </div>
+      </div>
+      </div>
     </div>
   );
 }

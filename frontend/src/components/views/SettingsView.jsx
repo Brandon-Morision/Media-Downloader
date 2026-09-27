@@ -32,7 +32,7 @@ export default function SettingsView({
     'yt-dlp': 'Checking…',
     'gallery-dl': 'Checking…',
     ffmpeg: 'Checking…',
-    app: '0.3.0',
+    app: '0.3.5',
   });
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [updatingTool, setUpdatingTool] = useState(null);
@@ -48,7 +48,7 @@ export default function SettingsView({
         if (res.any_update) {
           onShowToast('New updates available!');
         } else {
-          onShowToast('MediaDown engines are up to date');
+          onShowToast('MediaDownloader engines are up to date');
         }
       } else {
         onShowToast(res?.error || 'Failed to check for updates', false);
@@ -80,7 +80,7 @@ export default function SettingsView({
           'yt-dlp': res['yt-dlp'] || 'Installed',
           'gallery-dl': res['gallery-dl'] || 'Installed',
           ffmpeg: res.ffmpeg || 'Installed',
-          app: res.app || '0.3.0',
+          app: res.app || '0.3.5',
         });
       }
     } catch {
@@ -88,7 +88,7 @@ export default function SettingsView({
         'yt-dlp': 'Installed',
         'gallery-dl': 'Installed',
         ffmpeg: 'Installed',
-        app: '0.3.0',
+        app: '0.3.5',
       });
     }
   };
@@ -119,7 +119,7 @@ export default function SettingsView({
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto px-6 py-6 gap-6 max-w-2xl mx-auto w-full select-none">
+    <div className="flex-1 flex flex-col min-h-0 overflow-y-auto px-6 py-6 gap-6 max-w-3xl mx-auto w-full select-none">
       <h1 className="text-xl font-extrabold text-slate-100 tracking-tight">Settings</h1>
 
       {/* ── TOP USER / BRAND PROFILE BANNER (Screen 6) ── */}
@@ -128,8 +128,8 @@ export default function SettingsView({
           M
         </div>
         <div>
-          <h2 className="text-lg font-bold text-slate-100 tracking-tight">MediaDown</h2>
-          <p className="text-xs text-slate-400 font-medium mt-0.5">Version 0.3.0</p>
+          <h2 className="text-lg font-bold text-slate-100 tracking-tight">MediaDownloader</h2>
+          <p className="text-xs text-slate-400 font-medium mt-0.5">Version {versions.app || '0.3.5'}</p>
         </div>
       </div>
 
@@ -431,7 +431,7 @@ export default function SettingsView({
             <div className="p-4 pt-1 border-t border-border-subtle/60 flex flex-col gap-3 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">Media Downloader</span>
-                <span className="font-mono text-brand-acc font-semibold">v0.3.0</span>
+                <span className="font-mono text-brand-acc font-semibold">v{versions.app || '0.3.5'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">yt-dlp Engine</span>

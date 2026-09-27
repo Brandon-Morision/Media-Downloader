@@ -262,7 +262,7 @@ export const api = {
         "yt-dlp": "2026.08.20 (mock)",
         "gallery-dl": "1.32.13 (mock)",
         ffmpeg: "8.1.2 (mock)",
-        app: "0.3.0",
+        app: "0.3.5",
       };
     }
     try {
@@ -273,14 +273,14 @@ export const api = {
           "yt-dlp": res?.['yt-dlp']?.version || res?.['yt-dlp'] || 'Unknown',
           "gallery-dl": res?.['gallery-dl']?.version || res?.['gallery-dl'] || 'Unknown',
           ffmpeg: res?.ffmpeg?.version || res?.ffmpeg || 'Unknown',
-          app: res?.app?.version || res?.app || '0.3.0',
+          app: res?.app?.version || res?.app || '0.3.5',
           raw: res,
         };
       }
     } catch (err) {
       console.warn('Error fetching installed versions:', err);
     }
-    return { "yt-dlp": "Installed", "gallery-dl": "Installed", ffmpeg: "Installed", app: "0.3.0" };
+    return { "yt-dlp": "Installed", "gallery-dl": "Installed", ffmpeg: "Installed", app: "0.3.5" };
   },
 
   async checkUpdates() {

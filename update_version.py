@@ -26,6 +26,12 @@ from pathlib import Path
 # Add current directory to path to import version module
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Ensure stdout and stderr handle utf-8 on Windows cp1252 terminals
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 # File paths that need version updates.
 #
 # NOTE: the extension used to live under browser_extension/, but its

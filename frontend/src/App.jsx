@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import NavigationRail from './components/NavigationRail';
-import HeaderBar from './components/HeaderBar';
+
 import HomeView from './components/views/HomeView';
 import DownloaderView from './components/views/DownloaderView';
 import ExploreView from './components/views/ExploreView';
@@ -521,18 +521,9 @@ export default function App() {
 
       {/* 2. Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-        {/* Top Header */}
-        <HeaderBar
-          currentView={currentView}
-          themeAccent={themeAccent}
-          setThemeAccent={setThemeAccent}
-          outputDir={outputDir}
-          downloadsCount={downloads.length}
-          runningCount={runningCount}
-        />
-
         {/* Dynamic View Panel */}
         <main className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+          <div key={currentView} className="flex-1 flex flex-col min-h-0 animate-view-enter">
           {currentView === 'home' && (
             <HomeView
               onAnalyzeUrl={handleAnalyzeUrl}
@@ -623,6 +614,7 @@ export default function App() {
               onShowToast={showToast}
             />
           )}
+          </div>
         </main>
       </div>
 
