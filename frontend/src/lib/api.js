@@ -119,6 +119,18 @@ export const api = {
     return window.pywebview.api.clear_history();
   },
 
+  async scanMediaLibrary(rootDir = "") {
+    await waitForApi(6000);
+    if (!isDesktopApp()) {
+      return this.listHistory();
+    }
+    const fn = window.pywebview?.api?.scan_media_library;
+    if (typeof fn === 'function') {
+      return fn(rootDir);
+    }
+    return this.listHistory();
+  },
+
   // Search & Playlists & Link Preview
   async previewLink(url, requestId = "prev-" + Date.now()) {
     if (!isDesktopApp()) {
@@ -262,7 +274,7 @@ export const api = {
         "yt-dlp": "2026.08.20 (mock)",
         "gallery-dl": "1.32.13 (mock)",
         ffmpeg: "8.1.2 (mock)",
-        app: "0.3.5",
+        app: "0.3.7",
       };
     }
     try {
@@ -273,19 +285,31 @@ export const api = {
           "yt-dlp": res?.['yt-dlp']?.version || res?.['yt-dlp'] || 'Unknown',
           "gallery-dl": res?.['gallery-dl']?.version || res?.['gallery-dl'] || 'Unknown',
           ffmpeg: res?.ffmpeg?.version || res?.ffmpeg || 'Unknown',
-          app: res?.app?.version || res?.app || '0.3.5',
+          app: res?.app?.version || res?.app || '0.3.7',
           raw: res,
         };
       }
     } catch (err) {
       console.warn('Error fetching installed versions:', err);
     }
-    return { "yt-dlp": "Installed", "gallery-dl": "Installed", ffmpeg: "Installed", app: "0.3.5" };
+    return { "yt-dlp": "Installed", "gallery-dl": "Installed", ffmpeg: "Installed", app: "0.3.7" };
   },
 
   async checkUpdates() {
     if (!isDesktopApp()) return { ok: true, checking: true, mock: true };
     return window.pywebview.api.check_updates_async();
+  },
+
+  async checkEngineUpdate(toolName) {
+    if (!isDesktopApp()) return { ok: true, checking: true, mock: true };
+    const fn = window.pywebview.api.check_engine_update_async;
+    return fn ? fn(toolName) : { ok: false, error: 'Not supported' };
+  },
+
+  async checkAppUpdate() {
+    if (!isDesktopApp()) return { ok: true, checking: true, mock: true };
+    const fn = window.pywebview.api.check_app_update_async;
+    return fn ? fn() : { ok: false, error: 'Not supported' };
   },
 
   async updateTool(toolName) {
@@ -302,6 +326,12 @@ export const api = {
   async applyAppUpdate(installerPath, silent = false) {
     if (!isDesktopApp()) return { ok: true };
     return window.pywebview.api.apply_app_update(installerPath, silent);
+  },
+
+  async autoUpdateAll(autoDownloadApp = true) {
+    if (!isDesktopApp()) return { ok: true, started: true };
+    const fn = window.pywebview.api.auto_update_all_async;
+    return fn ? fn(autoDownloadApp) : { ok: false, error: 'Not supported' };
   },
 
   // Night-Owl & Shutdown

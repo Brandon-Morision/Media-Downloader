@@ -145,14 +145,98 @@ def _app_base_dir() -> str:
 def get_default_download_dir() -> str:
     """
     Return standard user media download directory (~/Downloads/media).
-    Created if missing so it is always guaranteed to exist and be writable.
+    Also creates the three canonical media subfolders (Videos, Music, Images)
+    so they always exist alongside the root media folder.
     """
     d = os.path.join(os.path.expanduser("~"), "Downloads", "media")
     try:
         os.makedirs(d, exist_ok=True)
+        for sub in ("Videos", "Music", "Images"):
+            os.makedirs(os.path.join(d, sub), exist_ok=True)
     except Exception:
         pass
     return d
+
+
+# ── Extension sets used for subfolder classification ──────────────────────────
+_VIDEO_EXTENSIONS = {
+    ".mp4", ".webm", ".mov", ".mkv", ".m4v", ".avi", ".flv", ".wmv", ".ts",
+}
+_AUDIO_EXTENSIONS = {
+    ".mp3", ".m4a", ".flac", ".wav", ".ogg", ".opus", ".aac",
+}
+_IMAGE_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".heic", ".avif", ".svg",
+}
+
+# Format values that always target a specific subfolder.
+_FORMAT_SUBFOLDER = {
+    # Audio-only formats → Music
+    "mp3": "Music", "m4a": "Music", "flac": "Music",
+    "wav": "Music", "opus": "Music",
+    # Explicit video formats → Videos
+    "mp4": "Videos", "best": "Videos",
+    "2160p": "Videos", "1440p": "Videos", "1080p": "Videos",
+    "720p": "Videos", "480p": "Videos",
+}
+
+
+def resolve_media_subfolder(base_output_dir: str, tool: str, url: str = "", fmt: str = "") -> str:
+    """
+    Resolve the correct subfolder (Videos / Music / Images) within
+    *base_output_dir* for a given download job and return the full path.
+
+    Decision precedence (first match wins):
+      1. Explicit format field   → maps deterministically to Videos or Music.
+      2. Tool == gallery-dl      → Images (gallery-dl is an image/gallery scraper).
+      3. Tool == yt-dlp          → Videos (yt-dlp is a video/audio extractor;
+                                    for yt-dlp audio-only the format check in
+                                    step 1 already catches mp3/m4a/flac etc).
+      4. Fallback                → Images.
+
+    Also ensures the resolved subfolder directory exists before returning.
+    Only applies when *base_output_dir* points to the canonical media root
+    (i.e. contains no deeper subfolder specified by the user).
+    """
+    default_root = os.path.normpath(get_default_download_dir())
+    # Only auto-split when the user is pointing at the canonical media root.
+    # If they chose a custom directory we respect that fully and don't add
+    # extra subfolders they didn't ask for.
+    norm_out = os.path.normpath(os.path.expanduser(base_output_dir))
+    if not (norm_out == default_root or norm_out.startswith(default_root + os.sep)):
+        # Custom location — use as-is, but still create it.
+        try:
+            os.makedirs(norm_out, exist_ok=True)
+        except Exception:
+            pass
+        return norm_out
+
+    # --- Determine subfolder name ---
+    subfolder = None
+
+    # 1. Explicit format takes highest priority.
+    if fmt and fmt in _FORMAT_SUBFOLDER:
+        subfolder = _FORMAT_SUBFOLDER[fmt]
+
+    # 2. gallery-dl → Images by default (image boards, galleries, Pinterest …)
+    if subfolder is None and tool == "gallery-dl":
+        subfolder = "Images"
+
+    # 3. yt-dlp → Videos by default
+    if subfolder is None and tool == "yt-dlp":
+        subfolder = "Videos"
+
+    # 4. Final fallback
+    if subfolder is None:
+        subfolder = "Images"
+
+    resolved = os.path.join(default_root, subfolder)
+    try:
+        os.makedirs(resolved, exist_ok=True)
+    except Exception:
+        pass
+    logger.debug(f"Resolved media subfolder: {resolved} (tool={tool}, fmt={fmt})")
+    return resolved
 
 
 def resolve_tool_path(tool: str) -> str:
@@ -485,7 +569,12 @@ def _restore_netrc(info: dict):
 def build_gallery_dl_cmd(url: str, cfg: dict) -> list:
     cmd = [resolve_tool_path("gallery-dl")]
     out_raw = cfg.get("output")
-    out = os.path.expanduser(str(out_raw).strip()) if (out_raw and str(out_raw).strip()) else get_default_download_dir()
+    base_out = os.path.expanduser(str(out_raw).strip()) if (out_raw and str(out_raw).strip()) else get_default_download_dir()
+    # gallery-dl always targets Images subfolder (unless a format override says otherwise)
+    fmt = cfg.get("format", "auto")
+    out = resolve_media_subfolder(base_out, "gallery-dl", url, fmt)
+    # Store the resolved path back so callers/history can see it
+    cfg["_resolved_output"] = out
     cmd += ["-d", out]
     if cfg.get("playlist_items"):
         cmd += ["--range", str(cfg["playlist_items"])]
@@ -550,7 +639,12 @@ def _ytdlp_extra_headers(url: str) -> list:
 def build_ytdlp_cmd(url: str, cfg: dict) -> list:
     cmd = [resolve_tool_path("yt-dlp")]
     out_raw = cfg.get("output")
-    out = os.path.expanduser(str(out_raw).strip()) if (out_raw and str(out_raw).strip()) else get_default_download_dir()
+    base_out = os.path.expanduser(str(out_raw).strip()) if (out_raw and str(out_raw).strip()) else get_default_download_dir()
+    fmt = cfg.get("format", "auto")
+    # yt-dlp routes to Videos or Music depending on the format selected.
+    out = resolve_media_subfolder(base_out, "yt-dlp", url, fmt)
+    # Store the resolved path back so callers/history can see it
+    cfg["_resolved_output"] = out
     # Use --paths for the directory and keep -o as a bare filename
     # template. Letting yt-dlp join directory + template internally
     # avoids os.path.join() producing backslashes in the template on
@@ -674,6 +768,8 @@ def run_download(url: str, tool: str, cfg: dict, dry_run: bool = False):
     cfg["output"] = output_dir
 
     cmd = build_gallery_dl_cmd(url, cfg) if tool == "gallery-dl" else build_ytdlp_cmd(url, cfg)
+    # Use the subfolder-resolved path the build_*_cmd set, if available
+    output_dir = cfg.get("_resolved_output") or output_dir
 
     print(f"\n  {THIN}")
     # Never print the real command if it contains a password; build_*_cmd
@@ -1255,6 +1351,10 @@ def download_from_ui(url: str, cfg: dict, tool_override: str = "", on_line=None,
     cfg["output"] = output_dir
 
     cmd = build_gallery_dl_cmd(url, cfg) if tool == "gallery-dl" else build_ytdlp_cmd(url, cfg)
+    # Use the subfolder-resolved path the build_*_cmd recorded, if available
+    output_dir = cfg.get("_resolved_output") or output_dir
+    # Keep cfg["output"] in sync so downstream code (history, callbacks) also sees it
+    cfg["output"] = output_dir
     cmd_str = " ".join(cmd)
 
     if cfg.get("dry_run"):

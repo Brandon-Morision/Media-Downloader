@@ -27,6 +27,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 from pathlib import Path
 from typing import Callable, Dict, Optional, Tuple
 
@@ -172,7 +173,7 @@ def get_all_installed_versions() -> dict:
         "ffmpeg": {
             "version": get_tool_version("ffmpeg"),
             "path": resolve_tool_path("ffmpeg"),
-            "is_user_tool": False,
+            "is_user_tool": os.path.dirname(resolve_tool_path("ffmpeg")) == str(USER_TOOLS_DIR),
         },
     }
 
@@ -263,17 +264,90 @@ def check_gallerydl_update() -> dict:
     return result
 
 
+def check_ffmpeg_update() -> dict:
+    """Check latest FFmpeg release on GyanD/codexffmpeg (primary) with yt-dlp/FFmpeg-Builds fallback."""
+    current_ver = get_tool_version("ffmpeg")
+    result = {
+        "tool": "ffmpeg",
+        "current_version": current_ver,
+        "latest_version": current_ver,
+        "update_available": False,
+        "asset_url": "",
+        "asset_size": 0,
+        "published_at": "",
+    }
+
+    # 1. Primary: GyanD/codexffmpeg releases
+    data = _fetch_json("https://api.github.com/repos/GyanD/codexffmpeg/releases/latest")
+    if data:
+        latest_tag = _normalize_version(data.get("tag_name", ""))
+        result["latest_version"] = latest_tag
+        result["published_at"] = data.get("published_at", "")
+
+        for asset in data.get("assets", []):
+            name = asset.get("name", "")
+            if "essentials_build.zip" in name:
+                result["asset_url"] = asset.get("browser_download_url", "")
+                result["asset_size"] = asset.get("size", 0)
+                break
+            elif "full_build.zip" in name and not result["asset_url"]:
+                result["asset_url"] = asset.get("browser_download_url", "")
+                result["asset_size"] = asset.get("size", 0)
+
+    # 2. Fallback: yt-dlp/FFmpeg-Builds
+    if not result["asset_url"]:
+        fb_data = _fetch_json("https://api.github.com/repos/yt-dlp/FFmpeg-Builds/releases/latest")
+        if fb_data:
+            latest_tag = _normalize_version(fb_data.get("tag_name", ""))
+            result["latest_version"] = latest_tag or "latest"
+            result["published_at"] = fb_data.get("published_at", "")
+            for asset in fb_data.get("assets", []):
+                name = asset.get("name", "")
+                if "win64-gpl.zip" in name and not "shared" in name:
+                    result["asset_url"] = asset.get("browser_download_url", "")
+                    result["asset_size"] = asset.get("size", 0)
+                    break
+
+    if result["asset_url"]:
+        if current_ver in ("Unknown", "", None):
+            result["update_available"] = True
+        elif result["latest_version"] != "latest":
+            if is_version_newer(current_ver, result["latest_version"]):
+                result["update_available"] = True
+
+    return result
+
+
+def check_single_tool_update(tool_name: str) -> dict:
+    """Check update availability for a specific tool independently."""
+    if tool_name == "yt-dlp":
+        return check_ytdlp_update()
+    elif tool_name == "gallery-dl":
+        return check_gallerydl_update()
+    elif tool_name == "ffmpeg":
+        return check_ffmpeg_update()
+    return {
+        "tool": tool_name,
+        "current_version": "Unknown",
+        "latest_version": "Unknown",
+        "update_available": False,
+        "error": f"Unsupported tool: {tool_name}",
+    }
+
+
 def check_tool_updates() -> dict:
-    """Check update availability for both yt-dlp and gallery-dl."""
+    """Check update availability for yt-dlp, gallery-dl, and ffmpeg."""
     yt = check_ytdlp_update()
     gdl = check_gallerydl_update()
-    any_update = yt["update_available"] or gdl["update_available"]
+    ff = check_ffmpeg_update()
+    any_update = yt["update_available"] or gdl["update_available"] or ff["update_available"]
     return {
         "ok": True,
         "any_update": any_update,
         "tools": {
             "yt-dlp": yt,
             "gallery-dl": gdl,
+            "ffmpeg": ff,
         },
     }
 
@@ -353,27 +427,60 @@ def update_engine_tool(
     Download latest executable for yt-dlp or gallery-dl into ~/.media_downloader/tools/.
     Returns result dictionary with ok, tool, new_version, and path.
     """
-    if tool_name not in ("yt-dlp", "gallery-dl"):
+    if tool_name not in ("yt-dlp", "gallery-dl", "ffmpeg"):
         return {"ok": False, "error": f"Unsupported tool: {tool_name}"}
 
     with _UPDATE_LOCK:
         logger.info(f"Initiating update for engine tool: {tool_name}")
-        info = check_ytdlp_update() if tool_name == "yt-dlp" else check_gallerydl_update()
-        asset_url = info.get("asset_url")
-        latest_ver = info.get("latest_version")
+        if tool_name == "yt-dlp":
+            info = check_ytdlp_update()
+        elif tool_name == "gallery-dl":
+            info = check_gallerydl_update()
+        else:
+            info = check_ffmpeg_update()
 
+        asset_url = info.get("asset_url")
         if not asset_url:
             return {"ok": False, "error": f"No download URL available for {tool_name}."}
 
         target_exe = USER_TOOLS_DIR / f"{tool_name}.exe"
 
         try:
-            download_file_with_progress(asset_url, target_exe, on_progress=on_progress)
-        except PermissionError:
-            logger.error(f"Permission denied updating {target_exe} — file in use")
+            if tool_name == "ffmpeg":
+                tmp_zip = TEMP_UPDATES_DIR / "ffmpeg_download.zip"
+                download_file_with_progress(asset_url, tmp_zip, on_progress=on_progress)
+
+                extracted_any = False
+                with zipfile.ZipFile(tmp_zip, 'r') as zf:
+                    for member in zf.namelist():
+                        base_name = os.path.basename(member).lower()
+                        if base_name in ("ffmpeg.exe", "ffprobe.exe", "ffplay.exe"):
+                            target_file = USER_TOOLS_DIR / os.path.basename(member)
+                            if target_file.exists():
+                                try:
+                                    target_file.unlink()
+                                except PermissionError:
+                                    raise PermissionError(f"File {target_file.name} is currently in use.")
+                            with zf.open(member) as src, open(target_file, "wb") as dst:
+                                shutil.copyfileobj(src, dst)
+                            extracted_any = True
+
+                try:
+                    if tmp_zip.exists():
+                        tmp_zip.unlink()
+                except Exception:
+                    pass
+
+                if not extracted_any:
+                    return {"ok": False, "error": "Could not find ffmpeg.exe inside the downloaded archive."}
+            else:
+                download_file_with_progress(asset_url, target_exe, on_progress=on_progress)
+
+        except PermissionError as pe:
+            logger.error(f"Permission denied updating {tool_name} — file in use: {pe}")
             return {
                 "ok": False,
-                "error": f"Cannot update {tool_name} while a download is running. Please finish or cancel active downloads.",
+                "error": f"Cannot update {tool_name} while a process is running. Please finish or cancel active downloads.",
             }
         except Exception as e:
             logger.error(f"Failed to download {tool_name}: {e}")
@@ -414,6 +521,15 @@ def check_app_update(github_repo: Optional[str] = None) -> dict:
 
     url = f"https://api.github.com/repos/{repo}/releases/latest"
     data = _fetch_json(url)
+
+    if not data:
+        # Fallback: check /releases in case /releases/latest returns 404 (e.g. pre-releases/alphas)
+        releases = _fetch_json(f"https://api.github.com/repos/{repo}/releases")
+        if releases and isinstance(releases, list) and len(releases) > 0:
+            for rel in releases:
+                if not rel.get("draft", False):
+                    data = rel
+                    break
 
     if not data:
         # Repository may not have releases published yet, or is private/unreachable

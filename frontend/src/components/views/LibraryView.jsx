@@ -12,12 +12,6 @@ import MediaThumbnail from '../common/MediaThumbnail';
  * Categorize media and detect multi-item bundles/albums across videos, photos, and audio.
  */
 export function getBundleInfo(item) {
-  let cat = item.category;
-  if (!cat) {
-    const detected = getMediaCategory(item);
-    cat = detected === 'audio' ? 'music' : detected === 'gallery' ? 'image' : detected;
-  }
-
   const filesList = Array.isArray(item.files) ? item.files : [];
   const playableList = playableFilesFor(item);
 
@@ -28,7 +22,7 @@ export function getBundleInfo(item) {
   for (const f of filesList) {
     const name = typeof f === 'string' ? f : f?.name || f?.path || '';
     const ext = (name.split('.').pop() || '').toLowerCase();
-    if (['mp4', 'mkv', 'webm', 'avi', 'mov', 'flv', 'm4v', 'ts'].includes(ext)) {
+    if (['mp4', 'mkv', 'webm', 'avi', 'mov', 'flv', 'm4v', 'ts', 'wmv'].includes(ext)) {
       videoFilesCount++;
     } else if (AUDIO_EXT.includes(ext)) {
       audioFilesCount++;
@@ -37,20 +31,33 @@ export function getBundleInfo(item) {
     }
   }
 
+  // File-content authoritative category detection
+  let cat = item.category;
+  if (audioFilesCount > videoFilesCount && audioFilesCount >= imageFilesCount) {
+    cat = 'music';
+  } else if (videoFilesCount > audioFilesCount && videoFilesCount >= imageFilesCount) {
+    cat = 'video';
+  } else if (imageFilesCount > videoFilesCount && imageFilesCount > audioFilesCount) {
+    cat = 'image';
+  } else if (!cat) {
+    const detected = getMediaCategory(item);
+    cat = detected === 'audio' ? 'music' : detected === 'gallery' ? 'image' : detected;
+  }
+
   const totalCount = filesList.length || (item.itemsDone > 0 ? item.itemsDone : 0);
   const isAudioCat = cat === 'music' || cat === 'audio';
   const isVideoCat = cat === 'video';
   const isImageCat = cat === 'image' || cat === 'gallery';
 
-  const isVideoBundle = videoFilesCount > 1 || (isVideoCat && (totalCount > 1 || playableList.length > 1));
-  const isAudioBundle = audioFilesCount > 1 || (isAudioCat && totalCount > 1);
-  const isImageBundle = imageFilesCount > 1 || (isImageCat && (totalCount > 1 || item.isAlbum));
+  const isAudioBundle = audioFilesCount > 1 || (isAudioCat && totalCount > 1 && videoFilesCount === 0);
+  const isVideoBundle = videoFilesCount > 1 || (isVideoCat && (totalCount > 1 || playableList.length > 1) && audioFilesCount === 0);
+  const isImageBundle = imageFilesCount > 1 || (isImageCat && (totalCount > 1 || item.isAlbum) && videoFilesCount === 0 && audioFilesCount === 0);
   const isMixedBundle = !isVideoBundle && !isAudioBundle && !isImageBundle && totalCount > 1;
 
-  const count = isVideoBundle
-    ? (videoFilesCount || playableList.length || totalCount)
-    : isAudioBundle
+  const count = isAudioBundle
     ? (audioFilesCount || totalCount)
+    : isVideoBundle
+    ? (videoFilesCount || playableList.length || totalCount)
     : isImageBundle
     ? (imageFilesCount || totalCount || (item.isAlbum ? 6 : 1))
     : totalCount;
@@ -79,6 +86,7 @@ export default function LibraryView({
   onOpenGallery,
   onSwitchToDownloader,
   onRefreshHistory,
+  isLoading = false,
 }) {
   const [filter, setFilter] = useState('all'); // all | video | music | image
   const [search, setSearch] = useState('');
@@ -213,14 +221,17 @@ export default function LibraryView({
             />
           </div>
 
-          {/* Sync History Button */}
+          {/* Sync History / Refresh Library Button */}
           {onRefreshHistory && (
             <button
               onClick={onRefreshHistory}
-              className="p-2 rounded-xl bg-surface-2 hover:bg-surface-3 text-slate-400 hover:text-brand-acc border border-border-subtle transition-colors shrink-0"
-              title="Refresh library history from disk"
+              disabled={isLoading}
+              className={`p-2 rounded-xl bg-surface-2 hover:bg-surface-3 text-slate-400 hover:text-brand-acc border border-border-subtle transition-colors shrink-0 ${
+                isLoading ? 'opacity-70 cursor-not-allowed' : ''
+              }`}
+              title="Refresh library media from disk"
             >
-              <RotateCcw className="w-4 h-4" />
+              <RotateCcw className={`w-4 h-4 ${isLoading ? 'animate-spin text-brand-acc' : ''}`} />
             </button>
           )}
 
@@ -288,9 +299,15 @@ export default function LibraryView({
         <div className="py-20 border border-dashed border-border-subtle rounded-2xl flex flex-col items-center justify-center text-slate-500 gap-3">
           <Folder className="w-10 h-10 opacity-30 text-brand-acc" />
           <div className="flex flex-col items-center gap-1">
-            <p className="text-sm font-semibold text-slate-300">No media found in Library</p>
+            <p className="text-sm font-semibold text-slate-300">
+              {isLoading ? 'Scanning media folder...' : 'No media found in Library'}
+            </p>
             <p className="text-xs text-slate-500">
-              {search ? `No items matched "${search}"` : 'Downloaded videos, pictures, and songs will appear here.'}
+              {isLoading
+                ? 'Discovering videos, music, and images...'
+                : search
+                ? `No items matched "${search}"`
+                : 'Videos, music, and images in your media folder will appear here.'}
             </p>
           </div>
           {onSwitchToDownloader && (
@@ -329,27 +346,30 @@ export default function LibraryView({
               <div
                 key={item.id}
                 onClick={() => handleCardClick(item)}
-                className={`bg-surface-1 border border-border-subtle hover:border-border rounded-2xl p-2.5 flex flex-col gap-2.5 cursor-pointer hover:bg-surface-2 transition-all duration-150 group shadow-sm hover:shadow-lg relative ${
+                className={`bg-surface-1 border border-border-subtle hover:border-border rounded-2xl overflow-hidden flex flex-col cursor-pointer hover:bg-surface-2 transition-all duration-200 group shadow-sm hover:shadow-xl hover:-translate-y-1 relative ${
                   isImageBundle
                     ? 'hover:border-brand-border'
                     : isVideoBundle
                     ? 'hover:border-sky-500/40'
                     : isAudioBundle
                     ? 'hover:border-purple-500/40'
-                    : ''
+                    : 'hover:border-white/20'
                 }`}
               >
-                {/* Visual Area */}
-                <div className="relative aspect-video rounded-xl overflow-hidden bg-surface-3 flex items-center justify-center">
+                {/* Visual Area - Fills top, left, and right */}
+                <div className="relative aspect-[16/11] sm:aspect-[4/3] w-full overflow-hidden bg-surface-3 flex items-center justify-center">
                   <MediaThumbnail
                     item={item}
                     type={cat}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                   />
+
+                  {/* Gradient Blend into the bottom of the card where it meets words */}
+                  <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-surface-1 via-surface-1/70 to-transparent pointer-events-none transition-colors duration-200 group-hover:from-surface-2 group-hover:via-surface-2/70" />
 
                   {/* Album Layer Indicator: Top-left badge for Image Albums */}
                   {isImageBundle && (
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-md border border-brand-border text-[10.5px] font-bold text-brand-acc flex items-center gap-1.5 shadow-lg z-10">
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-md border border-brand-border text-[10.5px] font-bold text-brand-acc flex items-center gap-1.5 shadow-lg z-10">
                       <Layers className="w-3.5 h-3.5 text-brand-acc" />
                       <span>{count} Photos</span>
                     </div>
@@ -357,7 +377,7 @@ export default function LibraryView({
 
                   {/* Video Series Indicator: Top-left badge for Multi-video Batch / Series */}
                   {isVideoBundle && (
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-md border border-sky-500/40 text-[10.5px] font-bold text-sky-300 flex items-center gap-1.5 shadow-lg z-10">
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-md border border-sky-500/40 text-[10.5px] font-bold text-sky-300 flex items-center gap-1.5 shadow-lg z-10">
                       <ListVideo className="w-3.5 h-3.5 text-sky-400" />
                       <span>{count} Videos</span>
                     </div>
@@ -365,7 +385,7 @@ export default function LibraryView({
 
                   {/* Audio Album Indicator: Top-left badge for Multi-track Audio Album */}
                   {isAudioBundle && (
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-md border border-purple-500/40 text-[10.5px] font-bold text-purple-300 flex items-center gap-1.5 shadow-lg z-10">
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-md border border-purple-500/40 text-[10.5px] font-bold text-purple-300 flex items-center gap-1.5 shadow-lg z-10">
                       <ListMusic className="w-3.5 h-3.5 text-purple-400" />
                       <span>{count} Tracks</span>
                     </div>
@@ -373,7 +393,7 @@ export default function LibraryView({
 
                   {/* Mixed Bundle Indicator: Top-left badge */}
                   {isMixedBundle && (
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-md border border-amber-500/40 text-[10.5px] font-bold text-amber-300 flex items-center gap-1.5 shadow-lg z-10">
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-md border border-amber-500/40 text-[10.5px] font-bold text-amber-300 flex items-center gap-1.5 shadow-lg z-10">
                       <Layers className="w-3.5 h-3.5 text-amber-400" />
                       <span>{count} Items</span>
                     </div>
@@ -381,29 +401,44 @@ export default function LibraryView({
 
                   {/* Single Video Duration Badge */}
                   {(isSingleVideo || isAudioCat) && item.duration && (
-                    <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 backdrop-blur-sm text-[10px] font-mono font-medium text-white">
+                    <span className="absolute bottom-2 right-2.5 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-md border border-white/10 text-[10px] font-mono font-medium text-white shadow-sm z-10">
                       {item.duration}
                     </span>
                   )}
 
-                  {/* External Link button */}
-                  {item.url && (
+                  {/* Action buttons: Open in Folder & External Link */}
+                  <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        api.openUrlExternal(item.url);
+                        const first = item.files?.[0];
+                        const path = typeof first === 'string' ? first : first?.path || item.outputDir || item.output_dir || '';
+                        if (path) api.openOutputFolder(path);
                       }}
-                      className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/60 hover:bg-black/85 backdrop-blur-sm text-slate-300 hover:text-white transition-colors opacity-0 group-hover:opacity-100 z-10"
-                      title="Open source link in browser"
+                      className="p-1.5 rounded-lg bg-black/75 hover:bg-black/95 backdrop-blur-md text-slate-300 hover:text-white border border-white/10 transition-colors shadow-md"
+                      title="Open containing folder"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" />
+                      <Folder className="w-3.5 h-3.5" />
                     </button>
-                  )}
+                    {item.url && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          api.openUrlExternal(item.url);
+                        }}
+                        className="p-1.5 rounded-lg bg-black/75 hover:bg-black/95 backdrop-blur-md text-slate-300 hover:text-white border border-white/10 transition-colors shadow-md"
+                        title="Open source link in browser"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
 
                   {/* Hover Open / Play Icon */}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-1.5 transition-opacity">
-                    <div className="w-10 h-10 rounded-full bg-brand-acc text-slate-950 flex items-center justify-center shadow-glow group-hover:scale-105 transition-transform">
+                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-1.5 transition-all duration-200 z-10">
+                    <div className="w-11 h-11 rounded-full bg-brand-acc text-slate-950 flex items-center justify-center shadow-glow group-hover:scale-110 transition-transform">
                       {isImageBundle ? (
                         <Images className="w-5 h-5" />
                       ) : isSingleImage ? (
@@ -416,7 +451,7 @@ export default function LibraryView({
                         <Play className="w-5 h-5 ml-0.5 fill-current" />
                       )}
                     </div>
-                    <span className="text-[10px] font-bold text-white bg-black/75 px-2 py-0.5 rounded-md backdrop-blur-sm">
+                    <span className="text-[10px] font-bold text-white bg-black/80 px-2.5 py-0.5 rounded-full backdrop-blur-md border border-white/10 shadow-md">
                       {isImageBundle
                         ? 'View Album'
                         : isSingleImage
@@ -430,12 +465,12 @@ export default function LibraryView({
                   </div>
                 </div>
 
-                {/* Card Info */}
-                <div className="flex flex-col px-1 pb-1">
-                  <span className="text-xs font-semibold text-slate-100 truncate group-hover:text-brand-acc transition-colors">
+                {/* Card Info - words section */}
+                <div className="flex flex-col px-3.5 pt-2 pb-3.5 gap-1 min-w-0">
+                  <span className="text-xs sm:text-sm font-semibold text-slate-100 truncate group-hover:text-brand-acc transition-colors leading-tight">
                     {item.filename}
                   </span>
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1 font-medium">
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 mt-0.5 font-medium">
                     <span>{fmtBytes(item.sizeBytes)}</span>
                     <span className="font-mono text-[11px]">
                       {isImageBundle ? (

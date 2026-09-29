@@ -282,12 +282,6 @@ export function getBundleInfo(item) {
     };
   }
 
-  let cat = item.category;
-  if (!cat) {
-    const detected = getMediaCategory(item);
-    cat = detected === 'audio' ? 'music' : detected === 'gallery' ? 'image' : detected;
-  }
-
   const filesList = Array.isArray(item.files) ? item.files : [];
   const playableList = playableFilesFor(item);
 
@@ -307,20 +301,33 @@ export function getBundleInfo(item) {
     }
   }
 
+  // File-content authoritative category detection
+  let cat = item.category;
+  if (audioFilesCount > videoFilesCount && audioFilesCount >= imageFilesCount) {
+    cat = 'music';
+  } else if (videoFilesCount > audioFilesCount && videoFilesCount >= imageFilesCount) {
+    cat = 'video';
+  } else if (imageFilesCount > videoFilesCount && imageFilesCount > audioFilesCount) {
+    cat = 'image';
+  } else if (!cat) {
+    const detected = getMediaCategory(item);
+    cat = detected === 'audio' ? 'music' : detected === 'gallery' ? 'image' : detected;
+  }
+
   const totalCount = filesList.length || (item.itemsDone > 0 ? item.itemsDone : 0);
   const isAudioCat = cat === 'music' || cat === 'audio';
   const isVideoCat = cat === 'video';
   const isImageCat = cat === 'image' || cat === 'gallery';
 
-  const isVideoBundle = videoFilesCount > 1 || (isVideoCat && (totalCount > 1 || playableList.length > 1));
-  const isAudioBundle = audioFilesCount > 1 || (isAudioCat && totalCount > 1);
-  const isImageBundle = imageFilesCount > 1 || (isImageCat && (totalCount > 1 || item.isAlbum));
+  const isAudioBundle = audioFilesCount > 1 || (isAudioCat && totalCount > 1 && videoFilesCount === 0);
+  const isVideoBundle = videoFilesCount > 1 || (isVideoCat && (totalCount > 1 || playableList.length > 1) && audioFilesCount === 0);
+  const isImageBundle = imageFilesCount > 1 || (isImageCat && (totalCount > 1 || item.isAlbum) && videoFilesCount === 0 && audioFilesCount === 0);
   const isMixedBundle = !isVideoBundle && !isAudioBundle && !isImageBundle && totalCount > 1;
 
-  const count = isVideoBundle
-    ? (videoFilesCount || playableList.length || totalCount)
-    : isAudioBundle
+  const count = isAudioBundle
     ? (audioFilesCount || totalCount)
+    : isVideoBundle
+    ? (videoFilesCount || playableList.length || totalCount)
     : isImageBundle
     ? (imageFilesCount || totalCount || (item.isAlbum ? 6 : 1))
     : totalCount;

@@ -125,6 +125,7 @@ from media_downloader import (
     extract_video_thumbnail,
     get_default_download_dir,
     resolve_existing_media_path,
+    resolve_media_subfolder,
 )
 from validators import (
     validate_url,
@@ -594,13 +595,48 @@ class Api:
         threading.Thread(target=run, daemon=True).start()
         return {"ok": True, "checking": True}
 
+    def check_engine_update_async(self, tool_name: str) -> dict:
+        """Check update for a specific tool independently (yt-dlp, gallery-dl, or ffmpeg)."""
+        def run():
+            try:
+                info = updater.check_single_tool_update(tool_name)
+                payload = {
+                    "ok": True,
+                    "tool": tool_name,
+                    "info": info,
+                }
+                self._push_js(f"window.onSingleToolCheckComplete?.({_js(payload)})")
+            except Exception as e:
+                logger.error(f"Error checking {tool_name} update: {e}")
+                self._push_js(f"window.onSingleToolCheckComplete?.({_js({'ok': False, 'tool': tool_name, 'error': str(e)})})")
+
+        threading.Thread(target=run, daemon=True).start()
+        return {"ok": True, "checking": True, "tool": tool_name}
+
+    def check_app_update_async(self) -> dict:
+        """Check update for desktop app independently."""
+        def run():
+            try:
+                app_info = updater.check_app_update()
+                payload = {
+                    "ok": True,
+                    "app": app_info,
+                }
+                self._push_js(f"window.onAppCheckComplete?.({_js(payload)})")
+            except Exception as e:
+                logger.error(f"Error checking app update: {e}")
+                self._push_js(f"window.onAppCheckComplete?.({_js({'ok': False, 'error': str(e)})})")
+
+        threading.Thread(target=run, daemon=True).start()
+        return {"ok": True, "checking": True}
+
     def update_engine_async(self, tool_name: str) -> dict:
-        """Update an extractor tool (yt-dlp or gallery-dl) in background thread."""
+        """Update an extractor or media tool (yt-dlp, gallery-dl, ffmpeg) in background thread."""
         with self._jobs_lock:
             if self._active_job_ids:
                 return {
                     "ok": False,
-                    "error": "Cannot update tools while a download is running. Please finish or cancel active downloads.",
+                    "error": f"Cannot update {tool_name} while downloads are running. Please finish or cancel active downloads.",
                 }
 
         def on_prog(snapshot: dict):
@@ -637,6 +673,57 @@ class Api:
                     pass
             os._exit(0)
         return {"ok": False, "error": "Failed to launch installer."}
+
+    def auto_update_all_async(self, auto_download_app: bool = True) -> dict:
+        """
+        Check updates and automatically download and install engine updates,
+        and download the app installer in the background.
+        """
+        def run():
+            try:
+                self._push_js(f"window.onAutoUpdateStatus?.({_js({'status': 'checking', 'message': 'Checking updates for engines and application…'})})")
+                tools_info = updater.check_tool_updates()
+                app_info = updater.check_app_update()
+
+                updated_tools = []
+                tools_data = tools_info.get("tools", {})
+                for tool_name, tinfo in tools_data.items():
+                    if tinfo.get("update_available"):
+                        lat_ver = tinfo.get("latest_version", "")
+                        msg = f"Updating {tool_name} to {lat_ver}…"
+                        status_obj = {"status": "updating_engine", "tool": tool_name, "message": msg}
+                        self._push_js(f"window.onAutoUpdateStatus?.({_js(status_obj)})")
+                        res = updater.update_engine_tool(tool_name)
+                        if res.get("ok"):
+                            updated_tools.append(tool_name)
+                            self._push_js(f"window.onEngineUpdateComplete?.({_js(res)})")
+
+                app_installer_ready = False
+                if app_info.get("update_available") and app_info.get("asset_url") and auto_download_app:
+                    app_lat = app_info.get("latest_version", "")
+                    app_msg = f"Downloading MediaDownloader v{app_lat}…"
+                    status_obj = {"status": "downloading_app", "message": app_msg}
+                    self._push_js(f"window.onAutoUpdateStatus?.({_js(status_obj)})")
+                    app_res = updater.download_app_installer(app_info["asset_url"], app_info.get("asset_name", ""))
+                    if app_res.get("ok"):
+                        app_installer_ready = True
+                        self._push_js(f"window.onAppInstallerReady?.({_js(app_res)})")
+
+                summary = {
+                    "ok": True,
+                    "updated_tools": updated_tools,
+                    "app_update_available": app_info.get("update_available", False),
+                    "app_installer_ready": app_installer_ready,
+                    "app_info": app_info,
+                    "message": "Auto-update complete",
+                }
+                self._push_js(f"window.onAutoUpdateStatus?.({_js({'status': 'completed', **summary})})")
+            except Exception as e:
+                logger.error(f"Auto-update error: {e}")
+                self._push_js(f"window.onAutoUpdateStatus?.({_js({'status': 'error', 'error': str(e)})})")
+
+        threading.Thread(target=run, daemon=True).start()
+        return {"ok": True, "started": True}
 
     # ── detection (used for the live "auto tool" badge) ──
     def detect(self, url: str) -> dict:
@@ -679,8 +766,11 @@ class Api:
         # Pre-seed history entry immediately so mid-download closures or crashes are never lost
         url_path = urllib.parse.urlsplit(url).path
         initial_name = cfg.get("title") or (os.path.basename(url_path) if url_path else "") or url
-        out_dir = cfg.get("output_dir") or get_default_download_dir()
+        base_out = cfg.get("output_dir") or get_default_download_dir()
         tool = tool_override or detect_tool(url)
+        fmt = cfg.get("format", "auto")
+        # Resolve the subfolder up-front so history shows the real destination
+        out_dir = resolve_media_subfolder(base_out, tool, url, fmt)
         initial_thumb = cfg.get("thumbnail") or None
 
         history_id = ""
@@ -766,12 +856,13 @@ class Api:
                         else "error"
                     )
                     thumb_url = resolve_entry_thumbnail_url(files, output_dir=result.get("output_dir") or out_dir) or initial_thumb
-
+                    detected_cat = Api._detect_entry_category(files, display_name)
                     hist_payload = {
                         "url": url,
                         "tool": result.get("tool", tool),
                         "output_dir": result.get("output_dir", out_dir),
                         "filename": display_name,
+                        "category": detected_cat,
                         "files": files,
                         "size_bytes": sum((f.get("size") or 0) for f in files),
                         "status": status_label,
@@ -1151,6 +1242,305 @@ class Api:
         except Exception as e:
             logger.error(f"Failed to list history: {e}")
             return {"ok": False, "error": str(e)}
+
+    @staticmethod
+    def _classify_media_ext(ext: str) -> str:
+        ext = ext.lower()
+        if ext in (".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv", ".m4v", ".ts", ".wmv"):
+            return "video"
+        if ext in (".mp3", ".m4a", ".flac", ".wav", ".ogg", ".opus", ".aac", ".wma"):
+            return "music"
+        if ext in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".jfif", ".avif", ".svg", ".tiff", ".heic"):
+            return "image"
+        return "other"
+
+    @classmethod
+    def _detect_dominant_category(cls, files: list) -> str:
+        video_count = 0
+        audio_count = 0
+        image_count = 0
+        for f in files:
+            if isinstance(f, dict):
+                raw = f.get("ext") or f.get("name") or f.get("path") or ""
+            else:
+                raw = str(f)
+            ext = os.path.splitext(raw)[1].lower() if "." in raw else ""
+            if not ext and raw.startswith("."):
+                ext = raw.lower()
+            if ext in (".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv", ".m4v", ".ts", ".wmv"):
+                video_count += 1
+            elif ext in (".mp3", ".m4a", ".flac", ".wav", ".ogg", ".opus", ".aac", ".wma"):
+                audio_count += 1
+            elif ext in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".jfif", ".avif", ".svg", ".tiff", ".heic"):
+                image_count += 1
+
+        if audio_count > video_count and audio_count >= image_count:
+            return "music"
+        if image_count > video_count and image_count > audio_count:
+            return "image"
+        if video_count > audio_count and video_count >= image_count:
+            return "video"
+        if audio_count > 0:
+            return "music"
+        if image_count > 0:
+            return "image"
+        if video_count > 0:
+            return "video"
+        return "other"
+
+    @classmethod
+    def _detect_entry_category(cls, files: list, filename: str = "") -> str:
+        # Check files in bundle/album first (e.g. bulk music albums)
+        if files:
+            dominant = cls._detect_dominant_category(files)
+            if dominant != "other":
+                return dominant
+        # Fallback to extension of filename if present
+        if filename:
+            ext = os.path.splitext(filename)[1].lower()
+            if ext:
+                classified = cls._classify_media_ext(ext)
+                if classified != "other":
+                    return classified
+        return "video"
+
+    def scan_media_library(self, root_dir: str = "") -> dict:
+        """
+        Scan the media directory and its subfolders (Videos, Music, Images, etc.)
+        for any and all supported media files, merging with existing download history.
+        Maintains the exact same media hierarchy (albums, bundles, single files, thumbnails,
+        playable file lists, categories) as the downloads history.
+        """
+        import hashlib
+        try:
+            from media_downloader import get_default_download_dir
+            target_dir = (root_dir or "").strip()
+            if not target_dir:
+                target_dir = get_default_download_dir()
+            else:
+                target_dir = os.path.expanduser(target_dir)
+
+            if not os.path.isdir(target_dir):
+                try:
+                    os.makedirs(target_dir, exist_ok=True)
+                except Exception:
+                    target_dir = get_default_download_dir()
+
+            # Ensure canonical subfolders always exist
+            for sub in ("Videos", "Music", "Images"):
+                try:
+                    os.makedirs(os.path.join(target_dir, sub), exist_ok=True)
+                except Exception:
+                    pass
+
+            SUPPORTED_VIDEO_EXTS = {".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv", ".m4v", ".ts", ".wmv"}
+            SUPPORTED_AUDIO_EXTS = {".mp3", ".m4a", ".flac", ".wav", ".ogg", ".opus", ".aac", ".wma"}
+            SUPPORTED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".jfif", ".avif", ".svg", ".tiff", ".heic"}
+            ALL_SUPPORTED_EXTS = SUPPORTED_VIDEO_EXTS | SUPPORTED_AUDIO_EXTS | SUPPORTED_IMAGE_EXTS
+
+            norm_target_dir = os.path.normcase(os.path.abspath(target_dir))
+            canonical_dirs = {
+                os.path.normcase(os.path.abspath(os.path.join(target_dir, "Videos"))),
+                os.path.normcase(os.path.abspath(os.path.join(target_dir, "Music"))),
+                os.path.normcase(os.path.abspath(os.path.join(target_dir, "Images"))),
+            }
+
+            # 1. Load download history entries
+            history_entries = download_history.list_entries()
+            claimed_paths = set()
+            history_items = []
+            history_modified = False
+
+            for e in history_entries:
+                files = e.get("files") or []
+                valid_files = []
+                for f in files:
+                    if isinstance(f, dict):
+                        fpath = f.get("path")
+                        real_p = resolve_existing_media_path(fpath, output_dir=e.get("output_dir"))
+                        if real_p and os.path.isfile(real_p):
+                            if fpath != real_p or not f.get("size"):
+                                f["path"] = real_p
+                                f["name"] = os.path.basename(real_p)
+                                f["size"] = os.path.getsize(real_p)
+                                history_modified = True
+                            _register_known_media_path(real_p)
+                            claimed_paths.add(os.path.normcase(os.path.abspath(real_p)))
+                            valid_files.append(f)
+                    else:
+                        real_p = resolve_existing_media_path(str(f), output_dir=e.get("output_dir"))
+                        if real_p and os.path.isfile(real_p):
+                            _register_known_media_path(real_p)
+                            claimed_paths.add(os.path.normcase(os.path.abspath(real_p)))
+                            valid_files.append({"name": os.path.basename(real_p), "path": real_p, "size": os.path.getsize(real_p)})
+
+                # Check if dedicated album directory itself exists and has files (never walk root media dir)
+                out_d = e.get("output_dir")
+                has_files_on_disk = len(valid_files) > 0
+                if not has_files_on_disk and out_d and os.path.isdir(out_d):
+                    norm_out = os.path.normcase(os.path.abspath(out_d))
+                    if norm_out != norm_target_dir and norm_out not in canonical_dirs:
+                        for root_w, _, fnames in os.walk(out_d):
+                            for fn in fnames:
+                                ext_w = os.path.splitext(fn)[1].lower()
+                                if ext_w in ALL_SUPPORTED_EXTS:
+                                    full_w = os.path.join(root_w, fn)
+                                    valid_files.append({"name": fn, "path": full_w, "size": os.path.getsize(full_w)})
+                                    claimed_paths.add(os.path.normcase(os.path.abspath(full_w)))
+                                    _register_known_media_path(full_w)
+                                    has_files_on_disk = True
+
+                if has_files_on_disk:
+                    e_copy = dict(e)
+                    e_copy["files"] = valid_files
+                    e_copy["state"] = "done"
+
+                    # Resolve thumbnail
+                    thumb_url = e_copy.get("thumbnail")
+                    valid_thumb = False
+                    if thumb_url and "/media?" in thumb_url:
+                        try:
+                            parsed = urllib.parse.urlsplit(thumb_url)
+                            qs = urllib.parse.parse_qs(parsed.query)
+                            old_p = (qs.get("path") or qs.get("p") or [""])[0]
+                            if old_p and os.path.isfile(old_p):
+                                _register_known_media_path(old_p)
+                                query = urllib.parse.urlencode({"token": BRIDGE_TOKEN, "path": old_p})
+                                thumb_url = f"http://127.0.0.1:{BRIDGE_PORT}/media?{query}"
+                                valid_thumb = True
+                        except Exception:
+                            pass
+
+                    if not valid_thumb and valid_files:
+                        thumb_url = resolve_entry_thumbnail_url(valid_files, output_dir=e_copy.get("output_dir"))
+
+                    if thumb_url:
+                        e_copy["thumbnail"] = thumb_url
+
+                    # Always re-detect category from actual files so bulk audio albums are categorized correctly
+                    detected_cat = self._detect_entry_category(valid_files, e_copy.get("filename", ""))
+                    e_copy["category"] = detected_cat
+                    if e.get("category") != detected_cat:
+                        e["category"] = detected_cat
+                        history_modified = True
+
+                    history_items.append(e_copy)
+
+            if history_modified:
+                try:
+                    download_history._save(history_entries)
+                except Exception:
+                    pass
+
+            # 2. Walk target_dir to find all unclaimed supported media files
+            dir_media_files = {}
+            for root, dirs, fnames in os.walk(target_dir):
+                norm_root = os.path.normcase(os.path.abspath(root))
+                base_name = os.path.basename(root)
+                if base_name.startswith(".") or base_name == "node_modules":
+                    continue
+
+                media_in_dir = []
+                for fn in fnames:
+                    ext = os.path.splitext(fn)[1].lower()
+                    if ext in ALL_SUPPORTED_EXTS:
+                        f_full = os.path.join(root, fn)
+                        norm_f = os.path.normcase(os.path.abspath(f_full))
+                        if norm_f not in claimed_paths:
+                            try:
+                                f_size = os.path.getsize(f_full)
+                                f_mtime = os.path.getmtime(f_full)
+                            except OSError:
+                                f_size = 0
+                                f_mtime = 0
+                            _register_known_media_path(f_full)
+                            media_in_dir.append({
+                                "name": fn,
+                                "path": f_full,
+                                "size": f_size,
+                                "mtime": f_mtime,
+                                "ext": ext,
+                            })
+
+                if media_in_dir:
+                    dir_media_files[norm_root] = {
+                        "dir_path": root,
+                        "files": media_in_dir,
+                    }
+
+            # 3. Create library items from discovered unclaimed files
+            disk_items = []
+            for norm_dir, dir_info in dir_media_files.items():
+                dir_path = dir_info["dir_path"]
+                files = dir_info["files"]
+
+                is_root_or_canonical = (norm_dir == norm_target_dir) or (norm_dir in canonical_dirs)
+
+                if is_root_or_canonical:
+                    # Direct files in media/, Videos/, Music/, Images/ -> Individual items
+                    for f in files:
+                        cat = self._classify_media_ext(f["ext"])
+                        thumb = resolve_entry_thumbnail_url([f["path"]], output_dir=dir_path)
+                        f_hash = hashlib.md5(f["path"].encode("utf-8", errors="ignore")).hexdigest()[:12]
+                        disk_items.append({
+                            "id": f"disk-{f_hash}",
+                            "historyId": None,
+                            "url": "",
+                            "tool": "local",
+                            "state": "done",
+                            "status": "done",
+                            "output_dir": dir_path,
+                            "filename": f["name"],
+                            "category": cat,
+                            "isAlbum": False,
+                            "files": [{"name": f["name"], "path": f["path"], "size": f["size"]}],
+                            "size_bytes": f["size"],
+                            "thumbnail": thumb or "",
+                            "finished_at": f["mtime"],
+                            "isDiskItem": True,
+                        })
+                else:
+                    # Subfolder containing media files -> Bundle / Album!
+                    folder_name = os.path.basename(dir_path)
+                    dominant_cat = self._detect_dominant_category(files)
+                    is_album = (dominant_cat == "gallery" or dominant_cat == "image") and len(files) > 1
+                    thumb = resolve_entry_thumbnail_url([f["path"] for f in files], output_dir=dir_path)
+                    total_size = sum(f["size"] for f in files)
+                    newest_mtime = max((f["mtime"] for f in files), default=0)
+                    folder_hash = hashlib.md5(dir_path.encode("utf-8", errors="ignore")).hexdigest()[:12]
+
+                    if len(files) == 1:
+                        display_title = files[0]["name"]
+                    else:
+                        display_title = folder_name
+
+                    disk_items.append({
+                        "id": f"disk-folder-{folder_hash}",
+                        "historyId": None,
+                        "url": "",
+                        "tool": "local",
+                        "state": "done",
+                        "status": "done",
+                        "output_dir": dir_path,
+                        "filename": display_title,
+                        "category": dominant_cat,
+                        "isAlbum": is_album,
+                        "files": [{"name": f["name"], "path": f["path"], "size": f["size"]} for f in files],
+                        "size_bytes": total_size,
+                        "thumbnail": thumb or "",
+                        "finished_at": newest_mtime,
+                        "isDiskItem": True,
+                    })
+
+            # 4. Merge history items + disk items, sorted newest first
+            all_items = history_items + disk_items
+            all_items.sort(key=lambda x: (x.get("finished_at") or x.get("started_at") or 0), reverse=True)
+
+            logger.info(f"scan_media_library scanned {len(all_items)} total items ({len(history_items)} history, {len(disk_items)} disk) from {target_dir}")
+            return {"ok": True, "entries": all_items}
+        except Exception as e:
+            logger.error(f"Failed to scan media library: {e}", exc_info=True)
+            return {"ok": False, "error": str(e), "entries": []}
 
     def get_item_thumbnail_url(self, path: str, output_dir: str = "") -> dict:
         """Resolve a thumbnail URL for any media file (audio cover art, video frame, or image)."""
@@ -1852,21 +2242,24 @@ def _apply_window_icon():
 
 
 def _startup_update_check(api):
-    """Background check on startup to illuminate the update indicator if needed."""
+    """Background check on startup to illuminate the update indicator and populate update states."""
     time.sleep(4)
     try:
         tools_info = updater.check_tool_updates()
         app_info = updater.check_app_update()
         any_update = bool(app_info.get("update_available") or tools_info.get("any_update"))
+        payload = {
+            "ok": True,
+            "any_update": any_update,
+            "app_update": app_info.get("update_available", False),
+            "app_version": app_info.get("latest_version"),
+            "app": app_info,
+            "tools_update": tools_info.get("any_update", False),
+            "tools": tools_info.get("tools", {}),
+        }
         if any_update:
-            payload = {
-                "any_update": True,
-                "app_update": app_info.get("update_available", False),
-                "app_version": app_info.get("latest_version"),
-                "tools_update": tools_info.get("any_update", False),
-                "tools": tools_info.get("tools", {}),
-            }
             api._push_js(f"window.onUpdateAvailable?.({_js(payload)})")
+        api._push_js(f"window.onUpdateCheckComplete?.({_js(payload)})")
     except Exception as e:
         logger.debug(f"Startup update check failed: {e}")
 

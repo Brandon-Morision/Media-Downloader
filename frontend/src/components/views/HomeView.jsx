@@ -279,78 +279,81 @@ export default function HomeView({
         </div>
 
         {/* Recent Items Cards Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
           {displayItems.map((item) => {
             const bundleInfo = getBundleInfo(item);
             return (
               <div
                 key={item.id}
                 onClick={() => handleItemClick(item)}
-                className="bg-surface-1 border border-border-subtle hover:border-border rounded-2xl p-2.5 flex flex-col gap-2.5 cursor-pointer hover:bg-surface-2 transition-all duration-150 group shadow-sm hover:shadow-md"
+                className="bg-surface-1 border border-border-subtle hover:border-border rounded-2xl overflow-hidden flex flex-col cursor-pointer hover:bg-surface-2 transition-all duration-200 group shadow-sm hover:shadow-xl hover:-translate-y-1 relative"
               >
-                {/* Thumbnail / Visual Box */}
-                <div className="relative aspect-video rounded-xl overflow-hidden bg-surface-3 flex items-center justify-center">
+                {/* Thumbnail / Visual Box - fills top, left, and right */}
+                <div className="relative aspect-[16/11] sm:aspect-[4/3] w-full overflow-hidden bg-surface-3 flex items-center justify-center">
                   <MediaThumbnail
                     item={item}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                   />
+
+                  {/* Gradient Blend into the bottom of the card where it meets words */}
+                  <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-surface-1 via-surface-1/70 to-transparent pointer-events-none transition-colors duration-200 group-hover:from-surface-2 group-hover:via-surface-2/70" />
 
                   {/* Album / Bundle Indicator: Top-left badge */}
                   {bundleInfo.isImageBundle && (
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-md border border-brand-border text-[10px] font-bold flex items-center gap-1.5 shadow-lg z-10" style={{color: 'var(--acc)'}}>
-                      <Layers className="w-3 h-3" style={{color: 'var(--acc)'}} />
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-md border border-brand-border text-[10.5px] font-bold flex items-center gap-1.5 shadow-lg z-10" style={{color: 'var(--acc)'}}>
+                      <Layers className="w-3.5 h-3.5" style={{color: 'var(--acc)'}} />
                       <span>{bundleInfo.count} Photos</span>
                     </div>
                   )}
 
                   {bundleInfo.isVideoBundle && (
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-md border border-sky-500/40 text-[10px] font-bold text-sky-300 flex items-center gap-1.5 shadow-lg z-10">
-                      <ListVideo className="w-3 h-3 text-sky-400" />
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-md border border-sky-500/40 text-[10.5px] font-bold text-sky-300 flex items-center gap-1.5 shadow-lg z-10">
+                      <ListVideo className="w-3.5 h-3.5 text-sky-400" />
                       <span>{bundleInfo.count} Videos</span>
                     </div>
                   )}
 
                   {bundleInfo.isAudioBundle && (
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-md border border-purple-500/40 text-[10px] font-bold text-purple-300 flex items-center gap-1.5 shadow-lg z-10">
-                      <ListMusic className="w-3 h-3 text-purple-400" />
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-md border border-purple-500/40 text-[10.5px] font-bold text-purple-300 flex items-center gap-1.5 shadow-lg z-10">
+                      <ListMusic className="w-3.5 h-3.5 text-purple-400" />
                       <span>{bundleInfo.count} Tracks</span>
                     </div>
                   )}
 
                   {bundleInfo.isMixedBundle && (
-                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-lg bg-black/85 backdrop-blur-md border border-amber-500/40 text-[10px] font-bold text-amber-300 flex items-center gap-1.5 shadow-lg z-10">
-                      <Layers className="w-3 h-3 text-amber-400" />
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-md border border-amber-500/40 text-[10.5px] font-bold text-amber-300 flex items-center gap-1.5 shadow-lg z-10">
+                      <Layers className="w-3.5 h-3.5 text-amber-400" />
                       <span>{bundleInfo.count} Items</span>
                     </div>
                   )}
 
                   {/* Single Item Duration Badge */}
                   {!bundleInfo.isImageBundle && !bundleInfo.isVideoBundle && !bundleInfo.isAudioBundle && !bundleInfo.isMixedBundle && item.duration && (
-                    <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded-md bg-black/75 backdrop-blur-sm text-[10px] font-mono font-medium text-white">
+                    <span className="absolute bottom-2 right-2.5 px-2 py-0.5 rounded-md bg-black/80 backdrop-blur-md border border-white/10 text-[10px] font-mono font-medium text-white shadow-sm z-10">
                       {item.duration}
                     </span>
                   )}
 
                   {/* Hover Play Button */}
-                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <div className="w-9 h-9 rounded-full bg-brand-acc text-slate-950 flex items-center justify-center shadow-lg">
-                      <Play className="w-4 h-4 ml-0.5 fill-current" />
+                  <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-200 z-10">
+                    <div className="w-11 h-11 rounded-full bg-brand-acc text-slate-950 flex items-center justify-center shadow-glow group-hover:scale-110 transition-transform">
+                      <Play className="w-5 h-5 ml-0.5 fill-current" />
                     </div>
                   </div>
                 </div>
 
                 {/* Info Text */}
-                <div className="flex flex-col px-1 pb-1">
-                  <span className="text-xs font-semibold text-slate-100 truncate group-hover:text-brand-acc transition-colors">
+                <div className="flex flex-col px-3.5 pt-2 pb-3.5 gap-1 min-w-0">
+                  <span className="text-xs sm:text-sm font-semibold text-slate-100 truncate group-hover:text-brand-acc transition-colors leading-tight">
                     {item.filename}
                   </span>
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1 font-medium">
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 mt-0.5 font-medium">
                     <span>
                       {bundleInfo.count > 1
                         ? `${bundleInfo.count} files · ${fmtBytes(item.sizeBytes)}`
                         : (item.res || fmtBytes(item.sizeBytes))}
                     </span>
-                    <span className="text-slate-500">{item.timeAgo || 'Recent'}</span>
+                    <span className="text-slate-500 font-mono text-[10.5px]">{item.timeAgo || 'Recent'}</span>
                   </div>
                 </div>
               </div>

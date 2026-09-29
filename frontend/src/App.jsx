@@ -26,6 +26,8 @@ export default function App() {
   const [initialAnalyzeUrl, setInitialAnalyzeUrl] = useState('');
 
   const [downloads, setDownloads] = useState([]);
+  const [libraryItems, setLibraryItems] = useState([]);
+  const [isLibraryLoading, setIsLibraryLoading] = useState(false);
   const [activeJobId, setActiveJobId] = useState(null);
 
   // Modals state
@@ -46,6 +48,7 @@ export default function App() {
   // Notifications
   const [toast, setToast] = useState({ message: '', isSuccess: true });
   const [clipboardUrl, setClipboardUrl] = useState(null);
+  const [hasUpdate, setHasUpdate] = useState(false);
 
   // Search Explore state
   const [searchResults, setSearchResults] = useState([]);
@@ -57,6 +60,18 @@ export default function App() {
   downloadsRef.current = downloads;
   const onFinishActionRef = useRef(onFinishAction);
   onFinishActionRef.current = onFinishAction;
+
+  useEffect(() => {
+    const prevHandler = window.onUpdateAvailable;
+    window.onUpdateAvailable = (payload) => {
+      if (payload?.any_update) {
+        setHasUpdate(true);
+      }
+      if (typeof prevHandler === 'function') {
+        prevHandler(payload);
+      }
+    };
+  }, []);
 
   // Apply theme data attribute
   useEffect(() => {
@@ -125,12 +140,50 @@ export default function App() {
     }
   }, []);
 
+  // ── Load full media library from disk & history ──
+  const loadLibrary = useCallback(async () => {
+    try {
+      setIsLibraryLoading(true);
+      await waitForApi(10000);
+      const targetDir = outputDir || localStorage.getItem('md_output_folder') || '';
+      const res = await api.scanMediaLibrary(targetDir);
+      if (res?.ok && Array.isArray(res.entries)) {
+        const formatted = res.entries.map((entry) => ({
+          id: entry.id,
+          historyId: entry.historyId || (entry.isDiskItem ? null : entry.id),
+          url: entry.url || '',
+          tool: entry.tool || 'local',
+          state: 'done',
+          jobId: null,
+          outputDir: entry.output_dir || entry.outputDir,
+          itemsDone: entry.files?.length || 0,
+          files: entry.files || [],
+          filename: entry.filename || '',
+          category: entry.category,
+          isAlbum: Boolean(entry.isAlbum),
+          sizeBytes: entry.size_bytes || entry.sizeBytes || 0,
+          thumbnail: entry.thumbnail || '',
+          error: '',
+          finishedAt: entry.finished_at ? (entry.finished_at * 1000) : (entry.finishedAt || Date.now()),
+          isDiskItem: Boolean(entry.isDiskItem),
+        }));
+        setLibraryItems(formatted);
+      }
+    } catch (err) {
+      console.error('Failed to scan media library:', err);
+    } finally {
+      setIsLibraryLoading(false);
+    }
+  }, [outputDir]);
+
   // ── Load initial data on mount & pywebview ready ──
   useEffect(() => {
     loadHistory();
+    loadLibrary();
 
     const onReady = () => {
       loadHistory();
+      loadLibrary();
     };
     window.addEventListener('pywebviewready', onReady);
 
@@ -152,14 +205,16 @@ export default function App() {
     return () => {
       window.removeEventListener('pywebviewready', onReady);
     };
-  }, [loadHistory]);
+  }, [loadHistory, loadLibrary]);
 
   // Re-sync history whenever switching to library or downloader
   useEffect(() => {
-    if (currentView === 'library' || currentView === 'downloader') {
+    if (currentView === 'library') {
+      loadLibrary();
+    } else if (currentView === 'downloader') {
       loadHistory();
     }
-  }, [currentView, loadHistory]);
+  }, [currentView, loadLibrary, loadHistory]);
 
   // ── Register PyWebView Python push event hooks ──
   useEffect(() => {
@@ -239,6 +294,13 @@ export default function App() {
           return item;
         })
       );
+
+      // Refresh media library when download completes successfully
+      if (ok) {
+        setTimeout(() => {
+          loadLibrary();
+        }, 300);
+      }
 
       // Check if queue has any more running items
       setTimeout(() => {
@@ -399,6 +461,15 @@ export default function App() {
     showToast('Removed from list');
   };
 
+  const handleDeleteLibraryItem = async (id) => {
+    const item = libraryItems.find((i) => i.id === id);
+    if (item?.historyId) {
+      await api.deleteHistoryEntry(item.historyId);
+    }
+    setLibraryItems((prev) => prev.filter((i) => i.id !== id));
+    showToast('Removed from library');
+  };
+
   const handleRetryDownload = (id) => {
     const item = downloads.find((i) => i.id === id);
     if (item) {
@@ -517,6 +588,7 @@ export default function App() {
         activeCount={runningCount}
         libraryCount={doneCount}
         nightOwlEnabled={nightOwlSettings.enabled}
+        hasUpdate={hasUpdate}
       />
 
       {/* 2. Main Content Area */}
@@ -531,7 +603,7 @@ export default function App() {
               onOpenPlayer={handleOpenPlayer}
               onSwitchToLibrary={() => setCurrentView('library')}
               onSwitchToDownloader={() => setCurrentView('downloader')}
-              downloads={downloads}
+              downloads={libraryItems.length > 0 ? libraryItems : downloads}
               onShowToast={showToast}
             />
           )}
@@ -589,13 +661,14 @@ export default function App() {
 
           {currentView === 'library' && (
             <LibraryView
-              downloads={downloads}
-              onDeleteDownload={handleDeleteDownload}
+              downloads={libraryItems}
+              onDeleteDownload={handleDeleteLibraryItem}
               onClearHistory={handleClearFinished}
               onOpenPlayer={handleOpenPlayer}
               onOpenGallery={handleOpenGallery}
               onSwitchToDownloader={() => setCurrentView('downloader')}
-              onRefreshHistory={loadHistory}
+              onRefreshHistory={loadLibrary}
+              isLoading={isLibraryLoading}
             />
           )}
 

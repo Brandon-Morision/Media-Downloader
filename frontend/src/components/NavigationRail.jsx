@@ -1,12 +1,12 @@
 import React from 'react';
 import { Home, Download, Library, Settings, Moon } from 'lucide-react';
 
-export default function NavigationRail({ currentView, setView, activeCount, libraryCount, nightOwlEnabled }) {
+export default function NavigationRail({ currentView, setView, activeCount, libraryCount, nightOwlEnabled, hasUpdate }) {
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'downloader', label: 'Downloads', icon: Download, badge: activeCount },
     { id: 'library', label: 'Library', icon: Library, badge: libraryCount },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'settings', label: 'Settings', icon: Settings, hasDot: hasUpdate },
   ];
 
   return (
@@ -56,8 +56,8 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
                 <span className="tracking-tight">{item.label}</span>
               </div>
 
-              {/* Badge indicator */}
-              {Boolean(item.badge) && item.badge > 0 && (
+              {/* Badge or update dot indicator */}
+              {Boolean(item.badge) && item.badge > 0 ? (
                 <span
                   className={`min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold rounded-full flex items-center justify-center ${
                     isActive
@@ -67,7 +67,9 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
                 >
                   {item.badge}
                 </span>
-              )}
+              ) : item.hasDot ? (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+              ) : null}
             </button>
           );
         })}
@@ -84,7 +86,7 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
               <Moon className="w-3.5 h-3.5 animate-pulse" />
             </div>
           )}
-          <span className="text-[10px] font-mono text-slate-500 tracking-wider">v0.3.5</span>
+          <span className="text-[10px] font-mono text-slate-500 tracking-wider">v0.3.7</span>
         </div>
       </div>
     </aside>
