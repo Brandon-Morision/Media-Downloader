@@ -299,11 +299,17 @@ export const api = {
     if (!isDesktopApp()) return { ok: true, checking: true, mock: true };
     return window.pywebview.api.check_updates_async();
   },
+  async checkForUpdates() {
+    return this.checkUpdates();
+  },
 
   async checkEngineUpdate(toolName) {
     if (!isDesktopApp()) return { ok: true, checking: true, mock: true };
     const fn = window.pywebview.api.check_engine_update_async;
     return fn ? fn(toolName) : { ok: false, error: 'Not supported' };
+  },
+  async checkSingleToolUpdate(toolName) {
+    return this.checkEngineUpdate(toolName);
   },
 
   async checkAppUpdate() {
@@ -317,6 +323,9 @@ export const api = {
     const fn = window.pywebview.api.update_engine_async || window.pywebview.api.update_tool;
     return fn ? fn(toolName) : { ok: false, error: 'Not supported' };
   },
+  async updateSingleTool(toolName) {
+    return this.updateTool(toolName);
+  },
 
   async downloadAppUpdate(assetUrl, assetName = '') {
     if (!isDesktopApp()) return { ok: true, downloading: true };
@@ -327,11 +336,17 @@ export const api = {
     if (!isDesktopApp()) return { ok: true };
     return window.pywebview.api.apply_app_update(installerPath, silent);
   },
+  async installAppUpdate(installerPath, silent = false) {
+    return this.applyAppUpdate(installerPath, silent);
+  },
 
   async autoUpdateAll(autoDownloadApp = true) {
     if (!isDesktopApp()) return { ok: true, started: true };
     const fn = window.pywebview.api.auto_update_all_async;
     return fn ? fn(autoDownloadApp) : { ok: false, error: 'Not supported' };
+  },
+  async autoUpdateAllEngines(autoDownloadApp = true) {
+    return this.autoUpdateAll(autoDownloadApp);
   },
 
   // Night-Owl & Shutdown

@@ -620,6 +620,7 @@ class Api:
                 app_info = updater.check_app_update()
                 payload = {
                     "ok": True,
+                    "info": app_info,
                     "app": app_info,
                 }
                 self._push_js(f"window.onAppCheckComplete?.({_js(payload)})")
@@ -640,10 +641,13 @@ class Api:
                 }
 
         def on_prog(snapshot: dict):
+            self._push_js(f"window.onSingleToolProgress?.({_js({'tool': tool_name, **snapshot})})")
             self._push_js(f"window.onUpdateProgress?.({_js({'type': 'tool', 'tool': tool_name, **snapshot})})")
 
         def run():
             result = updater.update_engine_tool(tool_name, on_progress=on_prog)
+            tool_payload = {"ok": result.get("ok", False), "tool": tool_name, "version": result.get("version"), "error": result.get("error")}
+            self._push_js(f"window.onSingleToolUpdateComplete?.({_js(tool_payload)})")
             self._push_js(f"window.onEngineUpdateComplete?.({_js(result)})")
 
         threading.Thread(target=run, daemon=True).start()
@@ -652,10 +656,12 @@ class Api:
     def download_app_update_async(self, asset_url: str, asset_name: str = "") -> dict:
         """Download desktop app installer in background thread."""
         def on_prog(snapshot: dict):
+            self._push_js(f"window.onAppDownloadProgress?.({_js(snapshot)})")
             self._push_js(f"window.onUpdateProgress?.({_js({'type': 'app', **snapshot})})")
 
         def run():
             result = updater.download_app_installer(asset_url, asset_name, on_progress=on_prog)
+            self._push_js(f"window.onAppDownloadComplete?.({_js(result)})")
             self._push_js(f"window.onAppInstallerReady?.({_js(result)})")
 
         threading.Thread(target=run, daemon=True).start()
@@ -682,6 +688,7 @@ class Api:
         def run():
             try:
                 self._push_js(f"window.onAutoUpdateStatus?.({_js({'status': 'checking', 'message': 'Checking updates for engines and application…'})})")
+                self._push_js(f"window.onAutoUpdateStep?.('Scanning for engine and application updates…')")
                 tools_info = updater.check_tool_updates()
                 app_info = updater.check_app_update()
 
@@ -693,20 +700,26 @@ class Api:
                         msg = f"Updating {tool_name} to {lat_ver}…"
                         status_obj = {"status": "updating_engine", "tool": tool_name, "message": msg}
                         self._push_js(f"window.onAutoUpdateStatus?.({_js(status_obj)})")
+                        self._push_js(f"window.onAutoUpdateStep?.({_js(msg)})")
                         res = updater.update_engine_tool(tool_name)
                         if res.get("ok"):
                             updated_tools.append(tool_name)
+                            tool_payload = {"ok": True, "tool": tool_name, "version": res.get("version")}
+                            self._push_js(f"window.onSingleToolUpdateComplete?.({_js(tool_payload)})")
                             self._push_js(f"window.onEngineUpdateComplete?.({_js(res)})")
 
                 app_installer_ready = False
-                if app_info.get("update_available") and app_info.get("asset_url") and auto_download_app:
+                asset_link = app_info.get("asset_url") or app_info.get("download_url")
+                if app_info.get("update_available") and asset_link and auto_download_app and app_info.get("has_direct_installer", True):
                     app_lat = app_info.get("latest_version", "")
                     app_msg = f"Downloading MediaDownloader v{app_lat}…"
                     status_obj = {"status": "downloading_app", "message": app_msg}
                     self._push_js(f"window.onAutoUpdateStatus?.({_js(status_obj)})")
-                    app_res = updater.download_app_installer(app_info["asset_url"], app_info.get("asset_name", ""))
+                    self._push_js(f"window.onAutoUpdateStep?.({_js(app_msg)})")
+                    app_res = updater.download_app_installer(asset_link, app_info.get("asset_name", ""))
                     if app_res.get("ok"):
                         app_installer_ready = True
+                        self._push_js(f"window.onAppDownloadComplete?.({_js(app_res)})")
                         self._push_js(f"window.onAppInstallerReady?.({_js(app_res)})")
 
                 summary = {
@@ -718,9 +731,11 @@ class Api:
                     "message": "Auto-update complete",
                 }
                 self._push_js(f"window.onAutoUpdateStatus?.({_js({'status': 'completed', **summary})})")
+                self._push_js(f"window.onAutoUpdateStep?.('All updates complete')")
             except Exception as e:
                 logger.error(f"Auto-update error: {e}")
                 self._push_js(f"window.onAutoUpdateStatus?.({_js({'status': 'error', 'error': str(e)})})")
+                self._push_js(f"window.onAutoUpdateStep?.({_js(f'Error: {str(e)}')})")
 
         threading.Thread(target=run, daemon=True).start()
         return {"ok": True, "started": True}

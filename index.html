@@ -6052,7 +6052,13 @@ window.onEngineUpdateComplete = function(result) {
 };
 
 function triggerAppDownload() {
-  if (!appUpdateData || !appUpdateData.asset_url) {
+  const url = appUpdateData?.asset_url || appUpdateData?.download_url;
+  if (!url || appUpdateData?.has_direct_installer === false) {
+    if (appUpdateData?.html_url && window.pywebview?.api?.open_url_external) {
+      window.pywebview.api.open_url_external(appUpdateData.html_url);
+      showToast("Opening release page in browser…", true);
+      return;
+    }
     showToast("No installer URL available", false);
     return;
   }
@@ -6063,7 +6069,7 @@ function triggerAppDownload() {
   $("app-update-progress-fill").style.width = "0%";
 
   if (window.pywebview?.api?.download_app_update_async) {
-    window.pywebview.api.download_app_update_async(appUpdateData.asset_url, appUpdateData.asset_name).catch(err => {
+    window.pywebview.api.download_app_update_async(url, appUpdateData.asset_name || "").catch(err => {
       btn.disabled = false;
       btn.textContent = "Download & Install";
       $("app-update-progress-wrap").classList.remove("show");

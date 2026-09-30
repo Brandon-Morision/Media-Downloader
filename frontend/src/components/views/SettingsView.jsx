@@ -398,14 +398,18 @@ export default function SettingsView({
   const handleDownloadApp = async () => {
     try {
       await waitForApi();
-      const downloadUrl = appState.info?.download_url;
-      if (!downloadUrl) {
-        onShowToast('No download URL available', false);
+      const downloadUrl = appState.info?.asset_url || appState.info?.download_url;
+      const assetName = appState.info?.asset_name || 'MediaDownloader_Setup.exe';
+      const htmlUrl = appState.info?.html_url || 'https://github.com/Brandon-Morision/Media-Downloader/releases';
+
+      if (!downloadUrl || appState.info?.has_direct_installer === false) {
+        onShowToast('Opening latest release on GitHub…');
+        await api.openUrlExternal(htmlUrl);
         return;
       }
       setAppState((prev) => ({ ...prev, downloading: true, error: null }));
       onShowToast('Downloading application update…');
-      await api.downloadAppUpdate(downloadUrl);
+      await api.downloadAppUpdate(downloadUrl, assetName);
     } catch (e) {
       setAppState((prev) => ({ ...prev, downloading: false, error: e.message }));
       onShowToast(`Download failed: ${e.message}`, false);
@@ -416,7 +420,8 @@ export default function SettingsView({
     if (!appState.installerPath) return;
     try {
       onShowToast('Launching installer and closing current session…');
-      await api.installAppUpdate(appState.installerPath);
+      const fn = api.installAppUpdate || api.applyAppUpdate;
+      await fn.call(api, appState.installerPath);
     } catch (e) {
       onShowToast(`Launch failed: ${e.message}`, false);
     }
@@ -1060,14 +1065,28 @@ export default function SettingsView({
                             <span>Install & Relaunch</span>
                           </button>
                         ) : appState.info?.update_available ? (
-                          <button
-                            onClick={handleDownloadApp}
-                            disabled={appState.downloading}
-                            className="px-3 py-1.5 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-glow transition-all"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Download Update</span>
-                          </button>
+                          (appState.info?.has_direct_installer !== false && (appState.info?.asset_url || appState.info?.download_url)) ? (
+                            <button
+                              onClick={handleDownloadApp}
+                              disabled={appState.downloading}
+                              className="px-3 py-1.5 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-glow transition-all"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Download Update</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                const url = appState.info?.html_url || 'https://github.com/Brandon-Morision/Media-Downloader/releases';
+                                onShowToast('Opening release page…');
+                                api.openUrlExternal(url);
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-4 text-brand-acc font-semibold text-xs flex items-center gap-1.5 border border-brand-acc/30 transition-all"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>View on GitHub</span>
+                            </button>
+                          )
                         ) : null}
                       </div>
                     </div>

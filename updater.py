@@ -514,6 +514,9 @@ def check_app_update(github_repo: Optional[str] = None) -> dict:
         "release_name": "",
         "release_notes": "",
         "asset_url": "",
+        "download_url": "",
+        "html_url": f"https://github.com/{repo}/releases",
+        "has_direct_installer": False,
         "asset_name": "",
         "asset_size": 0,
         "published_at": "",
@@ -542,15 +545,40 @@ def check_app_update(github_repo: Optional[str] = None) -> dict:
     result["release_name"] = data.get("name") or f"Release {raw_tag}"
     result["release_notes"] = data.get("body", "")
     result["published_at"] = data.get("published_at", "")
+    
+    html_url = data.get("html_url") or f"https://github.com/{repo}/releases"
+    result["html_url"] = html_url
 
-    # Look for Windows installer asset
+    # Robust Windows installer asset matching
+    # Priority: 1. Setup.exe / MediaDownloader.Setup.exe
+    #           2. *installer*.exe
+    #           3. Any .exe file attached to release
+    best_asset = None
     for asset in data.get("assets", []):
         name = asset.get("name", "")
-        if name.endswith("Setup.exe") or name == "MediaDownloader.exe" or (name.endswith(".exe") and "installer" in name.lower()):
-            result["asset_name"] = name
-            result["asset_url"] = asset.get("browser_download_url", "")
-            result["asset_size"] = asset.get("size", 0)
+        name_lower = name.lower()
+        if not name_lower.endswith(".exe"):
+            continue
+        if "setup" in name_lower:
+            best_asset = asset
             break
+        elif "installer" in name_lower:
+            best_asset = asset
+            break
+        elif not best_asset:
+            best_asset = asset
+
+    if best_asset:
+        result["asset_name"] = best_asset.get("name", "")
+        result["asset_url"] = best_asset.get("browser_download_url", "")
+        result["download_url"] = result["asset_url"]
+        result["asset_size"] = best_asset.get("size", 0)
+        result["has_direct_installer"] = True
+    else:
+        result["asset_name"] = ""
+        result["asset_url"] = ""
+        result["download_url"] = html_url
+        result["has_direct_installer"] = False
 
     # Compare versions using version.compare_versions
     try:
