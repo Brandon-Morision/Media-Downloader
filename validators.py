@@ -272,12 +272,16 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
     if 'format' in config:
         format_val = config['format']
         valid_formats = {
-            'auto', 'mp4', 'mp3', 'm4a', 'best',
-            '2160p', '1440p', '1080p', '720p', '480p',
+            'auto', 'mp4', 'mp3', 'm4a', 'best', 'video', 'audio',
+            '2160p', '1440p', '1080p', '720p', '480p', '360p',
             'flac', 'wav', 'opus'
         }
         if format_val not in valid_formats:
             raise ValidationError(f"Invalid format: {format_val}")
+        if format_val == 'video':
+            format_val = 'mp4'
+        elif format_val == 'audio':
+            format_val = 'mp3'
         validated['format'] = format_val
     
     # Validate rate limiting

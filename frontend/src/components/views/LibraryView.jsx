@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Film, Music, Image as ImageIcon, Search, Folder,
   Play, Trash2, LayoutGrid, List, MoreVertical, ExternalLink,
-  Layers, Eye, Images, ListVideo, ListMusic, RotateCcw
+  Layers, Eye, Images, ListVideo, ListMusic, RotateCcw, Shuffle
 } from 'lucide-react';
 import { fmtBytes, fmtDate, getMediaCategory, playableFilesFor, galleryFilesFor, isImage, AUDIO_EXT } from '../../lib/formatters';
 import { api } from '../../lib/api';
@@ -76,6 +76,23 @@ export function getBundleInfo(item) {
     isMixedBundle,
     count,
   };
+}
+
+function resolveItemFolderPath(item) {
+  if (!item) return '';
+  const first = item.files?.[0];
+  let filePath = typeof first === 'string' ? first : first?.path || '';
+  const outDir = item.outputDir || item.output_dir || '';
+
+  if (filePath && (filePath.includes(':\\') || filePath.includes(':/') || filePath.startsWith('/'))) {
+    return filePath;
+  }
+  if (outDir && filePath) {
+    const cleanOut = outDir.replace(/[\\/]+$/, '');
+    const cleanFile = filePath.replace(/^[\\/]+/, '');
+    return `${cleanOut}/${cleanFile}`;
+  }
+  return filePath || outDir || '';
 }
 
 export default function LibraryView({
@@ -173,6 +190,41 @@ export default function LibraryView({
     return true;
   });
 
+  // Extract deduplicated playable media files for current view
+  const allPlayableFiles = useMemo(() => {
+    const seen = new Set();
+    const result = [];
+    for (const item of filteredItems) {
+      const list = playableFilesFor(item);
+      for (const f of list) {
+        const key = f.path || f.name;
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          result.push(f);
+        }
+      }
+    }
+    return result;
+  }, [filteredItems]);
+
+  const handlePlayAll = (shuffle = false) => {
+    if (!onOpenPlayer || allPlayableFiles.length === 0) return;
+    let list = [...allPlayableFiles];
+    if (shuffle) {
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
+    }
+    const label = filter === 'music'
+      ? `Music Library (${list.length} tracks)`
+      : filter === 'video'
+      ? `Video Library (${list.length} videos)`
+      : `Library Playback (${list.length} items)`;
+
+    onOpenPlayer(list, label);
+  };
+
   const handleCardClick = (item) => {
     const info = getBundleInfo(item);
 
@@ -258,31 +310,58 @@ export default function LibraryView({
           </div>
         </div>
 
-        {/* ── CATEGORY FILTER PILLS ── */}
-        <div className="flex items-center gap-2 pt-1">
-          {[
-            { id: 'all', label: 'All' },
-            { id: 'video', label: 'Videos', icon: Film },
-            { id: 'music', label: 'Music', icon: Music },
-            { id: 'image', label: 'Images', icon: ImageIcon },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = filter === tab.id;
-            return (
+        {/* ── CATEGORY FILTER PILLS & ACTION ROW ── */}
+        <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+          <div className="flex items-center gap-2">
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'video', label: 'Videos', icon: Film },
+              { id: 'music', label: 'Music', icon: Music },
+              { id: 'image', label: 'Images', icon: ImageIcon },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = filter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setFilter(tab.id)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                    isActive
+                      ? 'bg-brand-acc text-slate-950 shadow-glow font-bold'
+                      : 'bg-surface-2 text-slate-400 hover:text-slate-200 border border-border-subtle hover:bg-surface-3'
+                  }`}
+                >
+                  {Icon && <Icon className="w-3.5 h-3.5" />}
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Play All & Shuffle Actions (Prominently shown on Music or Video tabs when playable media exists) */}
+          {(filter === 'music' || filter === 'video') && allPlayableFiles.length > 0 && (
+            <div className="flex items-center gap-2 animate-fade-in">
               <button
-                key={tab.id}
-                onClick={() => setFilter(tab.id)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                  isActive
-                    ? 'bg-brand-acc text-slate-950 shadow-glow font-bold'
-                    : 'bg-surface-2 text-slate-400 hover:text-slate-200 border border-border-subtle hover:bg-surface-3'
-                }`}
+                type="button"
+                onClick={() => handlePlayAll(false)}
+                className="px-3.5 py-1.5 rounded-xl bg-brand-acc text-slate-950 font-bold text-xs shadow-glow hover:opacity-95 transition-all active:scale-95 flex items-center gap-1.5"
+                title={`Play all ${allPlayableFiles.length} ${filter === 'music' ? 'tracks' : 'videos'} sequentially`}
               >
-                {Icon && <Icon className="w-3.5 h-3.5" />}
-                <span>{tab.label}</span>
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Play All ({allPlayableFiles.length})</span>
               </button>
-            );
-          })}
+
+              <button
+                type="button"
+                onClick={() => handlePlayAll(true)}
+                className="px-3 py-1.5 rounded-xl bg-surface-2 hover:bg-surface-3 border border-border-subtle text-slate-300 hover:text-white text-xs font-semibold transition-all active:scale-95 flex items-center gap-1.5"
+                title={`Shuffle and play all ${allPlayableFiles.length} ${filter === 'music' ? 'tracks' : 'videos'}`}
+              >
+                <Shuffle className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Shuffle</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -412,8 +491,7 @@ export default function LibraryView({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        const first = item.files?.[0];
-                        const path = typeof first === 'string' ? first : first?.path || item.outputDir || item.output_dir || '';
+                        const path = resolveItemFolderPath(item);
                         if (path) api.openOutputFolder(path);
                       }}
                       className="p-1.5 rounded-lg bg-black/75 hover:bg-black/95 backdrop-blur-md text-slate-300 hover:text-white border border-white/10 transition-colors shadow-md"
@@ -563,8 +641,7 @@ export default function LibraryView({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const first = item.files?.[0];
-                      const path = typeof first === 'string' ? first : first?.path || item.outputDir || item.output_dir || '';
+                      const path = resolveItemFolderPath(item);
                       if (path) api.openOutputFolder(path);
                     }}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-surface-3 transition-colors"

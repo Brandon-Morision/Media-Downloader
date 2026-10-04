@@ -18,7 +18,7 @@ Usage:
     print(f"Media Downloader {get_version_string()}")
 """
 
-__version__ = "0.3.7"
+__version__ = "0.4.0"
 __app_name__ = "Media Downloader"
 __author__ = "Brandon"
 __copyright__ = "2024"

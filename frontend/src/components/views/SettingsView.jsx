@@ -7,6 +7,8 @@ import {
   Volume2
 } from 'lucide-react';
 import { api, waitForApi } from '../../lib/api';
+import novadropBanner from '../../assets/novadrop-banner.png';
+import novadropIcon from '../../assets/novadrop-icon.png';
 
 const ACCENT_THEMES = [
   { id: 'violet', label: 'Violet Glow', color: '#7c6dfa' },
@@ -98,7 +100,7 @@ export default function SettingsView({
     'yt-dlp': 'Checking…',
     'gallery-dl': 'Checking…',
     ffmpeg: 'Checking…',
-    app: '0.3.7',
+    app: '0.4.0',
   });
 
   const [isCheckingAll, setIsCheckingAll] = useState(false);
@@ -199,9 +201,9 @@ export default function SettingsView({
         error: res.ok ? null : res.error,
       }));
       if (res.ok && res.info?.update_available) {
-        onShowToast(`MediaDownloader v${res.info.latest_version} available!`);
+        onShowToast(`NovaDrop v${res.info.latest_version} available!`);
       } else if (res.ok) {
-        onShowToast('MediaDownloader is up to date');
+        onShowToast('NovaDrop is up to date');
       } else {
         onShowToast(res.error || 'Failed to check app update', false);
       }
@@ -306,7 +308,7 @@ export default function SettingsView({
         'yt-dlp': yv || 'Not detected',
         'gallery-dl': gv || 'Not detected',
         ffmpeg: fv || 'Not detected',
-        app: '0.3.7',
+        app: '0.4.0',
       });
     } catch {
       // Fallback
@@ -387,7 +389,7 @@ export default function SettingsView({
     try {
       await waitForApi();
       setAppState((prev) => ({ ...prev, checking: true, error: null }));
-      onShowToast('Checking for MediaDownloader app updates…');
+      onShowToast('Checking for NovaDrop app updates…');
       await api.checkAppUpdate();
     } catch (e) {
       setAppState((prev) => ({ ...prev, checking: false, error: e.message }));
@@ -457,13 +459,19 @@ export default function SettingsView({
       {/* ── TOP USER / BRAND PROFILE BANNER ── */}
       <div className="bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-center justify-between gap-5 shadow-sm transition-all w-full">
         <div className="flex items-center gap-4 text-left w-full sm:w-auto">
-          <div className="w-14 h-14 rounded-2xl bg-brand-dim border-2 border-brand-border text-brand-acc font-extrabold text-2xl flex items-center justify-center shadow-glow shrink-0">
-            M
+          <div className="w-14 h-14 rounded-2xl overflow-hidden border border-white/10 bg-black flex items-center justify-center shadow-glow shrink-0">
+            <img
+              src={novadropBanner}
+              alt="NovaDrop"
+              className="w-full h-full object-cover"
+            />
           </div>
           <div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-100 tracking-tight">MediaDownloader</h2>
+            <h2 className="text-lg sm:text-xl font-extrabold text-slate-100 tracking-tight flex items-center">
+              Nova<span className="text-sky-400">Drop</span>
+            </h2>
             <p className="text-xs text-slate-400 font-medium mt-0.5">
-              Version {versions.app || '0.3.7'} · High Performance Media Extraction Suite
+              Version {versions.app || '0.4.0'} · High Performance Media Extraction Suite
             </p>
           </div>
         </div>
@@ -482,10 +490,10 @@ export default function SettingsView({
         </span>
         <div className="flex flex-col gap-3">
           {/* Row 1: Download Settings */}
-          <div className="bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 rounded-2xl overflow-hidden shadow-sm transition-all duration-200 w-full">
+          <div className="flex flex-col w-full">
             <div
               onClick={() => toggleSection('downloads')}
-              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4"
+              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 shadow-sm"
             >
               <div className="flex items-center gap-4 min-w-0">
                 <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-surface-2/90 border border-border-subtle/70 flex items-center justify-center text-slate-300 shrink-0 shadow-sm">
@@ -515,7 +523,7 @@ export default function SettingsView({
             </div>
 
             {activeSection === 'downloads' && (
-              <div className="p-6 pt-3 border-t border-border-subtle/60 flex flex-col gap-4 text-xs bg-surface-1/40">
+              <div className="mt-1.5 p-6 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle shadow-md flex flex-col gap-4 text-xs animate-fade-in">
                 {/* Output Directory */}
                 <div className="flex flex-col gap-2">
                   <span className="text-slate-300 font-medium text-xs">Download Location</span>
@@ -574,10 +582,10 @@ export default function SettingsView({
           </div>
 
           {/* Row 2: Storage & History */}
-          <div className="bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 rounded-2xl overflow-hidden shadow-sm transition-all duration-200 w-full">
+          <div className="flex flex-col w-full">
             <div
               onClick={() => toggleSection('storage')}
-              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4"
+              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 shadow-sm"
             >
               <div className="flex items-center gap-4 min-w-0">
                 <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-surface-2/90 border border-border-subtle/70 flex items-center justify-center text-slate-300 shrink-0 shadow-sm">
@@ -615,7 +623,7 @@ export default function SettingsView({
             </div>
 
             {activeSection === 'storage' && (
-              <div className="p-6 pt-3 border-t border-border-subtle/60 flex flex-col gap-4 text-xs bg-surface-1/40">
+              <div className="mt-1.5 p-6 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle shadow-md flex flex-col gap-4 text-xs animate-fade-in">
                 <div className="flex items-center justify-between py-1">
                   <div className="flex flex-col">
                     <span className="text-slate-200 font-medium text-xs">Download Directory</span>
@@ -657,10 +665,10 @@ export default function SettingsView({
         </span>
         <div className="flex flex-col gap-3">
           {/* Row 3: Appearance & Accent */}
-          <div className="bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 rounded-2xl overflow-hidden shadow-sm transition-all duration-200 w-full">
+          <div className="flex flex-col w-full">
             <div
               onClick={() => toggleSection('appearance')}
-              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4"
+              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 shadow-sm"
             >
               <div className="flex items-center gap-4 min-w-0">
                 <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-surface-2/90 border border-border-subtle/70 flex items-center justify-center text-slate-300 shrink-0 shadow-sm">
@@ -691,7 +699,7 @@ export default function SettingsView({
             </div>
 
             {activeSection === 'appearance' && (
-              <div className="p-6 pt-3 border-t border-border-subtle/60 flex flex-col gap-4 text-xs bg-surface-1/40">
+              <div className="mt-1.5 p-6 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle shadow-md flex flex-col gap-4 text-xs animate-fade-in">
                 <span className="text-slate-400 font-medium">Select Accent Theme</span>
                 {/* Windows 11 style radio options grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
@@ -731,10 +739,10 @@ export default function SettingsView({
           </div>
 
           {/* Row 4: Notifications & Alerts */}
-          <div className="bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 rounded-2xl overflow-hidden shadow-sm transition-all duration-200 w-full">
+          <div className="flex flex-col w-full">
             <div
               onClick={() => toggleSection('notifications')}
-              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4"
+              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 shadow-sm"
             >
               <div className="flex items-center gap-4 min-w-0">
                 <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-surface-2/90 border border-border-subtle/70 flex items-center justify-center text-slate-300 shrink-0 shadow-sm">
@@ -764,7 +772,7 @@ export default function SettingsView({
             </div>
 
             {activeSection === 'notifications' && (
-              <div className="p-6 pt-3 border-t border-border-subtle/60 flex flex-col gap-4 text-xs bg-surface-1/40">
+              <div className="mt-1.5 p-6 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle shadow-md flex flex-col gap-4 text-xs animate-fade-in">
                 {/* Toggle 1: Desktop Notification on Completion */}
                 <div className="flex items-center justify-between gap-4 py-1">
                   <div className="flex flex-col">
@@ -845,10 +853,10 @@ export default function SettingsView({
         </span>
         <div className="flex flex-col gap-3">
           {/* Row 5: Updates & Extractor Engines Suite */}
-          <div className="bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 rounded-2xl overflow-hidden shadow-sm transition-all duration-200 w-full">
+          <div className="flex flex-col w-full">
             <div
               onClick={() => toggleSection('updates')}
-              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4"
+              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 shadow-sm"
             >
               <div className="flex items-center gap-4 min-w-0">
                 <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-surface-2/90 border border-border-subtle/70 flex items-center justify-center text-slate-300 shrink-0 shadow-sm">
@@ -893,7 +901,7 @@ export default function SettingsView({
             </div>
 
             {activeSection === 'updates' && (
-              <div className="p-6 pt-3 border-t border-border-subtle/60 flex flex-col gap-5 text-xs bg-surface-1/40">
+              <div className="mt-1.5 p-6 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle shadow-md flex flex-col gap-5 text-xs animate-fade-in">
                 {/* Header Action Bar */}
                 <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-border-subtle/40">
                   <div className="flex flex-col">
@@ -976,18 +984,18 @@ export default function SettingsView({
                     </div>
                   </div>
 
-                  {/* 2. MediaDownloader Desktop App Card */}
+                  {/* 2. NovaDrop Desktop App Card */}
                   <div className="p-4 rounded-xl bg-surface-2/80 border border-border-subtle flex flex-col justify-between gap-3">
                     <div>
                       <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-brand-dim border border-brand-border text-brand-acc font-extrabold flex items-center justify-center text-xs shadow-sm">
-                            M
+                          <div className="w-7 h-7 rounded-lg overflow-hidden border border-white/10 bg-black flex items-center justify-center shadow-sm shrink-0">
+                            <img src={novadropIcon} alt="NovaDrop" className="w-full h-full object-contain" />
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-100 text-xs">MediaDownloader Desktop App</span>
+                            <span className="font-bold text-slate-100 text-xs">NovaDrop Desktop App</span>
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-surface-3 text-slate-300 border border-border-subtle">
-                              v{versions.app || '0.3.7'}
+                              v{versions.app || '0.4.0'}
                             </span>
                           </div>
                         </div>
@@ -1225,10 +1233,10 @@ export default function SettingsView({
         </span>
         <div className="flex flex-col gap-3">
           {/* Row 6: Browser Extension */}
-          <div className="bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 rounded-2xl overflow-hidden shadow-sm transition-all duration-200 w-full">
+          <div className="flex flex-col w-full">
             <div
               onClick={() => toggleSection('extension')}
-              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4"
+              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 shadow-sm"
             >
               <div className="flex items-center gap-4 min-w-0">
                 <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-surface-2/90 border border-border-subtle/70 flex items-center justify-center text-slate-300 shrink-0 shadow-sm">
@@ -1259,7 +1267,7 @@ export default function SettingsView({
             </div>
 
             {activeSection === 'extension' && (
-              <div className="p-6 pt-3 border-t border-border-subtle/60 flex flex-col gap-4 text-xs bg-surface-1/40">
+              <div className="mt-1.5 p-6 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle shadow-md flex flex-col gap-4 text-xs animate-fade-in">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400 font-medium">Bridge Server</span>
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-brand-acc bg-brand-dim border border-brand-border font-semibold font-mono text-[11px]">
@@ -1298,11 +1306,11 @@ export default function SettingsView({
             )}
           </div>
 
-          {/* Row 7: About & Repository */}
-          <div className="bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 rounded-2xl overflow-hidden shadow-sm transition-all duration-200 w-full">
+          {/* Row 7: About NovaDrop (Quick Share Style Sub-card) */}
+          <div className="flex flex-col w-full">
             <div
               onClick={() => toggleSection('about')}
-              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4"
+              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 shadow-sm"
             >
               <div className="flex items-center gap-4 min-w-0">
                 <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-surface-2/90 border border-border-subtle/70 flex items-center justify-center text-slate-300 shrink-0 shadow-sm">
@@ -1310,7 +1318,7 @@ export default function SettingsView({
                 </div>
                 <div className="flex flex-col min-w-0">
                   <span className="text-[15px] font-semibold text-slate-100 tracking-tight leading-snug">
-                    About & Repository
+                    About NovaDrop
                   </span>
                   <span className="text-xs text-slate-400 font-normal leading-normal mt-0.5 truncate">
                     Project details, open-source repository & license
@@ -1321,7 +1329,7 @@ export default function SettingsView({
               {/* Win11 Right-side badge & Chevron */}
               <div className="flex items-center gap-3 shrink-0">
                 <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-mono font-semibold bg-surface-2 text-slate-300 border border-border-subtle">
-                  v{versions.app || '0.3.7'}
+                  v{versions.app || '0.4.0'}
                 </span>
                 <ChevronDown
                   className={`w-4.5 h-4.5 text-slate-400 transition-transform duration-200 ${
@@ -1332,33 +1340,25 @@ export default function SettingsView({
             </div>
 
             {activeSection === 'about' && (
-              <div className="p-6 pt-3 border-t border-border-subtle/60 flex flex-col gap-3 text-xs bg-surface-1/40">
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-slate-400">Media Downloader</span>
-                  <span className="font-mono text-brand-acc font-semibold">v{versions.app || '0.3.7'}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-t border-border-subtle/30">
-                  <span className="text-slate-400">yt-dlp Engine</span>
-                  <span className="font-mono text-slate-200">{versions['yt-dlp']}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-t border-border-subtle/30">
-                  <span className="text-slate-400">gallery-dl Engine</span>
-                  <span className="font-mono text-slate-200">{versions['gallery-dl']}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-t border-border-subtle/30">
-                  <span className="text-slate-400">ffmpeg</span>
-                  <span className="font-mono text-slate-200">{versions.ffmpeg}</span>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-border-subtle/40">
-                  <span className="text-slate-400">Project Repository</span>
+              <div className="mt-1.5 px-6 py-5 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle shadow-md flex flex-col gap-3.5 text-xs sm:text-[13px] animate-fade-in select-text">
+                <div className="flex flex-col gap-1 text-slate-300 leading-relaxed">
+                  <span>Copyright 2024–2026 Brandon Morision. All rights reserved.</span>
                   <button
                     type="button"
                     onClick={() => api.openUrlExternal('https://github.com/Brandon-Morision/Media-Downloader')}
-                    className="text-brand-acc hover:text-brand-acc flex items-center gap-1 font-medium transition-colors"
-                    title="Open GitHub repository in browser"
+                    className="text-brand-acc hover:underline cursor-pointer text-left font-normal transition-colors w-fit"
                   >
-                    <span>GitHub</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
+                    NovaDrop is made possible by open source software.
+                  </button>
+                </div>
+
+                <div className="pt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => api.openUrlExternal('https://github.com/Brandon-Morision/Media-Downloader#license')}
+                    className="text-brand-acc hover:underline cursor-pointer text-left font-normal transition-colors w-fit"
+                  >
+                    Terms of Service
                   </button>
                 </div>
               </div>

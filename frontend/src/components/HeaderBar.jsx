@@ -2,6 +2,8 @@ import React from 'react';
 import { Folder } from 'lucide-react';
 import { api } from '../lib/api';
 
+import novadropIcon from '../assets/novadrop-icon.png';
+
 const ACCENT_OPTIONS = [
   { id: 'violet', label: 'Violet Glow', color: '#7c6dfa' },
   { id: 'emerald', label: 'Emerald Mint', color: '#00e599' },
@@ -29,7 +31,7 @@ export default function HeaderBar({ currentView, themeAccent, setThemeAccent, ou
       {/* View Title & Active Indicator */}
       <div className="flex items-center gap-3">
         <h1 className="text-sm font-semibold tracking-wide text-slate-100 flex items-center gap-2">
-          <span>{titles[currentView] || 'MediaDownloader'}</span>
+          <span>{titles[currentView] || 'NovaDrop'}</span>
         </h1>
         {runningCount > 0 && (
           <span className="px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase bg-brand-dim text-brand-acc border border-brand-border rounded-full animate-pulse">
@@ -65,12 +67,12 @@ export default function HeaderBar({ currentView, themeAccent, setThemeAccent, ou
           ))}
         </div>
 
-        {/* User Avatar Circle */}
+        {/* Brand Icon Circle */}
         <div
-          className="w-7 h-7 rounded-full bg-surface-3 border border-white/10 text-slate-200 font-bold text-xs flex items-center justify-center cursor-default shadow-sm select-none"
-          title="MediaDownloader User"
+          className="w-7 h-7 rounded-full overflow-hidden border border-white/10 bg-surface-3 flex items-center justify-center cursor-default shadow-sm select-none"
+          title="NovaDrop"
         >
-          M
+          <img src={novadropIcon} alt="NovaDrop" className="w-full h-full object-contain" />
         </div>
       </div>
     </header>

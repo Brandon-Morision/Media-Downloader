@@ -26,7 +26,7 @@ export default function VideoDownloadModal({
 
   const handleDownloadClick = () => {
     onStartDownload(data.url, {
-      format: selectedFormat === 'audio' ? 'mp3' : 'video',
+      format: selectedFormat === 'audio' ? 'mp3' : (selectedQuality || 'mp4'),
       quality: selectedQuality.replace('p', ''),
       title: data.title,
     });

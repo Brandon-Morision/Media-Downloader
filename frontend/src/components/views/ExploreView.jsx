@@ -7,8 +7,8 @@ import { fmtViews, fmtDuration } from '../../lib/formatters';
 import { api } from '../../lib/api';
 
 const FORMAT_PRESETS = [
-  { id: 'video-best', type: 'video', format: 'video', quality: 'best', label: 'Best Video', sub: 'Highest resolution available (MP4)', icon: Film },
-  { id: 'video-1080', type: 'video', format: 'video', quality: '1080', label: '1080p HD', sub: 'Standard Full HD (MP4)', icon: Film },
+  { id: 'video-best', type: 'video', format: 'best', quality: 'best', label: 'Best Video', sub: 'Highest resolution available (MP4)', icon: Film },
+  { id: 'video-1080', type: 'video', format: '1080p', quality: '1080', label: '1080p HD', sub: 'Standard Full HD (MP4)', icon: Film },
   { id: 'audio-mp3', type: 'audio', format: 'mp3', quality: 'best', label: 'MP3 Audio', sub: '320kbps High Quality Audio', icon: Music },
   { id: 'audio-m4a', type: 'audio', format: 'm4a', quality: 'best', label: 'M4A Audio', sub: 'Fast Apple AAC Audio stream', icon: Music },
   { id: 'audio-flac', type: 'audio', format: 'flac', quality: 'best', label: 'Lossless FLAC', sub: 'Studio quality lossless compression', icon: Music },

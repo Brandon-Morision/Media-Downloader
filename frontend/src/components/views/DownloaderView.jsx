@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import {
   fmtBytes, fmtDate, fmtViews, fmtDuration, toolLabel,
-  playableFilesFor, galleryFilesFor, isLikelyUrl, normalizeUrl, detectTool, getToolDetails,
+  playableFilesFor, galleryFilesFor, isLikelyUrl, normalizeUrl, detectTool,
   friendlyError, getBundleInfo,
 } from '../../lib/formatters';
 import { api } from '../../lib/api';
@@ -221,8 +221,8 @@ export default function DownloaderView({
         limit: galleryLimit > 0 ? galleryLimit : undefined,
       });
     } else {
-      let formatOption = selectedFormatType;
-      let qualityOption = selectedQualityId.replace('p', '');
+      let formatOption = selectedQualityId || 'mp4';
+      let qualityOption = selectedQualityId ? selectedQualityId.replace('p', '') : 'best';
 
       if (selectedFormatType === 'audio') {
         formatOption = 'mp3';
@@ -321,27 +321,6 @@ export default function DownloaderView({
             className="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none pr-2"
           />
 
-          {/* Mode Pill Badge with Auto-Detected Engine */}
-          {urlInput.trim() && (
-            isLikelyUrl(urlInput) ? (
-              <span
-                className={`hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border ${getToolDetails(urlInput).badgeColor}`}
-                title={getToolDetails(urlInput).description}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                <span>{getToolDetails(urlInput).label} · {getToolDetails(urlInput).tool}</span>
-              </span>
-            ) : (
-              <span
-                className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border bg-sky-500/15 text-sky-400 border-sky-500/30"
-                title="Search YouTube"
-              >
-                <Search className="w-2.5 h-2.5" />
-                <span>YouTube Search</span>
-              </span>
-            )
-          )}
-
           <button
             type="button"
             onClick={handlePaste}
@@ -352,29 +331,6 @@ export default function DownloaderView({
 
           {isLikelyUrl(urlInput) ? (
             <>
-              {/* YouTube / Video Format Selector Dropdown */}
-              {detectTool(urlInput) === 'yt-dlp' && (
-                <div
-                  className="flex items-center gap-1 bg-surface-3 hover:bg-surface-4 border border-border-subtle rounded-lg px-2 py-1 shrink-0 transition-colors"
-                  title="Choose download format"
-                >
-                  <span className="text-[11px] font-semibold text-slate-400 hidden lg:inline">Format:</span>
-                  <select
-                    value={ytDownloadFormat}
-                    onChange={(e) => setYtDownloadFormat(e.target.value)}
-                    className="bg-transparent text-xs font-semibold text-brand-acc focus:outline-none cursor-pointer"
-                    title="Select format to download"
-                  >
-                    <option value="mp4" className="bg-surface-2 text-slate-100">🎬 Video · MP4</option>
-                    <option value="1080p" className="bg-surface-2 text-slate-100">🎥 1080p Full HD</option>
-                    <option value="720p" className="bg-surface-2 text-slate-100">📺 720p HD</option>
-                    <option value="mp3" className="bg-surface-2 text-slate-100">🎵 Audio · MP3</option>
-                    <option value="m4a" className="bg-surface-2 text-slate-100">🎧 Audio · M4A</option>
-                    <option value="best" className="bg-surface-2 text-slate-100">✨ Best Quality</option>
-                  </select>
-                </div>
-              )}
-
               {/* Optional Inspect button */}
               <button
                 type="button"
@@ -396,10 +352,10 @@ export default function DownloaderView({
                 type="submit"
                 disabled={!urlInput.trim() || isAnalyzing}
                 className="px-5 py-2 rounded-lg font-bold text-xs tracking-wide shadow-glow transition-all active:scale-95 shrink-0 flex items-center gap-1.5 bg-brand-acc text-slate-950 hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                title={`Download directly with ${detectTool(urlInput)} (${detectTool(urlInput) === 'yt-dlp' ? ytDownloadFormat.toUpperCase() : 'default'})`}
+                title="Download directly"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Download{detectTool(urlInput) === 'yt-dlp' ? ` (${ytDownloadFormat.toUpperCase()})` : ''}</span>
+                <span>Download</span>
               </button>
             </>
           ) : (
@@ -423,58 +379,6 @@ export default function DownloaderView({
             </button>
           )}
         </form>
-
-        {/* Quick Format Selector Chips for YouTube/Video Links */}
-        {isLikelyUrl(urlInput) && detectTool(urlInput) === 'yt-dlp' && (
-          <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-surface-2/80 border border-border-subtle rounded-xl animate-fade-in shadow-sm">
-            <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mr-1">
-              <Sparkles className="w-3.5 h-3.5 text-brand-acc" />
-              <span>Choose format:</span>
-            </span>
-            {[
-              { id: 'mp4', label: '🎬 Video (MP4)', desc: 'Standard MP4 video with audio' },
-              { id: '1080p', label: '🎥 1080p Full HD', desc: '1080p MP4' },
-              { id: '720p', label: '📺 720p HD', desc: '720p MP4' },
-              { id: 'mp3', label: '🎵 Audio (MP3)', desc: 'Extract MP3 audio with cover art' },
-              { id: 'm4a', label: '🎧 Audio (M4A)', desc: 'High quality M4A/AAC with cover art' },
-              { id: 'best', label: '✨ Best Quality', desc: 'Maximum available stream quality' },
-            ].map((f) => {
-              const active = ytDownloadFormat === f.id;
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setYtDownloadFormat(f.id)}
-                  title={f.desc}
-                  className={`px-2.5 py-1 rounded-lg text-xs transition-all flex items-center gap-1 ${
-                    active
-                      ? 'bg-brand-dim text-brand-acc border border-brand-border font-bold shadow-sm'
-                      : 'bg-surface-3 text-slate-400 hover:text-white border border-transparent hover:border-white/10'
-                  }`}
-                >
-                  <span>{f.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Dynamic Contextual Hint */}
-        {urlInput.trim() && (
-          <div className="px-2 text-[11px] text-slate-400 flex items-center justify-between">
-            {isLikelyUrl(urlInput) ? (
-              <span>
-                {detectTool(urlInput) === 'gallery-dl' ? (
-                  <>Auto-detected as <strong>Images / Gallery</strong> (<code className="text-brand-acc">gallery-dl</code>). Press <strong>Enter</strong> or click <strong>Download</strong> to queue directly.</>
-                ) : (
-                  <>Auto-detected as <strong>Video Stream</strong> (<code className="text-pink-400">yt-dlp</code>). Press <strong>Enter</strong> or click <strong>Download</strong> to queue directly.</>
-                )}
-              </span>
-            ) : (
-              <span>Press <strong>Enter</strong> or click <strong>Search</strong> to fetch YouTube videos.</span>
-            )}
-          </div>
-        )}
 
         {/* Analysis Warning / Error Banner with Download Anyway Option */}
         {analyzeError && (

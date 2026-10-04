@@ -527,7 +527,7 @@ class Api:
         self._active_job_ids = set()
         self._active_job_history = {}  # job_id -> history_id
         self._jobs_lock = threading.Lock()
-        logger.info(f"Media Downloader {get_version_string()} initialized")
+        logger.info(f"NovaDrop {get_version_string()} initialized")
         self._recover_interrupted_history()
 
     def _recover_interrupted_history(self):
@@ -1151,35 +1151,69 @@ class Api:
                 return {"ok": False, "error": str(e)}
         return {"ok": False, "error": "Not applicable on non-Windows"}
 
-    def open_output_folder(self, path: str) -> dict:
+    def open_output_folder(self, path: str = "") -> dict:
         """Open the directory containing the file (with file selected if possible),
         or the directory itself, in Windows File Explorer."""
         try:
-            target = (path or "").strip() or get_default_download_dir()
-            expanded = resolve_existing_media_path(target) or os.path.expanduser(target)
-            
             import subprocess as _sp
-            if os.path.isfile(expanded):
-                norm = os.path.normpath(expanded)
-                _sp.Popen(["explorer", f"/select,{norm}"])
+            default_dir = get_default_download_dir()
+            target = (path or "").strip()
+
+            # If no path provided, open default download folder
+            if not target:
+                folder_to_open = default_dir if (default_dir and os.path.isdir(default_dir)) else os.path.expanduser("~")
+                _sp.Popen(f'explorer "{os.path.normpath(folder_to_open)}"')
+                logger.info(f"Opened default folder: {folder_to_open}")
+                return {"ok": True}
+
+            # Attempt resolving as media file or expanding user/relative path
+            resolved = resolve_existing_media_path(target)
+            expanded = resolved or os.path.expanduser(target)
+            norm = os.path.normpath(expanded)
+
+            # 1. Target (or resolved target) is an existing file -> open containing folder and select file
+            if os.path.isfile(norm):
+                # Critical Windows Explorer fix:
+                # Explorer expects: explorer /select,"C:\path\to\file.mp4"
+                # If passed as ['explorer', f'/select,{norm}'], Python's list2cmdline wraps
+                # the entire token in quotes: explorer "/select,C:\path\to\file.mp4"
+                # which causes Explorer to fail switch parsing and fall back to user Documents!
+                _sp.Popen(f'explorer /select,"{norm}"')
                 logger.info(f"Opened containing folder with item selected: {norm}")
                 return {"ok": True}
 
-            folder_to_open = expanded
-            if not os.path.isdir(folder_to_open):
-                parent = os.path.dirname(folder_to_open)
-                if os.path.isdir(parent):
-                    folder_to_open = parent
+            # 2. Target is an existing directory -> open directory
+            if os.path.isdir(norm):
+                _sp.Popen(f'explorer "{norm}"')
+                logger.info(f"Opened directory: {norm}")
+                return {"ok": True}
 
-            if not os.path.isdir(folder_to_open):
-                try:
-                    os.makedirs(folder_to_open, exist_ok=True)
-                except Exception:
-                    folder_to_open = get_default_download_dir()
+            # 3. Target might be a missing file whose parent directory exists
+            parent = os.path.dirname(norm)
+            if parent and os.path.isdir(parent):
+                _sp.Popen(f'explorer "{parent}"')
+                logger.info(f"Target file missing, opened parent directory: {parent}")
+                return {"ok": True}
 
-            norm = os.path.normpath(folder_to_open)
-            _sp.Popen(["explorer", norm])
-            logger.info(f"Opened folder: {norm}")
+            # 4. Check if target exists as a file or folder in default download dir or canonical subfolders
+            if default_dir and os.path.isdir(default_dir):
+                base_name = os.path.basename(norm)
+                for sub in ("", "Videos", "Music", "Images"):
+                    cand_dir = os.path.join(default_dir, sub) if sub else default_dir
+                    file_cand = os.path.join(cand_dir, base_name)
+                    if os.path.isfile(file_cand):
+                        _sp.Popen(f'explorer /select,"{file_cand}"')
+                        logger.info(f"Opened containing folder with candidate selected: {file_cand}")
+                        return {"ok": True}
+                    if os.path.isdir(file_cand):
+                        _sp.Popen(f'explorer "{file_cand}"')
+                        logger.info(f"Opened candidate folder: {file_cand}")
+                        return {"ok": True}
+
+            # 5. Fallback safely to default media directory (never create random dirs in CWD or open Documents)
+            folder_to_open = default_dir if (default_dir and os.path.isdir(default_dir)) else os.path.expanduser("~")
+            _sp.Popen(f'explorer "{os.path.normpath(folder_to_open)}"')
+            logger.info(f"Opened fallback folder: {folder_to_open}")
             return {"ok": True}
         except Exception as e:
             logger.error(f"Failed to open folder {path}: {e}")
@@ -2237,7 +2271,9 @@ def _apply_window_icon():
         user32.FindWindowW.restype = ctypes.c_void_p
         user32.LoadImageW.restype = ctypes.c_void_p
 
-        hwnd = user32.FindWindowW(None, "Media Downloader")
+        hwnd = user32.FindWindowW(None, "NovaDrop")
+        if not hwnd:
+            hwnd = user32.FindWindowW(None, "Media Downloader")
         if not hwnd:
             return
 
@@ -2305,7 +2341,7 @@ def main():
         logger.info(f"Loading legacy frontend from {url_target}")
 
     window = webview.create_window(
-        "Media Downloader",
+        "NovaDrop",
         url_target,
         js_api=api,
         width=1280,

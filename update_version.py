@@ -43,6 +43,7 @@ if hasattr(sys.stderr, 'reconfigure'):
 FILES_TO_UPDATE = {
     'version.py': None,  # Handled specially
     'manifest.json': 'version',
+    'browser_extension/manifest.json': 'version',
     'installer.iss': 'AppVersion',
 }
 

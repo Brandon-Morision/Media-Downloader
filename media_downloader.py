@@ -175,9 +175,9 @@ _FORMAT_SUBFOLDER = {
     "mp3": "Music", "m4a": "Music", "flac": "Music",
     "wav": "Music", "opus": "Music",
     # Explicit video formats → Videos
-    "mp4": "Videos", "best": "Videos",
+    "mp4": "Videos", "best": "Videos", "video": "Videos",
     "2160p": "Videos", "1440p": "Videos", "1080p": "Videos",
-    "720p": "Videos", "480p": "Videos",
+    "720p": "Videos", "480p": "Videos", "360p": "Videos",
 }
 
 
@@ -690,7 +690,7 @@ def build_ytdlp_cmd(url: str, cfg: dict) -> list:
         cmd += ["--ffmpeg-location", ffmpeg_dir]
 
     fmt = cfg.get("format", "auto")
-    if fmt in ("2160p", "1440p", "1080p", "720p", "480p"):
+    if fmt in ("2160p", "1440p", "1080p", "720p", "480p", "360p"):
         h = fmt[:-1]
         cmd += [
             "-f", f"bestvideo[height<={h}]+bestaudio/best[height<={h}]/best",
@@ -1071,8 +1071,17 @@ def resolve_existing_media_path(path: str, output_dir: str = None) -> str:
     candidate_dirs = []
     if output_dir and os.path.isdir(output_dir):
         candidate_dirs.append(output_dir)
-    if dl_dir and os.path.isdir(dl_dir) and dl_dir not in candidate_dirs:
-        candidate_dirs.append(dl_dir)
+        for sub in ("Videos", "Music", "Images"):
+            sub_d = os.path.join(output_dir, sub)
+            if os.path.isdir(sub_d) and sub_d not in candidate_dirs:
+                candidate_dirs.append(sub_d)
+    if dl_dir and os.path.isdir(dl_dir):
+        if dl_dir not in candidate_dirs:
+            candidate_dirs.append(dl_dir)
+        for sub in ("Videos", "Music", "Images"):
+            sub_d = os.path.join(dl_dir, sub)
+            if os.path.isdir(sub_d) and sub_d not in candidate_dirs:
+                candidate_dirs.append(sub_d)
     parent_dir = os.path.dirname(expanded)
     if parent_dir and os.path.isdir(parent_dir) and parent_dir not in candidate_dirs:
         candidate_dirs.append(parent_dir)

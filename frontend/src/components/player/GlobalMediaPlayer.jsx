@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Maximize2, Minimize2, X, Music, Film,
-  Repeat, Shuffle, Heart, Expand, AlertCircle, ListVideo
+  Repeat, Shuffle, Heart, Expand, Shrink, AlertCircle, ListVideo
 } from 'lucide-react';
 import { fmtTime, AUDIO_EXT } from '../../lib/formatters';
 import { api } from '../../lib/api';
@@ -185,29 +185,95 @@ export default function GlobalMediaPlayer({
     if (isMuted && val > 0) setIsMuted(false);
   };
 
-  const toggleFullscreen = () => {
-    if (!modalContainerRef.current) return;
-    if (!document.fullscreenElement) {
-      modalContainerRef.current.requestFullscreen?.().catch(() => {});
-    } else {
-      document.exitFullscreen?.().catch(() => {});
+  const getFullscreenElement = () => {
+    return document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.mozFullScreenElement ||
+      document.msFullscreenElement ||
+      null;
+  };
+
+  const exitFullscreenSafe = async () => {
+    try {
+      if (getFullscreenElement()) {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          await document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+          await document.mozCancelFullScreen();
+        } else if (document.msExitFullscreen) {
+          await document.msExitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.warn('exitFullscreen error:', err);
+    } finally {
+      setIsFullscreen(false);
     }
+  };
+
+  const enterFullscreenSafe = async () => {
+    const el = modalContainerRef.current;
+    if (!el) return;
+    try {
+      if (el.requestFullscreen) {
+        await el.requestFullscreen();
+      } else if (el.webkitRequestFullscreen) {
+        await el.webkitRequestFullscreen();
+      } else if (el.mozRequestFullScreen) {
+        await el.mozRequestFullScreen();
+      } else if (el.msRequestFullscreen) {
+        await el.msRequestFullscreen();
+      }
+      setIsFullscreen(true);
+    } catch (err) {
+      console.warn('requestFullscreen failed, falling back to CSS fullscreen:', err);
+      setIsFullscreen(true);
+    }
+  };
+
+  const toggleFullscreen = () => {
+    if (isFullscreen || getFullscreenElement()) {
+      exitFullscreenSafe();
+    } else {
+      enterFullscreenSafe();
+    }
+  };
+
+  const handleMinimizeToMini = async () => {
+    if (isFullscreen || getFullscreenElement()) {
+      await exitFullscreenSafe();
+    }
+    setIsMinimized(true);
   };
 
   // Sync fullscreen state with native browser fullscreen changes
   useEffect(() => {
     const handleFsChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+      const fsEl = getFullscreenElement();
+      setIsFullscreen(Boolean(fsEl));
     };
     document.addEventListener('fullscreenchange', handleFsChange);
     document.addEventListener('webkitfullscreenchange', handleFsChange);
+    document.addEventListener('mozfullscreenchange', handleFsChange);
+    document.addEventListener('MSFullscreenChange', handleFsChange);
     return () => {
       document.removeEventListener('fullscreenchange', handleFsChange);
       document.removeEventListener('webkitfullscreenchange', handleFsChange);
+      document.removeEventListener('mozfullscreenchange', handleFsChange);
+      document.removeEventListener('MSFullscreenChange', handleFsChange);
+      // If unmounting while in fullscreen, ensure native fullscreen exits
+      if (getFullscreenElement()) {
+        exitFullscreenSafe();
+      }
     };
   }, []);
 
   const handleFullClose = () => {
+    if (isFullscreen || getFullscreenElement()) {
+      exitFullscreenSafe();
+    }
     if (mediaRef.current) {
       mediaRef.current.pause();
     }
@@ -245,17 +311,16 @@ export default function GlobalMediaPlayer({
         toggleFullscreen();
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        if (document.fullscreenElement) {
-          document.exitFullscreen?.().catch(() => {});
-          setIsFullscreen(false);
+        if (isFullscreen || getFullscreenElement()) {
+          exitFullscreenSafe();
         } else if (!isMinimized) {
-          setIsMinimized(true);
+          handleMinimizeToMini();
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [active, isMinimized, duration, togglePlay, isMuted]);
+  }, [active, isMinimized, isFullscreen, duration, togglePlay, isMuted]);
 
   if (!active) return null;
 
@@ -334,19 +399,29 @@ export default function GlobalMediaPlayer({
               {!isAudio && (
                 <button
                   onClick={toggleFullscreen}
-                  className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-surface-3 transition-colors"
-                  title="Toggle Fullscreen (F)"
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-surface-3 transition-colors flex items-center gap-1.5 border border-white/5"
+                  title={isFullscreen ? "Exit Fullscreen (F)" : "Enter Fullscreen (F)"}
                 >
-                  <Expand className="w-3.5 h-3.5 text-slate-300" />
+                  {isFullscreen ? (
+                    <>
+                      <Shrink className="w-3.5 h-3.5 text-brand-acc" />
+                      <span className="hidden sm:inline">Normal Size</span>
+                    </>
+                  ) : (
+                    <>
+                      <Expand className="w-3.5 h-3.5 text-slate-300" />
+                      <span className="hidden sm:inline">Fullscreen</span>
+                    </>
+                  )}
                 </button>
               )}
               <button
-                onClick={() => setIsMinimized(true)}
+                onClick={handleMinimizeToMini}
                 className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-surface-3 transition-colors flex items-center gap-1.5 border border-white/5"
                 title="Minimize to mini-player (Esc)"
               >
                 <Minimize2 className="w-3.5 h-3.5 text-brand-acc" />
-                <span className="hidden sm:inline">Minimize</span>
+                <span className="hidden sm:inline">Mini Player</span>
               </button>
               <button
                 onClick={handleFullClose}
@@ -359,7 +434,7 @@ export default function GlobalMediaPlayer({
           </div>
 
           {/* Media Visual Area */}
-          <div className={`relative ${isFullscreen ? 'flex-1 w-full h-full' : isAudio ? 'min-h-[260px]' : 'aspect-video min-h-[300px] max-h-[58vh]'} bg-black flex items-center justify-center overflow-hidden`}>
+          <div className={`relative ${isFullscreen ? 'flex-1 w-full min-h-0' : isAudio ? 'min-h-[260px]' : 'aspect-video min-h-[300px] max-h-[58vh]'} bg-black flex items-center justify-center overflow-hidden`}>
             {playbackError ? (
               <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-surface-2/90 gap-3 select-none">
                 <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-center text-rose-400 shadow-lg">
@@ -397,6 +472,7 @@ export default function GlobalMediaPlayer({
               <div
                 className="relative w-full h-full flex items-center justify-center bg-black cursor-pointer group select-none"
                 onClick={togglePlay}
+                onDoubleClick={toggleFullscreen}
               >
                 <video
                   ref={mediaRef}
@@ -541,7 +617,7 @@ export default function GlobalMediaPlayer({
               )}
             </div>
 
-            {/* Right Controls: Loop */}
+            {/* Right Controls: Loop & Fullscreen */}
             <div className="flex items-center gap-2">
               <button
                 onClick={toggleLoop}
@@ -552,6 +628,20 @@ export default function GlobalMediaPlayer({
               >
                 <Repeat className="w-4 h-4" />
               </button>
+
+              {!isAudio && (
+                <button
+                  onClick={toggleFullscreen}
+                  className="p-2 rounded-xl text-slate-400 hover:text-white transition-colors"
+                  title={isFullscreen ? 'Exit Fullscreen (F)' : 'Fullscreen (F)'}
+                >
+                  {isFullscreen ? (
+                    <Shrink className="w-4 h-4 text-brand-acc" />
+                  ) : (
+                    <Expand className="w-4 h-4" />
+                  )}
+                </button>
+              )}
             </div>
           </div>
 

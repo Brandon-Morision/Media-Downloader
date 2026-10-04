@@ -3,12 +3,12 @@
 @tailwind utilities;
 
 :root {
-  /* Default: Violet Glow theme */
-  --acc: #7c6dfa;
-  --acc-dim: rgba(124, 109, 250, 0.12);
-  --acc-glow: rgba(124, 109, 250, 0.35);
-  --acc-border: rgba(124, 109, 250, 0.40);
-  --acc-gradient: linear-gradient(135deg, #7c6dfa 0%, #a78bfa 100%);
+  /* Default: Ocean Blue theme */
+  --acc: #38bdf8;
+  --acc-dim: rgba(56, 189, 248, 0.12);
+  --acc-glow: rgba(56, 189, 248, 0.35);
+  --acc-border: rgba(56, 189, 248, 0.40);
+  --acc-gradient: linear-gradient(135deg, #38bdf8 0%, #60a5fa 100%);
 }
 
 [data-theme="emerald"] {
@@ -177,3 +177,106 @@
   animation: tab-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: opacity, transform;
 }
+
+/* ── Windows 11 Fluent Animated Icons (Native Media Player Style) ── */
+
+/* Settings Gear: WinUI3 360° fluid spin with spring & settle */
+@keyframes fluent-gear-spin {
+  0% {
+    transform: rotate(0deg) scale(0.92);
+  }
+  60% {
+    transform: rotate(385deg) scale(1.1);
+  }
+  82% {
+    transform: rotate(355deg) scale(0.98);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+.animate-fluent-gear {
+  animation: fluent-gear-spin 0.58s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+/* Downloads: Directional drop & spring return */
+@keyframes fluent-download-bounce {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  30% {
+    transform: translateY(3.5px) scale(0.95);
+  }
+  65% {
+    transform: translateY(-2px) scale(1.08);
+  }
+  85% {
+    transform: translateY(0.5px) scale(1.02);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fluent-download {
+  animation: fluent-download-bounce 0.48s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+/* Library: WinUI subtle collection tilt & settle */
+@keyframes fluent-library-tilt {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  35% {
+    transform: rotate(-12deg) scale(1.1);
+  }
+  70% {
+    transform: rotate(4deg) scale(1.03);
+  }
+  85% {
+    transform: rotate(-1.5deg) scale(1.01);
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+.animate-fluent-library {
+  animation: fluent-library-tilt 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+/* Home: Subtle spring pop */
+@keyframes fluent-home-pop {
+  0% {
+    transform: scale(1) translateY(0);
+  }
+  35% {
+    transform: scale(1.16) translateY(-2px);
+  }
+  70% {
+    transform: scale(0.96) translateY(0.5px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-fluent-home {
+  animation: fluent-home-pop 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fluent-gear,
+  .animate-fluent-download,
+  .animate-fluent-library,
+  .animate-fluent-home {
+    animation: none !important;
+  }
+}
+

@@ -6,7 +6,7 @@
 
 ; Version is managed centrally in version.py - update that file to change versions
 #define AppName      "Media Downloader"
-#define AppVersion   "0.3.7"
+#define AppVersion   "0.4.0"
 #define AppPublisher "Brandon"
 #define AppExeName   "MediaDownloader.exe"
 #define SourceDir    "dist\MediaDownloader"
@@ -44,6 +44,8 @@ PrivilegesRequired                = admin
 PrivilegesRequiredOverridesAllowed = commandline
 MinVersion                        = 10.0.17134
 WizardStyle                       = modern
+WizardImageFile                   = build_assets\wizard.bmp,build_assets\wizard-2x.bmp
+WizardSmallImageFile              = build_assets\wizard-small.bmp,build_assets\wizard-small-2x.bmp
 ShowLanguageDialog                = no
 
 [Languages]

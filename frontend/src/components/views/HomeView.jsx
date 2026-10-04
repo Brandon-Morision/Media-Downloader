@@ -7,7 +7,6 @@ import {
   fmtBytes,
   playableFilesFor,
   isLikelyUrl,
-  getToolDetails,
   toolLabel,
   getBundleInfo
 } from '../../lib/formatters';
@@ -171,17 +170,6 @@ export default function HomeView({
             placeholder="Paste link to download, or type anything to search YouTube…"
             className="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none pr-3"
           />
-
-          {/* Detected Engine Badge */}
-          {urlInput.trim() && isLikelyUrl(urlInput) && (
-            <span
-              className={`hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider mr-2 border ${getToolDetails(urlInput).badgeColor}`}
-              title={getToolDetails(urlInput).description}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-current" />
-              <span>{getToolDetails(urlInput).label} · {getToolDetails(urlInput).tool}</span>
-            </span>
-          )}
 
           {urlInput.trim() ? (
             <button
