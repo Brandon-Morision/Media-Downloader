@@ -2,12 +2,54 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Maximize2, Minimize2, X, Music, Film,
-  Repeat, Shuffle, Heart, Expand, Shrink, AlertCircle, ListVideo
+  Repeat, Shuffle, Heart, ArrowLeft, MoreHorizontal, Check, ListMusic, ListVideo
 } from 'lucide-react';
-import { fmtTime, AUDIO_EXT } from '../../lib/formatters';
+import { AUDIO_EXT } from '../../lib/formatters';
 import { api } from '../../lib/api';
 import AudioVisualizer from './AudioVisualizer';
 import MiniPlayer from './MiniPlayer';
+
+// Format time precisely as Windows 11 Media Player: HH:MM:SS (e.g. 00:00:05, 00:03:52)
+function fmtWin11Time(seconds) {
+  if (!seconds || isNaN(seconds) || seconds < 0) return '00:00:00';
+  const totalSecs = Math.floor(seconds);
+  const s = totalSecs % 60;
+  const m = Math.floor((totalSecs / 60) % 60);
+  const h = Math.floor(totalSecs / 3600);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+// Windows 11 Media Player Rewind 10s Icon
+function Rewind10Icon({ className = "w-4.5 h-4.5" }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M4 11a8 8 0 1 1 2.3 5.7L4 19" />
+      <polyline points="4 5 4 11 10 11" />
+      <text x="12" y="14.8" textAnchor="middle" fontSize="6.5" fontWeight="bold" fill="currentColor" stroke="none" fontFamily="system-ui, -apple-system, sans-serif">10</text>
+    </svg>
+  );
+}
+
+// Windows 11 Media Player Forward 30s Icon
+function Forward30Icon({ className = "w-4.5 h-4.5" }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M20 11a8 8 0 1 0-2.3 5.7L20 19" />
+      <polyline points="20 5 20 11 14 11" />
+      <text x="12" y="14.8" textAnchor="middle" fontSize="6.5" fontWeight="bold" fill="currentColor" stroke="none" fontFamily="system-ui, -apple-system, sans-serif">30</text>
+    </svg>
+  );
+}
+
+// Windows 11 Media Player Mini Player (PIP) Icon
+function MiniPlayerIcon({ className = "w-4 h-4" }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="3" y="4" width="18" height="15" rx="2" />
+      <rect x="11" y="10" width="8" height="7" rx="1" fill="currentColor" fillOpacity="0.35" />
+    </svg>
+  );
+}
 
 export default function GlobalMediaPlayer({
   active,
@@ -30,7 +72,9 @@ export default function GlobalMediaPlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [showVideoQueue, setShowVideoQueue] = useState(true);
+  const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
 
   const [mediaUrl, setMediaUrl] = useState('');
   const [playbackError, setPlaybackError] = useState('');
@@ -39,15 +83,13 @@ export default function GlobalMediaPlayer({
 
   const mediaRef = useRef(null);
   const modalContainerRef = useRef(null);
+  const idleTimerRef = useRef(null);
 
-  // Normalize files or provide demo track queue if single file
+  // Normalize files or provide fallback
   const safeFiles = Array.isArray(files) && files.length > 0 ? files : [];
-  const currentFile = safeFiles[currentIndex] || safeFiles[0] || { name: title || 'Better Days.mp3', path: '' };
+  const currentFile = safeFiles[currentIndex] || safeFiles[0] || { name: title || 'Media Track', path: '' };
   const ext = (currentFile?.name?.split('.').pop() || '').toLowerCase();
   const isAudio = AUDIO_EXT.includes(ext) || !ext;
-
-  // Up Next playlist queue: only present when multiple tracks are queued/downloaded together
-  const upNextTracks = safeFiles.length > 1 ? safeFiles : [];
 
   // Reset index when fresh playlist provided
   useEffect(() => {
@@ -106,7 +148,7 @@ export default function GlobalMediaPlayer({
     };
   }, [active, currentFile?.path, isAudio]);
 
-  // Autoplay and volume initialization on mediaUrl load
+  // Autoplay on mediaUrl load
   useEffect(() => {
     if (!mediaUrl || !mediaRef.current) return;
     const el = mediaRef.current;
@@ -117,7 +159,7 @@ export default function GlobalMediaPlayer({
       playPromise
         .then(() => setIsPlaying(true))
         .catch((err) => {
-          console.warn('Playback auto-start prevented or waiting user interaction:', err);
+          console.warn('Playback waiting on user interaction:', err);
           setIsPlaying(false);
         });
     }
@@ -131,6 +173,30 @@ export default function GlobalMediaPlayer({
     }
     localStorage.setItem('md_player_volume', String(volume));
   }, [volume, isMuted, playbackRate]);
+
+  // Mouse idle auto-hide controls in video/fullscreen
+  const handleUserActivity = useCallback(() => {
+    setControlsVisible(true);
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (isPlaying) {
+      idleTimerRef.current = setTimeout(() => {
+        setControlsVisible(false);
+        setShowSpeedMenu(false);
+      }, 3200);
+    }
+  }, [isPlaying]);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      setControlsVisible(true);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    } else {
+      handleUserActivity();
+    }
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
+  }, [isPlaying, handleUserActivity]);
 
   // Play / Pause toggle
   const togglePlay = useCallback(() => {
@@ -166,6 +232,20 @@ export default function GlobalMediaPlayer({
       setCurrentIndex(0);
     }
   }, [currentIndex, isShuffling, isLooping, safeFiles.length]);
+
+  const handleRewind10 = useCallback(() => {
+    if (mediaRef.current) {
+      mediaRef.current.currentTime = Math.max(0, mediaRef.current.currentTime - 10);
+      setCurrentTime(mediaRef.current.currentTime);
+    }
+  }, []);
+
+  const handleForward30 = useCallback(() => {
+    if (mediaRef.current) {
+      mediaRef.current.currentTime = Math.min(duration || 0, mediaRef.current.currentTime + 30);
+      setCurrentTime(mediaRef.current.currentTime);
+    }
+  }, [duration]);
 
   const toggleLoop = () => setIsLooping((prev) => !prev);
   const toggleShuffle = () => setIsShuffling((prev) => !prev);
@@ -228,7 +308,7 @@ export default function GlobalMediaPlayer({
       }
       setIsFullscreen(true);
     } catch (err) {
-      console.warn('requestFullscreen failed, falling back to CSS fullscreen:', err);
+      console.warn('requestFullscreen fallback:', err);
       setIsFullscreen(true);
     }
   };
@@ -263,7 +343,6 @@ export default function GlobalMediaPlayer({
       document.removeEventListener('webkitfullscreenchange', handleFsChange);
       document.removeEventListener('mozfullscreenchange', handleFsChange);
       document.removeEventListener('MSFullscreenChange', handleFsChange);
-      // If unmounting while in fullscreen, ensure native fullscreen exits
       if (getFullscreenElement()) {
         exitFullscreenSafe();
       }
@@ -279,8 +358,132 @@ export default function GlobalMediaPlayer({
     }
     setIsPlaying(false);
     setIsMinimized(false);
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.playbackState = 'none';
+      } catch (e) {}
+    }
     if (onClose) onClose();
   };
+
+  // ── Windows System Media Transport Controls (SMTC) via MediaSession API ──
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+
+    if (!active) {
+      try {
+        navigator.mediaSession.playbackState = 'none';
+      } catch (e) {}
+      return;
+    }
+
+    const cleanTitle = currentFile?.name ? currentFile.name.replace(/\.[^/.]+$/, '') : (title || 'Media');
+    let artistName = 'NovaDrop Media Player';
+    let trackTitle = cleanTitle;
+
+    if (cleanTitle.includes(' - ')) {
+      const parts = cleanTitle.split(' - ');
+      artistName = parts[0].trim();
+      trackTitle = parts.slice(1).join(' - ').trim();
+    }
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: trackTitle,
+        artist: artistName,
+        album: safeFiles.length > 1 ? `Playlist (${currentIndex + 1}/${safeFiles.length})` : 'NovaDrop',
+        artwork: coverArtUrl ? [
+          { src: coverArtUrl, sizes: '512x512', type: 'image/jpeg' }
+        ] : [
+          { src: '/favicon.png', sizes: '128x128', type: 'image/png' }
+        ],
+      });
+    } catch (e) {
+      console.debug('MediaSession metadata assignment error:', e);
+    }
+  }, [active, currentFile?.name, title, coverArtUrl, currentIndex, safeFiles.length]);
+
+  // Hook up MediaSession action handlers (Hardware Media Keys & Windows 11 Flyout)
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !active) return;
+
+    const actionHandlers = [
+      ['play', () => {
+        mediaRef.current?.play().then(() => setIsPlaying(true)).catch(() => {});
+      }],
+      ['pause', () => {
+        mediaRef.current?.pause();
+        setIsPlaying(false);
+      }],
+      ['previoustrack', () => handlePrev()],
+      ['nexttrack', () => handleNext()],
+      ['seekto', (details) => {
+        if (details.seekTime != null && mediaRef.current) {
+          mediaRef.current.currentTime = details.seekTime;
+          setCurrentTime(details.seekTime);
+        }
+      }],
+      ['seekbackward', (details) => {
+        if (mediaRef.current) {
+          const skip = details.seekOffset || 10;
+          const target = Math.max(mediaRef.current.currentTime - skip, 0);
+          mediaRef.current.currentTime = target;
+          setCurrentTime(target);
+        }
+      }],
+      ['seekforward', (details) => {
+        if (mediaRef.current) {
+          const skip = details.seekOffset || 30;
+          const target = Math.min(mediaRef.current.currentTime + skip, duration || 0);
+          mediaRef.current.currentTime = target;
+          setCurrentTime(target);
+        }
+      }],
+      ['stop', () => {
+        if (mediaRef.current) {
+          mediaRef.current.pause();
+          mediaRef.current.currentTime = 0;
+        }
+        setIsPlaying(false);
+      }],
+    ];
+
+    for (const [action, handler] of actionHandlers) {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch (e) {}
+    }
+
+    return () => {
+      for (const [action] of actionHandlers) {
+        try {
+          navigator.mediaSession.setActionHandler(action, null);
+        } catch (e) {}
+      }
+    };
+  }, [active, handlePrev, handleNext, duration]);
+
+  // Sync MediaSession playbackState (playing/paused)
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !active) return;
+    try {
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+    } catch (e) {}
+  }, [active, isPlaying]);
+
+  // Sync MediaSession positionState for live Windows 11 flyout scrubber
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !active || !('setPositionState' in navigator.mediaSession)) return;
+    if (duration > 0 && currentTime >= 0 && currentTime <= duration) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: duration,
+          playbackRate: playbackRate || 1,
+          position: currentTime,
+        });
+      } catch (e) {}
+    }
+  }, [active, duration, currentTime, playbackRate]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -292,10 +495,10 @@ export default function GlobalMediaPlayer({
         togglePlay();
       } else if (e.code === 'ArrowLeft') {
         e.preventDefault();
-        if (mediaRef.current) mediaRef.current.currentTime = Math.max(0, mediaRef.current.currentTime - 10);
+        handleRewind10();
       } else if (e.code === 'ArrowRight') {
         e.preventDefault();
-        if (mediaRef.current) mediaRef.current.currentTime = Math.min(duration, mediaRef.current.currentTime + 10);
+        handleForward30();
       } else if (e.code === 'ArrowUp') {
         e.preventDefault();
         setVolume((v) => Math.min(1, parseFloat((v + 0.1).toFixed(2))));
@@ -311,20 +514,23 @@ export default function GlobalMediaPlayer({
         toggleFullscreen();
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        if (isFullscreen || getFullscreenElement()) {
+        if (isQueueOpen) {
+          setIsQueueOpen(false);
+        } else if (isFullscreen || getFullscreenElement()) {
           exitFullscreenSafe();
-        } else if (!isMinimized) {
-          handleMinimizeToMini();
+        } else {
+          handleFullClose();
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [active, isMinimized, isFullscreen, duration, togglePlay, isMuted]);
+  }, [active, isFullscreen, duration, togglePlay, isMuted, handleRewind10, handleForward30, isQueueOpen]);
 
   if (!active) return null;
 
   const trackDisplayName = currentFile?.name ? currentFile.name.replace(/\.[^/.]+$/, '') : (title || 'Track');
+  const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
 
   return (
     <>
@@ -348,102 +554,83 @@ export default function GlobalMediaPlayer({
         onClose={handleFullClose}
       />
 
-      {/* Media Player Modal (Kept in DOM so audio/video playback never breaks across minimize) */}
+      {/* Main Fullscreen / Media Player Surface */}
       <div
-        className={`fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center ${
-          isFullscreen ? 'p-0' : 'p-4'
-        } select-none transition-all duration-200 ${
+        className={`fixed inset-0 z-50 bg-black flex items-center justify-center select-none transition-all duration-300 ${
           isMinimized ? 'opacity-0 pointer-events-none -z-50 scale-95' : 'opacity-100 z-50 scale-100'
         }`}
+        onMouseMove={handleUserActivity}
+        onClick={handleUserActivity}
       >
         <div
           ref={modalContainerRef}
-          className={`w-full ${
-            isFullscreen
-              ? 'w-screen h-screen max-w-none max-h-none rounded-none border-none bg-black flex flex-col justify-between'
-              : isAudio ? 'max-w-md max-h-[92vh] rounded-3xl border border-white/10' : 'max-w-3xl max-h-[92vh] rounded-3xl border border-white/10'
-          } bg-surface-1 shadow-2xl flex flex-col overflow-hidden relative`}
+          className="w-full h-full bg-[#0a0a0c] flex flex-col justify-between overflow-hidden relative"
         >
-          {/* Top Modal Controls Header */}
-          <div className="h-11 px-4 bg-surface-2 border-b border-border-subtle flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2 truncate">
-              {isAudio ? (
-                <Music className="w-3.5 h-3.5 text-brand-acc shrink-0" />
-              ) : (
-                <Film className="w-3.5 h-3.5 text-brand-acc shrink-0" />
-              )}
-              <span className="text-xs font-semibold text-slate-300 truncate">
-                {isAudio
-                  ? (safeFiles.length > 1 ? `Music Playlist · ${currentIndex + 1} of ${safeFiles.length}` : 'Music Player')
-                  : (safeFiles.length > 1 ? `Video Album · Video ${currentIndex + 1} of ${safeFiles.length}` : 'Video Player')}
-              </span>
+          {/* ── WINDOWS 11 MEDIA PLAYER TOP BAR ── */}
+          <div
+            className={`absolute top-0 left-0 right-0 z-30 h-14 px-5 bg-gradient-to-b from-black/85 via-black/45 to-transparent flex items-center justify-between transition-opacity duration-300 ${
+              controlsVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            }`}
+          >
+            {/* Top Left: Back Arrow + App Icon + "Media Player" */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleFullClose}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-slate-200 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
+                title="Back (Esc)"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-2 select-none">
+                {/* Windows 11 Media Player Play Icon Badge */}
+                <div className="w-5 h-5 rounded-full bg-brand-acc/20 border border-brand-acc/40 flex items-center justify-center text-brand-acc shadow-sm">
+                  <Play className="w-2.5 h-2.5 fill-current ml-0.5" />
+                </div>
+                <span className="text-[13px] font-semibold text-slate-200 tracking-tight">
+                  Media Player
+                </span>
+                {safeFiles.length > 1 && (
+                  <span className="text-xs text-slate-400 font-normal ml-1">
+                    ({currentIndex + 1} of {safeFiles.length})
+                  </span>
+                )}
+              </div>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
-              {/* Video Queue toggle button (only shown when multiple videos are queued/downloaded together and not fullscreen) */}
-              {!isAudio && safeFiles.length > 1 && !isFullscreen && (
-                <button
-                  onClick={() => setShowVideoQueue((prev) => !prev)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors border ${
-                    showVideoQueue
-                      ? 'bg-brand-dim text-brand-acc border-brand-border'
-                      : 'text-slate-400 border-white/5 hover:text-white hover:bg-surface-3'
-                  }`}
-                  title="Toggle Album Video Queue"
-                >
-                  <ListVideo className="w-3.5 h-3.5 text-brand-acc" />
-                  <span className="hidden sm:inline">Queue ({safeFiles.length})</span>
-                </button>
-              )}
-
-              {!isAudio && (
-                <button
-                  onClick={toggleFullscreen}
-                  className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-surface-3 transition-colors flex items-center gap-1.5 border border-white/5"
-                  title={isFullscreen ? "Exit Fullscreen (F)" : "Enter Fullscreen (F)"}
-                >
-                  {isFullscreen ? (
-                    <>
-                      <Shrink className="w-3.5 h-3.5 text-brand-acc" />
-                      <span className="hidden sm:inline">Normal Size</span>
-                    </>
-                  ) : (
-                    <>
-                      <Expand className="w-3.5 h-3.5 text-slate-300" />
-                      <span className="hidden sm:inline">Fullscreen</span>
-                    </>
-                  )}
-                </button>
-              )}
+            {/* Top Right: Minimal Controls */}
+            <div className="flex items-center gap-1.5">
               <button
+                type="button"
                 onClick={handleMinimizeToMini}
-                className="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-surface-3 transition-colors flex items-center gap-1.5 border border-white/5"
-                title="Minimize to mini-player (Esc)"
+                className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                title="Mini player (Picture-in-Picture)"
               >
-                <Minimize2 className="w-3.5 h-3.5 text-brand-acc" />
-                <span className="hidden sm:inline">Mini Player</span>
+                <MiniPlayerIcon className="w-4 h-4" />
               </button>
               <button
+                type="button"
                 onClick={handleFullClose}
-                className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-surface-3 transition-colors"
+                className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-white/10 transition-colors"
                 title="Close player"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4.5 h-4.5" />
               </button>
             </div>
           </div>
 
-          {/* Media Visual Area */}
-          <div className={`relative ${isFullscreen ? 'flex-1 w-full min-h-0' : isAudio ? 'min-h-[260px]' : 'aspect-video min-h-[300px] max-h-[58vh]'} bg-black flex items-center justify-center overflow-hidden`}>
+          {/* ── MEDIA CANVAS (VIDEO / AUDIO VISUALIZER) ── */}
+          <div className="flex-1 w-full h-full relative bg-black flex items-center justify-center overflow-hidden">
             {playbackError ? (
-              <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-surface-2/90 gap-3 select-none">
+              <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-[#0d0e12] gap-3 select-none">
                 <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-center text-rose-400 shadow-lg">
-                  <AlertCircle className="w-7 h-7" />
+                  <Film className="w-7 h-7" />
                 </div>
                 <div className="flex flex-col gap-1 max-w-sm">
                   <h4 className="text-sm font-bold text-slate-100">Unable to Play File</h4>
                   <p className="text-xs text-slate-400 leading-relaxed">{playbackError}</p>
-                  <p className="text-[11px] font-mono text-slate-500 truncate mt-1 bg-surface-3 px-2.5 py-1 rounded-lg border border-white/5 max-w-xs">
+                  <p className="text-[11px] font-mono text-slate-500 truncate mt-1 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5 max-w-xs">
                     {currentFile?.path || currentFile?.name}
                   </p>
                 </div>
@@ -459,7 +646,7 @@ export default function GlobalMediaPlayer({
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
                   onEnded={handleNext}
-                  onError={() => setPlaybackError('Playback error: Unable to load or decode this audio track.')}
+                  onError={() => setPlaybackError('Playback error: Unable to decode audio stream.')}
                 />
                 <AudioVisualizer
                   mediaRef={mediaRef}
@@ -478,273 +665,343 @@ export default function GlobalMediaPlayer({
                   ref={mediaRef}
                   src={mediaUrl}
                   crossOrigin="anonymous"
-                  className={`w-full h-full object-contain ${isFullscreen ? 'max-h-full' : 'max-h-[58vh]'}`}
+                  className="w-full h-full object-contain max-h-screen"
                   onTimeUpdate={() => mediaRef.current && setCurrentTime(mediaRef.current.currentTime)}
                   onDurationChange={() => mediaRef.current && setDuration(mediaRef.current.duration)}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
                   onEnded={handleNext}
-                  onError={() => setPlaybackError('Playback error: Unable to load or decode this video file.')}
+                  onError={() => setPlaybackError('Playback error: Unable to play video.')}
                   playsInline
                 />
                 {!isPlaying && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none transition-opacity">
-                    <div className="w-16 h-16 rounded-full bg-brand-acc text-slate-950 flex items-center justify-center shadow-glow transition-transform group-hover:scale-105">
-                      <Play className="w-8 h-8 ml-0.5 fill-current" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/35 pointer-events-none transition-opacity">
+                    <div className="w-16 h-16 rounded-full bg-surface-1/90 border border-white/20 text-white flex items-center justify-center shadow-2xl transition-transform group-hover:scale-105">
+                      <Play className="w-7 h-7 ml-0.5 fill-current text-white" />
                     </div>
                   </div>
                 )}
               </div>
             )}
+
+            {/* Slide-out Queue / Playlist Drawer (Windows 11 Media Player side drawer) */}
+            {safeFiles.length > 1 && (
+              <div
+                className={`absolute top-0 right-0 bottom-0 w-80 max-w-[85vw] z-40 bg-[#111216]/95 backdrop-blur-2xl border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-300 ${
+                  isQueueOpen ? 'translate-x-0' : 'translate-x-full'
+                }`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ListMusic className="w-4 h-4 text-brand-acc" />
+                    <span className="text-sm font-semibold text-white">Play Queue</span>
+                    <span className="text-xs text-slate-400">({safeFiles.length})</span>
+                  </div>
+                  <button
+                    onClick={() => setIsQueueOpen(false)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
+                  {safeFiles.map((file, idx) => {
+                    const isActive = currentIndex === idx;
+                    const itemName = file.name ? file.name.replace(/\.[^/.]+$/, '') : `Item ${idx + 1}`;
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => {
+                          setCurrentIndex(idx);
+                        }}
+                        className={`p-2.5 rounded-xl flex items-center justify-between cursor-pointer transition-all ${
+                          isActive
+                            ? 'bg-brand-acc/15 border border-brand-acc/35 text-white font-medium'
+                            : 'hover:bg-white/5 text-slate-300 border border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                              isActive ? 'bg-brand-acc text-slate-950 font-bold' : 'bg-white/5 text-slate-400'
+                            }`}
+                          >
+                            {isActive ? (
+                              <Play className="w-3 h-3 fill-current ml-0.5" />
+                            ) : (
+                              <span className="text-xs font-mono">{idx + 1}</span>
+                            )}
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs truncate">{itemName}</span>
+                            <span className="text-[10px] text-slate-400">
+                              {isActive ? 'Now Playing' : `Track #${idx + 1}`}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Track Info & Like Row */}
-          <div className="flex items-center justify-between px-6 pt-4 pb-2">
-            <div className="flex flex-col min-w-0">
-              <h3 className="text-base sm:text-lg font-bold text-slate-100 truncate tracking-tight">
-                {trackDisplayName}
-              </h3>
-              <p className="text-xs text-slate-400 font-medium mt-0.5">
-                {currentFile?.artist || (isAudio ? 'Audio Track' : 'Video')}
-              </p>
+          {/* ── WINDOWS 11 MEDIA PLAYER BOTTOM CONTROLS BAR ── */}
+          <div
+            className={`w-full z-30 bg-[#0e0f14]/90 backdrop-blur-2xl border-t border-white/5 transition-opacity duration-300 ${
+              controlsVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* ROW 1: FULL-WIDTH PRECISE SEEKBAR */}
+            <div className="px-5 sm:px-8 pt-3 pb-1 flex items-center gap-3.5 w-full">
+              {/* Left Timestamp: 00:00:05 */}
+              <span className="font-mono text-[11px] sm:text-xs text-slate-300 font-medium select-none min-w-[56px] text-left">
+                {fmtWin11Time(currentTime)}
+              </span>
+
+              {/* Windows 11 Styled Scrub Track */}
+              <div className="relative flex-1 flex items-center group py-2 cursor-pointer">
+                <input
+                  type="range"
+                  min={0}
+                  max={duration || 100}
+                  step={0.1}
+                  value={currentTime}
+                  onChange={handleSeek}
+                  className="w-full h-1 group-hover:h-1.5 rounded-full appearance-none cursor-pointer bg-white/20 transition-all focus:outline-none"
+                  style={{
+                    background: `linear-gradient(to right, var(--acc, #38bdf8) 0%, var(--acc, #38bdf8) ${progressPercent}%, rgba(255,255,255,0.2) ${progressPercent}%, rgba(255,255,255,0.2) 100%)`,
+                    accentColor: 'var(--acc, #38bdf8)',
+                  }}
+                />
+              </div>
+
+              {/* Right Timestamp: 00:03:52 */}
+              <span className="font-mono text-[11px] sm:text-xs text-slate-300 font-medium select-none min-w-[56px] text-right">
+                {fmtWin11Time(duration)}
+              </span>
             </div>
 
-            <button
-              onClick={() => setIsLiked(!isLiked)}
-              className={`p-2 rounded-full transition-transform active:scale-125 ${
-                isLiked ? 'text-rose-500 fill-rose-500' : 'text-slate-400 hover:text-white'
-              }`}
-              title={isLiked ? 'Liked' : 'Like'}
-            >
-              <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
-            </button>
-          </div>
+            {/* ROW 2: CONTROLS CLUSTER (LEFT: TITLE | CENTER: PLAYBACK | RIGHT: UTILITIES) */}
+            <div className="px-5 sm:px-8 pt-0.5 pb-4 flex items-center justify-between gap-4">
+              {/* Left Section: Track Title (Matching Windows 11 Media Player) */}
+              <div className="flex items-center min-w-0 w-1/4">
+                <h3
+                  className="text-sm sm:text-base font-semibold text-white truncate tracking-tight select-text"
+                  title={trackDisplayName}
+                >
+                  {trackDisplayName}
+                </h3>
+              </div>
 
-          {/* Scrubber Bar */}
-          <div className="flex items-center gap-3 px-6 pt-1">
-            <span className="text-[11px] font-mono text-slate-400 min-w-[34px] text-right">
-              {fmtTime(currentTime * 1000)}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={duration || 100}
-              step={0.1}
-              value={currentTime}
-              onChange={handleSeek}
-              className="flex-1 h-1.5 rounded-lg bg-surface-3 cursor-pointer"
-              style={{ accentColor: 'var(--acc)' }}
-            />
-            <span className="text-[11px] font-mono text-slate-400 min-w-[34px]">
-              {fmtTime((duration || 0) * 1000)}
-            </span>
-          </div>
-
-          {/* Playback Controls Row */}
-          <div className="flex items-center justify-between px-6 py-3">
-            {/* Left Controls: Shuffle & Volume */}
-            <div className="flex items-center gap-2">
-              {safeFiles.length > 1 && (
+              {/* Center Section: Playback Controls (Perfect Windows 11 alignment) */}
+              <div className="flex items-center justify-center gap-1.5 sm:gap-2.5 shrink-0">
+                {/* 1. Shuffle */}
                 <button
+                  type="button"
                   onClick={toggleShuffle}
-                  className={`p-2 rounded-xl transition-colors ${
-                    isShuffling ? 'text-brand-acc' : 'text-slate-400 hover:text-white'
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                    isShuffling
+                      ? 'text-brand-acc bg-brand-acc/10'
+                      : 'text-slate-400 hover:text-white hover:bg-white/10'
                   }`}
                   title={isShuffling ? 'Shuffle On' : 'Shuffle Off'}
                 >
                   <Shuffle className="w-4 h-4" />
                 </button>
-              )}
 
-              <div className="flex items-center gap-1.5 ml-1">
+                {/* 2. Previous Track */}
                 <button
-                  onClick={toggleMute}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-white transition-colors"
-                  title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
-                >
-                  {isMuted || volume === 0 ? (
-                    <VolumeX className="w-4 h-4 text-rose-400" />
-                  ) : (
-                    <Volume2 className="w-4 h-4 text-slate-300" />
-                  )}
-                </button>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={isMuted ? 0 : volume}
-                  onChange={handleVolumeChange}
-                  className="w-16 sm:w-20 h-1.5 rounded-lg bg-surface-3 cursor-pointer"
-                  style={{ accentColor: 'var(--acc)' }}
-                  title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
-                />
-              </div>
-            </div>
-
-            {/* Center Controls: Prev, Play/Pause, Next */}
-            <div className="flex items-center gap-3">
-              {safeFiles.length > 1 && (
-                <button
+                  type="button"
                   onClick={handlePrev}
-                  className="p-2 rounded-xl text-slate-300 hover:text-white transition-colors"
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
                   title="Previous track"
                 >
-                  <SkipBack className="w-5 h-5" />
+                  <SkipBack className="w-4.5 h-4.5 fill-current" />
                 </button>
-              )}
 
-              <button
-                onClick={togglePlay}
-                className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-brand-acc text-slate-950 flex items-center justify-center hover:opacity-95 shadow-glow transition-transform active:scale-95 shrink-0"
-                title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
-              >
-                {isPlaying ? (
-                  <Pause className="w-6 h-6 fill-current" />
-                ) : (
-                  <Play className="w-6 h-6 ml-0.5 fill-current" />
-                )}
-              </button>
-
-              {safeFiles.length > 1 && (
+                {/* 3. Rewind 10 seconds (Windows 11 signature control) */}
                 <button
+                  type="button"
+                  onClick={handleRewind10}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
+                  title="Rewind 10 seconds (Left Arrow)"
+                >
+                  <Rewind10Icon className="w-4.5 h-4.5" />
+                </button>
+
+                {/* 4. Play / Pause Button (The Windows 11 Accent Ring Button!) */}
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  className="w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-[#1c1c22] hover:bg-[#25252c] border-[2.5px] border-brand-acc flex items-center justify-center shadow-[0_0_16px_var(--acc-glow,rgba(56,189,248,0.3))] hover:scale-105 active:scale-95 transition-all cursor-pointer mx-1 shrink-0"
+                  title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
+                >
+                  {isPlaying ? (
+                    <Pause className="w-5 h-5 fill-white text-white" />
+                  ) : (
+                    <Play className="w-5 h-5 fill-white text-white ml-0.5" />
+                  )}
+                </button>
+
+                {/* 5. Fast Forward 30 seconds (Windows 11 signature control) */}
+                <button
+                  type="button"
+                  onClick={handleForward30}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
+                  title="Forward 30 seconds (Right Arrow)"
+                >
+                  <Forward30Icon className="w-4.5 h-4.5" />
+                </button>
+
+                {/* 6. Next Track */}
+                <button
+                  type="button"
                   onClick={handleNext}
-                  className="p-2 rounded-xl text-slate-300 hover:text-white transition-colors"
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
                   title="Next track"
                 >
-                  <SkipForward className="w-5 h-5" />
+                  <SkipForward className="w-4.5 h-4.5 fill-current" />
                 </button>
-              )}
-            </div>
 
-            {/* Right Controls: Loop & Fullscreen */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={toggleLoop}
-                className={`p-2 rounded-xl transition-colors ${
-                  isLooping ? 'text-brand-acc' : 'text-slate-400 hover:text-white'
-                }`}
-                title={isLooping ? 'Repeat On' : 'Repeat Off'}
-              >
-                <Repeat className="w-4 h-4" />
-              </button>
-
-              {!isAudio && (
+                {/* 7. Repeat / Loop */}
                 <button
+                  type="button"
+                  onClick={toggleLoop}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                    isLooping
+                      ? 'text-brand-acc bg-brand-acc/10'
+                      : 'text-slate-400 hover:text-white hover:bg-white/10'
+                  }`}
+                  title={isLooping ? 'Repeat On' : 'Repeat Off'}
+                >
+                  <Repeat className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Right Section: Utility Cluster (PIP, Volume, Fullscreen, Queue, More) */}
+              <div className="flex items-center justify-end gap-1 sm:gap-2 w-1/4">
+                {/* 1. Mini Player (PIP) */}
+                <button
+                  type="button"
+                  onClick={handleMinimizeToMini}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
+                  title="Mini Player (Picture in Picture)"
+                >
+                  <MiniPlayerIcon className="w-4 h-4" />
+                </button>
+
+                {/* 2. Volume with smooth hover slider */}
+                <div className="relative flex items-center group/vol">
+                  <button
+                    type="button"
+                    onClick={toggleMute}
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+                    title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
+                  >
+                    {isMuted || volume === 0 ? (
+                      <VolumeX className="w-4.5 h-4.5 text-rose-400" />
+                    ) : (
+                      <Volume2 className="w-4.5 h-4.5" />
+                    )}
+                  </button>
+                  <div className="w-0 group-hover/vol:w-20 transition-all duration-200 overflow-hidden flex items-center pr-1">
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={isMuted ? 0 : volume}
+                      onChange={handleVolumeChange}
+                      className="w-18 h-1 rounded-full cursor-pointer bg-white/20"
+                      style={{ accentColor: 'var(--acc, #38bdf8)' }}
+                      title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Fullscreen Toggle */}
+                <button
+                  type="button"
                   onClick={toggleFullscreen}
-                  className="p-2 rounded-xl text-slate-400 hover:text-white transition-colors"
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
                   title={isFullscreen ? 'Exit Fullscreen (F)' : 'Fullscreen (F)'}
                 >
                   {isFullscreen ? (
-                    <Shrink className="w-4 h-4 text-brand-acc" />
+                    <Minimize2 className="w-4.5 h-4.5 text-brand-acc" />
                   ) : (
-                    <Expand className="w-4 h-4" />
+                    <Maximize2 className="w-4.5 h-4.5" />
                   )}
                 </button>
-              )}
-            </div>
-          </div>
 
-          {/* "Up Next" Video Queue (Shown ONLY if videos are in bulk / same album, and hidden in fullscreen) */}
-          {!isAudio && safeFiles.length > 1 && showVideoQueue && !isFullscreen && (
-            <div className="px-6 py-3 border-t border-border-subtle bg-surface-2/60 flex flex-col gap-2 max-h-48 overflow-y-auto">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-300 tracking-tight flex items-center gap-1.5">
-                  <ListVideo className="w-3.5 h-3.5 text-brand-acc" />
-                  <span>Up Next in Album ({safeFiles.length} videos)</span>
-                </span>
-                <span className="text-[11px] text-slate-400 font-mono">
-                  Playing {currentIndex + 1} of {safeFiles.length}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                {safeFiles.map((item, idx) => {
-                  const isActive = currentIndex === idx;
-                  const vName = item.name ? item.name.replace(/\.[^/.]+$/, '') : `Video ${idx + 1}`;
-                  return (
+                {/* 4. Queue / Playlist Drawer Toggle */}
+                {safeFiles.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsQueueOpen((prev) => !prev)}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                      isQueueOpen
+                        ? 'text-brand-acc bg-brand-acc/15'
+                        : 'text-slate-400 hover:text-white hover:bg-white/10'
+                    }`}
+                    title="Toggle Queue Drawer"
+                  >
+                    <ListMusic className="w-4.5 h-4.5" />
+                  </button>
+                )}
+
+                {/* 5. More Options (Playback Speed, etc.) */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowSpeedMenu((prev) => !prev)}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                      showSpeedMenu
+                        ? 'text-white bg-white/15'
+                        : 'text-slate-400 hover:text-white hover:bg-white/10'
+                    }`}
+                    title="More Options"
+                  >
+                    <MoreHorizontal className="w-4.5 h-4.5" />
+                  </button>
+
+                  {/* Windows 11 Fluent Context Menu */}
+                  {showSpeedMenu && (
                     <div
-                      key={idx}
-                      onClick={() => setCurrentIndex(idx)}
-                      className={`p-2 rounded-xl flex items-center justify-between cursor-pointer transition-all ${
-                        isActive
-                          ? 'bg-brand-dim border border-brand-border text-brand-acc font-semibold shadow-sm'
-                          : 'hover:bg-surface-2 text-slate-300 border border-transparent hover:border-white/5'
-                      }`}
+                      className="absolute right-0 bottom-11 w-44 bg-[#18191e]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-1.5 flex flex-col gap-1 z-50 text-xs animate-fade-in"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                            isActive
-                              ? 'bg-brand-acc text-slate-950 shadow-glow'
-                              : 'bg-surface-3 text-slate-400'
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
+                        Playback Speed
+                      </span>
+                      {[0.5, 0.75, 1, 1.25, 1.5, 2].map((spd) => (
+                        <button
+                          key={spd}
+                          type="button"
+                          onClick={() => {
+                            setPlaybackRate(spd);
+                            setShowSpeedMenu(false);
+                          }}
+                          className={`px-2.5 py-1.5 rounded-xl flex items-center justify-between transition-colors ${
+                            playbackRate === spd
+                              ? 'bg-brand-acc/20 text-brand-acc font-semibold'
+                              : 'text-slate-300 hover:bg-white/5 hover:text-white'
                           }`}
                         >
-                          {isActive ? (
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                          ) : (
-                            <Film className="w-3.5 h-3.5" />
-                          )}
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-xs truncate font-medium">
-                            {vName}
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            {isActive ? 'Now Playing' : `Video #${idx + 1}`}
-                          </span>
-                        </div>
-                      </div>
-                      <span className="text-[11px] font-mono text-slate-400 shrink-0">
-                        {item.duration || ''}
-                      </span>
+                          <span>{spd === 1 ? '1.0x (Normal)' : `${spd}x`}</span>
+                          {playbackRate === spd && <Check className="w-3.5 h-3.5 text-brand-acc" />}
+                        </button>
+                      ))}
                     </div>
-                  );
-                })}
+                  )}
+                </div>
               </div>
             </div>
-          )}
-
-          {/* "Up Next" Audio Playlist Queue (Only for songs downloaded in bulk or together) */}
-          {isAudio && safeFiles.length > 1 && (
-            <div className="px-6 py-3 border-t border-border-subtle flex flex-col gap-2 max-h-40 overflow-y-auto">
-              <span className="text-xs font-bold text-slate-300 tracking-tight">
-                Up Next ({safeFiles.length} tracks)
-              </span>
-              <div className="flex flex-col gap-1.5">
-                {upNextTracks.map((item, idx) => {
-                  const isActive = currentIndex === idx;
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => setCurrentIndex(idx)}
-                      className={`p-2 rounded-xl flex items-center justify-between cursor-pointer transition-colors ${
-                        isActive
-                          ? 'bg-brand-dim border border-brand-border text-brand-acc font-semibold'
-                          : 'hover:bg-surface-2 text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-surface-3 flex items-center justify-center shrink-0">
-                          <Music className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-xs truncate font-medium">
-                            {item.name ? item.name.replace(/\.[^/.]+$/, '') : `Track ${idx + 1}`}
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            {item.artist || 'Audio Track'}
-                          </span>
-                        </div>
-                      </div>
-                      <span className="text-[11px] font-mono text-slate-400">
-                        {item.duration || ''}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </>

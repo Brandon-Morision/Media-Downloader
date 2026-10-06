@@ -128,11 +128,12 @@ export default function SettingsView({
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(() => localStorage.getItem('md_auto_update') !== 'false');
   const [autoDownloadEngines, setAutoDownloadEngines] = useState(() => localStorage.getItem('md_auto_download_engines') !== 'false');
 
-  // Notification toggles
+  // Notification & Power toggles
   const [notifyOnComplete, setNotifyOnComplete] = useState(() => localStorage.getItem('md_notify_complete') !== 'false');
   const [notifyClipboardToast, setNotifyClipboardToast] = useState(() => localStorage.getItem('md_notify_clipboard') !== 'false');
   const [notifyOnError, setNotifyOnError] = useState(() => localStorage.getItem('md_notify_error') !== 'false');
   const [soundOnComplete, setSoundOnComplete] = useState(() => localStorage.getItem('md_sound_complete') === 'true');
+  const [preventSleep, setPreventSleep] = useState(() => localStorage.getItem('md_prevent_sleep') !== 'false');
 
   useEffect(() => {
     loadVersions();
@@ -471,7 +472,7 @@ export default function SettingsView({
               Nova<span className="text-sky-400">Drop</span>
             </h2>
             <p className="text-xs text-slate-400 font-medium mt-0.5">
-              Version {versions.app || '0.4.0'} · High Performance Media Extraction Suite
+              Version {versions.app || '0.4.3'} · High Performance Media Extraction Suite
             </p>
           </div>
         </div>
@@ -574,6 +575,24 @@ export default function SettingsView({
                       setClipAutostart(val);
                       localStorage.setItem('md_clip_autostart', String(val));
                       onShowToast(val ? 'Clipboard auto-detect enabled' : 'Clipboard auto-detect disabled');
+                    }}
+                  />
+                </div>
+
+                {/* Windows Sleep Prevention */}
+                <div className="flex items-center justify-between gap-4 py-2 border-t border-border-subtle/40">
+                  <div className="flex flex-col">
+                    <span className="text-slate-200 font-medium text-xs">Prevent PC sleep during active downloads</span>
+                    <span className="text-slate-400 text-[11px]">Keep Windows awake so large video or gallery downloads aren't interrupted</span>
+                  </div>
+                  <ToggleSwitch
+                    checked={preventSleep}
+                    ariaLabel="Prevent PC sleep during active downloads"
+                    onChange={(val) => {
+                      setPreventSleep(val);
+                      localStorage.setItem('md_prevent_sleep', String(val));
+                      api.setSleepPrevention(val);
+                      onShowToast(val ? 'Windows sleep prevention enabled' : 'Sleep prevention disabled');
                     }}
                   />
                 </div>
@@ -785,7 +804,8 @@ export default function SettingsView({
                     onChange={(val) => {
                       setNotifyOnComplete(val);
                       localStorage.setItem('md_notify_complete', String(val));
-                      onShowToast(val ? 'Completion notifications enabled' : 'Completion notifications disabled');
+                      api.setNativeToastEnabled(val);
+                      onShowToast(val ? 'Windows 11 notifications enabled' : 'Notifications disabled');
                     }}
                   />
                 </div>
@@ -839,6 +859,30 @@ export default function SettingsView({
                       onShowToast(val ? 'Completion audio enabled' : 'Completion audio disabled');
                     }}
                   />
+                </div>
+
+                {/* Windows 11 Native Toast Test Action */}
+                <div className="flex items-center justify-between gap-4 pt-3 border-t border-border-subtle/40">
+                  <div className="flex flex-col">
+                    <span className="text-slate-200 font-medium text-xs">Test Native Windows Notification</span>
+                    <span className="text-slate-400 text-[11px]">Trigger a sample Windows 11 rich toast with action buttons</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sampleUri = outputDir ? `file:///${outputDir.replace(/\\/g, '/')}` : '';
+                      api.showNativeToast(
+                        'NovaDrop • Sample Download Complete',
+                        'sample_video.mp4 (48.5 MB)\nReady to play',
+                        null,
+                        sampleUri ? [{ content: 'Open Folder', arguments: sampleUri, type: 'protocol' }] : []
+                      );
+                      onShowToast('Windows notification sent');
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-4 text-slate-200 hover:text-white font-semibold text-xs border border-border-subtle transition-all shrink-0"
+                  >
+                    Send Test Toast
+                  </button>
                 </div>
               </div>
             )}

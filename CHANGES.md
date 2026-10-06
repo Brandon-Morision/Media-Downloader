@@ -5,7 +5,34 @@ This document summarizes the high priority improvements implemented to enhance t
 
 ## Completed Improvements
 
-### 0. ✅ Modern React 19 Frontend, Universal Thumbnails & Enhanced Downloader (v0.3.0)
+### 0. ✅ Windows 11 Native Integration Suite, SMTC & Compact Navigation Rail (v0.4.3)
+**Status:** Completed
+
+**Changes:**
+- **System Media Transport Controls (SMTC)**: Wired `navigator.mediaSession` with rich metadata (`title`, `artist`, `album`, `artwork`) and action handlers (`play`, `pause`, `previoustrack`, `nexttrack`, `seekto`, `seekbackward`, `seekforward`, `stop`) bridging to Windows 11 volume flyout, lock screen, and Action Center (Win+A).
+- **Windows Taskbar Progress (`taskbar_manager.py`)**: Implemented direct pure-Python COM calling `ITaskbarList3` (`SetProgressValue` & `SetProgressState`) for live green (downloading), yellow (paused), red (error with auto-clear), and normal states directly on the taskbar icon.
+- **Windows 10/11 Interactive Rich Toast Notifications (`toast_manager.py`)**: Built WinRT PowerShell toast dispatch with app branding, downloaded media thumbnails, and native protocol action buttons ("Open File", "Open Folder"). Added "Send Test Toast" action in Settings.
+- **Sleep & Standby Prevention (`sleep_manager.py`)**: Integrated Windows `SetThreadExecutionState` (`ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED`) to keep the PC awake during active downloads and automatically restore normal sleep policy when queues complete.
+- **Fluent DWM Window Effects (`window_effects.py`)**: Configured Windows 11 `DwmSetWindowAttribute` for Immersive Dark Mode (`DWMWA_USE_IMMERSIVE_DARK_MODE`), seamless `#090a0f` caption bar coloring (`DWMWA_CAPTION_COLOR`), rounded corners (`DWMWCP_ROUND`), and Mica backdrop material (`DWMWA_SYSTEMBACKDROP_TYPE`).
+- **Collapsible Windows 11 Navigation Rail**: Added compact icon-only mode when window `< 860px` or toggled via hamburger Menu with refined 14px icons (`w-3.5 h-3.5`), docked active indicator pill, and pinned Settings button.
+
+---
+
+### 0.0. ✅ NovaDrop Brand Rebirth, Ocean Blue Theme, Win11 Settings & Fluent Navigation (v0.4.0)
+**Status:** Completed
+
+**Changes:**
+- Rebranded application from generic Media Downloader to **NovaDrop: High Performance Media Extraction Suite**.
+- Generated comprehensive high-DPI visual assets (icons, Inno Setup wizard bitmaps, banners, favicon).
+- Established Ocean Blue (`#38bdf8`) as the system default accent theme with high-contrast dark mode tuning.
+- Redesigned all 7 Settings sections using native Windows 11 Fluent header cards and distinct sub-card dropdown bodies.
+- Implemented Windows 11 Media Player Fluent micro-animations for navigation icons (360° gear spin, download drop, library tilt, home pop).
+- Added mathematically centered Windows 11 vertical active indicator pill with flexbox alignment.
+- Fixed updater routines for download URL bridging, asset endpoint mapping, and browser release fallback.
+
+---
+
+### 0.0. ✅ Modern React 19 Frontend, Universal Thumbnails & Enhanced Downloader (v0.3.0)
 **Status:** Completed
 
 **Changes:**

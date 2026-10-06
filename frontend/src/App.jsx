@@ -576,6 +576,29 @@ export default function App() {
     showToast(`Night-Owl scheduler ${settings.enabled ? 'activated' : 'deactivated'}`);
   };
 
+  // ── Windows 11 Taskbar Progress Bar Sync (ITaskbarList3) ──
+  useEffect(() => {
+    const runningJobs = downloads.filter((i) => i.state === 'running');
+    const pausedJobs = downloads.filter((i) => i.state === 'paused');
+
+    if (runningJobs.length === 0 && pausedJobs.length === 0) {
+      api.clearTaskbarProgress().catch(() => {});
+      return;
+    }
+
+    if (pausedJobs.length > 0 && runningJobs.length === 0) {
+      // All active jobs are paused -> show yellow paused bar
+      const avg = pausedJobs.reduce((acc, curr) => acc + (curr.progressPercent || 0), 0) / pausedJobs.length;
+      api.setTaskbarProgress(avg, 'paused').catch(() => {});
+      return;
+    }
+
+    // Active downloading -> show green progress bar with average percent
+    const allActive = [...runningJobs, ...pausedJobs];
+    const avgPercent = allActive.reduce((acc, curr) => acc + (curr.progressPercent || 0), 0) / allActive.length;
+    api.setTaskbarProgress(avgPercent, 'normal').catch(() => {});
+  }, [downloads]);
+
   const runningCount = downloads.filter((i) => i.state === 'running').length;
   const doneCount = downloads.filter((i) => i.state === 'done').length;
 

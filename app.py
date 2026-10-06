@@ -813,21 +813,32 @@ class Api:
             if history_id:
                 self._active_job_history[job_id] = history_id
         
+        # Prevent Windows sleep/standby during active downloads
+        try:
+            from sleep_manager import sleep_manager
+            sleep_manager.prevent_sleep()
+        except Exception:
+            pass
+
         logger.info(f"Starting download job {job_id} for URL: {url}")
 
         def on_line(line: str):
             self._push_js(f"window.onDownloadLine?.({_js(job_id)}, {_js(line)})")
 
         def on_progress(snapshot: dict):
-            # Passed as a single object rather than a long positional
-            # argument list — adding new fields (like downloaded_bytes/
-            # total_bytes below) doesn't require touching this call or
-            # remembering an argument order on the JS side.
+            # Update Windows Taskbar Progress bar
+            pct = snapshot.get("percent", 0)
+            try:
+                from taskbar_manager import taskbar
+                taskbar.set_progress(pct, 100, state="normal")
+            except Exception:
+                pass
+
             payload = {
                 "items_done": snapshot.get("items_done", 0),
                 "limit": snapshot.get("limit", 0),
                 "current_file": snapshot.get("current_file") or "",
-                "percent": snapshot.get("percent", 0),
+                "percent": pct,
                 "speed": snapshot.get("speed") or "",
                 "eta": snapshot.get("eta") or "",
                 "downloaded_bytes": snapshot.get("downloaded_bytes"),
@@ -844,6 +855,27 @@ class Api:
             finally:
                 with self._jobs_lock:
                     self._active_job_ids.discard(job_id)
+                    remaining = len(self._active_job_ids)
+
+                if remaining == 0:
+                    try:
+                        from sleep_manager import sleep_manager
+                        sleep_manager.restore_sleep()
+                    except Exception:
+                        pass
+
+                    try:
+                        from taskbar_manager import taskbar
+                        if not result.get("ok") and (result.get("error") != "Cancelled by user."):
+                            taskbar.set_progress(100, 100, state="error")
+                            def _clear_err():
+                                time.sleep(3.5)
+                                taskbar.clear()
+                            threading.Thread(target=_clear_err, daemon=True).start()
+                        else:
+                            taskbar.clear()
+                    except Exception:
+                        pass
 
             status = job_status(job_id)
             files = status.get("files", []) if status.get("ok") else []
@@ -907,6 +939,24 @@ class Api:
                 f"{_js(thumb_url)})"
             )
 
+            # Windows 10/11 Native Interactive Rich Toast Notification
+            try:
+                from toast_manager import toast
+                if result.get("ok"):
+                    toast.show_download_complete(
+                        title=display_name,
+                        files=files,
+                        output_dir=result.get("output_dir") or out_dir,
+                        thumbnail=thumb_url
+                    )
+                elif not result.get("ok") and (result.get("error") != "Cancelled by user."):
+                    toast.show_download_failed(
+                        title=display_name,
+                        error=result.get("error")
+                    )
+            except Exception as e:
+                logger.debug(f"Failed to display native toast notification: {e}")
+
         threading.Thread(target=run, daemon=True).start()
         return {"ok": True, "started": True, "job_id": job_id}
 
@@ -927,7 +977,86 @@ class Api:
         if not validate_job_id(job_id):
             logger.warning(f"Invalid job ID for cancel: {job_id}")
             return {"ok": False, "error": "Invalid job ID"}
-        return cancel_job(job_id)
+        res = cancel_job(job_id)
+        with self._jobs_lock:
+            remaining = len(self._active_job_ids)
+        if remaining == 0:
+            try:
+                from sleep_manager import sleep_manager
+                sleep_manager.restore_sleep()
+            except Exception:
+                pass
+            try:
+                from taskbar_manager import taskbar
+                taskbar.clear()
+            except Exception:
+                pass
+        return res
+
+    # ── windows 11 taskbar progress controls (ITaskbarList3) ──
+    def set_taskbar_progress(self, percent: float, state: str = "normal") -> dict:
+        """Update Windows 7/10/11 taskbar icon progress bar (ITaskbarList3)."""
+        try:
+            from taskbar_manager import taskbar
+            taskbar.set_progress(percent, 100, state=state)
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def clear_taskbar_progress(self) -> dict:
+        """Clear Windows taskbar icon progress bar."""
+        try:
+            from taskbar_manager import taskbar
+            taskbar.clear()
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── windows 10/11 native interactive toast notifications ──
+    def show_native_toast(self, title: str, message: str, image_path: str = None, actions: list = None) -> dict:
+        """Display native Windows 10/11 interactive toast notification."""
+        try:
+            from toast_manager import toast
+            toast.show_toast(title, message, image_path=image_path, actions=actions)
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def set_native_toast_enabled(self, enabled: bool) -> dict:
+        """Toggle native toast notifications on or off."""
+        try:
+            from toast_manager import toast
+            toast.set_enabled(enabled)
+            return {"ok": True, "enabled": enabled}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── windows sleep prevention ──
+    def set_sleep_prevention(self, prevent: bool) -> dict:
+        """Prevent or restore system sleep policy manually."""
+        try:
+            from sleep_manager import sleep_manager
+            if prevent:
+                sleep_manager.prevent_sleep()
+            else:
+                sleep_manager.restore_sleep()
+            return {"ok": True, "preventing": sleep_manager.is_preventing()}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── windows 11 dwm window effects ──
+    def apply_window_backdrop(self, backdrop: str = "mica") -> dict:
+        """Apply Windows 11 DWM backdrop (mica, mica_alt, acrylic, auto)."""
+        try:
+            from taskbar_manager import taskbar
+            hwnd = taskbar._find_hwnd()
+            if hwnd:
+                from window_effects import window_effects
+                window_effects.apply_fluent_effects(hwnd, backdrop=backdrop)
+                return {"ok": True}
+            return {"ok": False, "error": "HWND not found"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     def get_status(self, job_id: str) -> dict:
         if not validate_job_id(job_id):
@@ -2174,6 +2303,16 @@ class Api:
         with self._jobs_lock:
             self._active_job_ids.clear()
             self._active_job_history.clear()
+        try:
+            from sleep_manager import sleep_manager
+            sleep_manager.restore_sleep()
+        except Exception:
+            pass
+        try:
+            from taskbar_manager import taskbar
+            taskbar.clear()
+        except Exception:
+            pass
 
     # ── internal ──
     def _push_js(self, code: str):
@@ -2288,6 +2427,18 @@ def _apply_window_icon():
             user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, h_small)
         if h_big:
             user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, h_big)
+
+        try:
+            from taskbar_manager import taskbar
+            taskbar.set_hwnd(hwnd)
+        except Exception:
+            pass
+
+        try:
+            from window_effects import window_effects
+            window_effects.apply_fluent_effects(hwnd)
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -2353,6 +2504,16 @@ def main():
 
     def _on_closing():
         api.cancel_all_active()
+        try:
+            from sleep_manager import sleep_manager
+            sleep_manager.restore_sleep()
+        except Exception:
+            pass
+        try:
+            from taskbar_manager import taskbar
+            taskbar.clear()
+        except Exception:
+            pass
         _stop_bridge_server()
 
     window.events.closing += _on_closing

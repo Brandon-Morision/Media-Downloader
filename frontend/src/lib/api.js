@@ -73,6 +73,40 @@ export const api = {
     return window.pywebview.api.cancel_download(jobId);
   },
 
+  // Windows Taskbar Progress (ITaskbarList3)
+  async setTaskbarProgress(percent, state = 'normal') {
+    if (!isDesktopApp()) return { ok: true };
+    return window.pywebview.api?.set_taskbar_progress?.(percent, state);
+  },
+
+  async clearTaskbarProgress() {
+    if (!isDesktopApp()) return { ok: true };
+    return window.pywebview.api?.clear_taskbar_progress?.();
+  },
+
+  // Windows 10/11 Native Rich Interactive Toast Notifications
+  async showNativeToast(title, message, imagePath = null, actions = null) {
+    if (!isDesktopApp()) return { ok: true };
+    return window.pywebview.api?.show_native_toast?.(title, message, imagePath, actions);
+  },
+
+  async setNativeToastEnabled(enabled) {
+    if (!isDesktopApp()) return { ok: true };
+    return window.pywebview.api?.set_native_toast_enabled?.(enabled);
+  },
+
+  // Windows Sleep Prevention
+  async setSleepPrevention(prevent) {
+    if (!isDesktopApp()) return { ok: true };
+    return window.pywebview.api?.set_sleep_prevention?.(prevent);
+  },
+
+  // Windows 11 DWM Window Backdrop & Styling
+  async applyWindowBackdrop(backdrop = 'mica') {
+    if (!isDesktopApp()) return { ok: true };
+    return window.pywebview.api?.apply_window_backdrop?.(backdrop);
+  },
+
   // History
   async listHistory() {
     await waitForApi(6000);
