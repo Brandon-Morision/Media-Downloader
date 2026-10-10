@@ -51,6 +51,9 @@ function MiniPlayerIcon({ className = "w-4 h-4" }) {
   );
 }
 
+// Crisp 512x512 SVG cover art fallback for Windows 11 SMTC / Quick Settings Flyout
+const DEFAULT_MEDIA_ARTWORK = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><defs><linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%23090a0f"/><stop offset="100%" stop-color="%231a1d2e"/></linearGradient><linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%2338bdf8"/><stop offset="50%" stop-color="%23818cf8"/><stop offset="100%" stop-color="%23c084fc"/></linearGradient></defs><rect width="512" height="512" rx="48" fill="url(%23bg)"/><circle cx="256" cy="256" r="180" fill="%231e2238"/><path d="M256 120 C256 120 170 238 170 304 C170 351 208 390 256 390 C304 390 342 351 342 304 C342 238 256 120 256 120 Z" fill="url(%23grad)"/><circle cx="256" cy="304" r="36" fill="%23ffffff" opacity="0.9"/></svg>`;
+
 export default function GlobalMediaPlayer({
   active,
   files = [],
@@ -90,6 +93,7 @@ export default function GlobalMediaPlayer({
   const currentFile = safeFiles[currentIndex] || safeFiles[0] || { name: title || 'Media Track', path: '' };
   const ext = (currentFile?.name?.split('.').pop() || '').toLowerCase();
   const isAudio = AUDIO_EXT.includes(ext) || !ext;
+  const trackDisplayName = currentFile?.name ? currentFile.name.replace(/\.[^/.]+$/, '') : (title || 'Media Track');
 
   // Reset index when fresh playlist provided
   useEffect(() => {
@@ -373,35 +377,47 @@ export default function GlobalMediaPlayer({
     if (!active) {
       try {
         navigator.mediaSession.playbackState = 'none';
+        document.title = 'NovaDrop';
       } catch (e) {}
       return;
     }
 
-    const cleanTitle = currentFile?.name ? currentFile.name.replace(/\.[^/.]+$/, '') : (title || 'Media');
-    let artistName = 'NovaDrop Media Player';
-    let trackTitle = cleanTitle;
+    let artistName = 'NovaDrop';
+    let trackTitle = trackDisplayName;
 
-    if (cleanTitle.includes(' - ')) {
-      const parts = cleanTitle.split(' - ');
+    if (trackDisplayName.includes(' - ')) {
+      const parts = trackDisplayName.split(' - ');
       artistName = parts[0].trim();
       trackTitle = parts.slice(1).join(' - ').trim();
     }
 
+    // Update document.title so Chromium / WebView2 broadcasts the track name to Windows
+    document.title = `${trackTitle} • ${artistName}`;
+
     try {
+      const artwork = coverArtUrl
+        ? [
+            { src: coverArtUrl, sizes: '512x512', type: 'image/jpeg' },
+            { src: DEFAULT_MEDIA_ARTWORK, sizes: '512x512', type: 'image/svg+xml' },
+          ]
+        : [
+            { src: DEFAULT_MEDIA_ARTWORK, sizes: '512x512', type: 'image/svg+xml' },
+          ];
+
       navigator.mediaSession.metadata = new MediaMetadata({
         title: trackTitle,
         artist: artistName,
         album: safeFiles.length > 1 ? `Playlist (${currentIndex + 1}/${safeFiles.length})` : 'NovaDrop',
-        artwork: coverArtUrl ? [
-          { src: coverArtUrl, sizes: '512x512', type: 'image/jpeg' }
-        ] : [
-          { src: '/favicon.png', sizes: '128x128', type: 'image/png' }
-        ],
+        artwork: artwork,
       });
     } catch (e) {
       console.debug('MediaSession metadata assignment error:', e);
     }
-  }, [active, currentFile?.name, title, coverArtUrl, currentIndex, safeFiles.length]);
+
+    return () => {
+      document.title = 'NovaDrop';
+    };
+  }, [active, trackDisplayName, coverArtUrl, currentIndex, safeFiles.length]);
 
   // Hook up MediaSession action handlers (Hardware Media Keys & Windows 11 Flyout)
   useEffect(() => {
@@ -529,7 +545,6 @@ export default function GlobalMediaPlayer({
 
   if (!active) return null;
 
-  const trackDisplayName = currentFile?.name ? currentFile.name.replace(/\.[^/.]+$/, '') : (title || 'Track');
   const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
 
   return (
@@ -640,6 +655,8 @@ export default function GlobalMediaPlayer({
                 <audio
                   ref={mediaRef}
                   src={mediaUrl}
+                  title={trackDisplayName}
+                  aria-label={trackDisplayName}
                   crossOrigin="anonymous"
                   onTimeUpdate={() => mediaRef.current && setCurrentTime(mediaRef.current.currentTime)}
                   onDurationChange={() => mediaRef.current && setDuration(mediaRef.current.duration)}
@@ -664,6 +681,8 @@ export default function GlobalMediaPlayer({
                 <video
                   ref={mediaRef}
                   src={mediaUrl}
+                  title={trackDisplayName}
+                  aria-label={trackDisplayName}
                   crossOrigin="anonymous"
                   className="w-full h-full object-contain max-h-screen"
                   onTimeUpdate={() => mediaRef.current && setCurrentTime(mediaRef.current.currentTime)}

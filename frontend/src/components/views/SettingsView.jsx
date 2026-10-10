@@ -4,7 +4,7 @@ import {
   DownloadCloud, ArrowUpCircle, ExternalLink, ShieldCheck, Box,
   ChevronRight, ChevronDown, Bell, HardDrive, Info, Sparkles, Puzzle,
   Cpu, ArrowDownCircle, CheckCircle2, AlertTriangle, Zap, Download,
-  Volume2
+  Volume2, FileText, X
 } from 'lucide-react';
 import { api, waitForApi } from '../../lib/api';
 import novadropBanner from '../../assets/novadrop-banner.png';
@@ -25,6 +25,7 @@ const ENGINE_METADATA = [
     desc: 'High-speed video & audio extractor (YouTube, Twitch, Vimeo, 1000+ sites)',
     tag: 'Video & Audio',
     color: 'border-amber-500/30 text-amber-400 bg-amber-500/10',
+    iconColor: 'text-amber-400',
   },
   {
     id: 'gallery-dl',
@@ -32,6 +33,7 @@ const ENGINE_METADATA = [
     desc: 'Image board, multi-post manga, and art gallery scraper',
     tag: 'Image Boards & Galleries',
     color: 'border-sky-500/30 text-sky-400 bg-sky-500/10',
+    iconColor: 'text-sky-400',
   },
   {
     id: 'ffmpeg',
@@ -39,6 +41,7 @@ const ENGINE_METADATA = [
     desc: 'Media remuxing, audio conversion (MP3/M4A), stream merging & cover art',
     tag: 'Core Media Muxer',
     color: 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10',
+    iconColor: 'text-emerald-400',
   },
 ];
 
@@ -96,12 +99,15 @@ export default function SettingsView({
   onShowToast,
 }) {
   const [activeSection, setActiveSection] = useState(null);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const [versions, setVersions] = useState({
-    'yt-dlp': 'Checking…',
-    'gallery-dl': 'Checking…',
-    ffmpeg: 'Checking…',
-    app: '0.4.0',
+    'yt-dlp': '',
+    'gallery-dl': '',
+    ffmpeg: '',
+    app: '0.4.6',
   });
+  const [toolMeta, setToolMeta] = useState({});
+  const [isLoadingVersions, setIsLoadingVersions] = useState(true);
 
   const [isCheckingAll, setIsCheckingAll] = useState(false);
   const [isAutoUpdatingAll, setIsAutoUpdatingAll] = useState(false);
@@ -147,6 +153,7 @@ export default function SettingsView({
             ...prev,
             checking: false,
             info: res.app,
+            error: null,
           }));
         }
         if (res.tools) {
@@ -154,7 +161,17 @@ export default function SettingsView({
             const next = { ...prev };
             for (const [tool, tinfo] of Object.entries(res.tools)) {
               if (next[tool]) {
-                next[tool] = { ...next[tool], checking: false, info: tinfo };
+                next[tool] = { ...next[tool], checking: false, info: tinfo, error: null };
+              }
+            }
+            return next;
+          });
+          // Update current versions from backend check result
+          setVersions((prev) => {
+            const next = { ...prev };
+            for (const [tool, tinfo] of Object.entries(res.tools)) {
+              if (tinfo?.current_version && tinfo.current_version !== 'Unknown') {
+                next[tool] = tinfo.current_version;
               }
             }
             return next;
@@ -166,6 +183,12 @@ export default function SettingsView({
           onShowToast('All engines and app are up to date');
         }
       } else {
+        setEngineStates((prev) => ({
+          'yt-dlp': { ...prev['yt-dlp'], checking: false },
+          'gallery-dl': { ...prev['gallery-dl'], checking: false },
+          ffmpeg: { ...prev.ffmpeg, checking: false },
+        }));
+        setAppState((prev) => ({ ...prev, checking: false }));
         onShowToast(res?.error || 'Failed to check updates', false);
       }
     };
@@ -183,10 +206,13 @@ export default function SettingsView({
             error: res.ok ? null : res.error,
           },
         }));
+        if (res.ok && res.info?.current_version && res.info.current_version !== 'Unknown') {
+          setVersions((prev) => ({ ...prev, [tool]: res.info.current_version }));
+        }
         if (res.ok && res.info?.update_available) {
-          onShowToast(`Update available for ${tool}: ${res.info.latest_version}`);
+          onShowToast(`Update available for ${tool}: v${res.info.latest_version}`);
         } else if (res.ok) {
-          onShowToast(`${tool} is already up to date`);
+          onShowToast(`${tool} is up to date`);
         } else {
           onShowToast(res.error || `Failed to check ${tool}`, false);
         }
@@ -236,11 +262,21 @@ export default function SettingsView({
             updating: false,
             progress: null,
             error: res.ok ? null : res.error,
-            info: res.ok ? { ...prev[tool].info, update_available: false } : prev[tool].info,
+            info: res.ok
+              ? {
+                  ...prev[tool].info,
+                  update_available: false,
+                  current_version: res.version || prev[tool].info?.latest_version,
+                  latest_version: res.version || prev[tool].info?.latest_version,
+                }
+              : prev[tool].info,
           },
         }));
         if (res.ok) {
-          onShowToast(`${tool} updated successfully to ${res.version}!`);
+          if (res.version) {
+            setVersions((prev) => ({ ...prev, [tool]: res.version }));
+          }
+          onShowToast(`${tool} updated successfully to v${res.version}!`);
           loadVersions();
         } else {
           onShowToast(`Failed to update ${tool}: ${res.error}`, false);
@@ -278,6 +314,23 @@ export default function SettingsView({
       setAutoUpdateStatusMsg(msg);
     };
 
+    // 9. Auto-updater batch complete / status notification
+    window.onAutoUpdateStatus = (data) => {
+      if (!data) return;
+      if (data.status === 'completed' || data.status === 'error') {
+        setIsAutoUpdatingAll(false);
+        setAutoUpdateStatusMsg(data.message || (data.status === 'error' ? 'Auto-update failed' : 'All updates complete'));
+        loadVersions();
+        if (data.status === 'completed') {
+          onShowToast('Engines auto-update complete!');
+        } else {
+          onShowToast(data.error || 'Auto-update failed', false);
+        }
+      } else if (data.message) {
+        setAutoUpdateStatusMsg(data.message);
+      }
+    };
+
     // Auto-check on mount if enabled
     if (localStorage.getItem('md_auto_update') !== 'false') {
       setTimeout(() => {
@@ -294,25 +347,28 @@ export default function SettingsView({
       window.onAppDownloadProgress = null;
       window.onAppDownloadComplete = null;
       window.onAutoUpdateStep = null;
+      window.onAutoUpdateStatus = null;
     };
   }, []);
 
   const loadVersions = async () => {
+    setIsLoadingVersions(true);
     try {
       await waitForApi();
-      const [yv, gv, fv] = await Promise.all([
-        api.getYtdlpVersion(),
-        api.getGalleryDlVersion(),
-        api.getFfmpegVersion(),
-      ]);
+      const v = await api.getInstalledVersions();
       setVersions({
-        'yt-dlp': yv || 'Not detected',
-        'gallery-dl': gv || 'Not detected',
-        ffmpeg: fv || 'Not detected',
-        app: '0.4.0',
+        'yt-dlp': v['yt-dlp'] && v['yt-dlp'] !== 'Not detected' ? v['yt-dlp'] : 'Not detected',
+        'gallery-dl': v['gallery-dl'] && v['gallery-dl'] !== 'Not detected' ? v['gallery-dl'] : 'Not detected',
+        ffmpeg: v['ffmpeg'] && v['ffmpeg'] !== 'Not detected' ? v['ffmpeg'] : 'Not detected',
+        app: v['app'] || '0.4.6',
       });
-    } catch {
-      // Fallback
+      if (v.raw) {
+        setToolMeta(v.raw);
+      }
+    } catch (err) {
+      console.warn('Failed to load engine versions:', err);
+    } finally {
+      setIsLoadingVersions(false);
     }
   };
 
@@ -333,9 +389,21 @@ export default function SettingsView({
     try {
       await waitForApi();
       setIsCheckingAll(true);
+      setEngineStates((prev) => ({
+        'yt-dlp': { ...prev['yt-dlp'], checking: true, error: null },
+        'gallery-dl': { ...prev['gallery-dl'], checking: true, error: null },
+        ffmpeg: { ...prev.ffmpeg, checking: true, error: null },
+      }));
+      setAppState((prev) => ({ ...prev, checking: true, error: null }));
       await api.checkForUpdates();
     } catch {
       setIsCheckingAll(false);
+      setEngineStates((prev) => ({
+        'yt-dlp': { ...prev['yt-dlp'], checking: false },
+        'gallery-dl': { ...prev['gallery-dl'], checking: false },
+        ffmpeg: { ...prev.ffmpeg, checking: false },
+      }));
+      setAppState((prev) => ({ ...prev, checking: false }));
     }
   };
 
@@ -343,10 +411,22 @@ export default function SettingsView({
     try {
       await waitForApi();
       setIsCheckingAll(true);
+      setEngineStates((prev) => ({
+        'yt-dlp': { ...prev['yt-dlp'], checking: true, error: null },
+        'gallery-dl': { ...prev['gallery-dl'], checking: true, error: null },
+        ffmpeg: { ...prev.ffmpeg, checking: true, error: null },
+      }));
+      setAppState((prev) => ({ ...prev, checking: true, error: null }));
       onShowToast('Checking all extractor engines and application updates…');
       await api.checkForUpdates();
     } catch (e) {
       setIsCheckingAll(false);
+      setEngineStates((prev) => ({
+        'yt-dlp': { ...prev['yt-dlp'], checking: false },
+        'gallery-dl': { ...prev['gallery-dl'], checking: false },
+        ffmpeg: { ...prev.ffmpeg, checking: false },
+      }));
+      setAppState((prev) => ({ ...prev, checking: false }));
       onShowToast(`Update check failed: ${e.message}`, false);
     }
   };
@@ -358,6 +438,7 @@ export default function SettingsView({
         ...prev,
         [tool]: { ...prev[tool], checking: true, error: null },
       }));
+      onShowToast(`Checking updates for ${tool}…`);
       await api.checkSingleToolUpdate(tool);
     } catch (e) {
       setEngineStates((prev) => ({
@@ -472,7 +553,7 @@ export default function SettingsView({
               Nova<span className="text-sky-400">Drop</span>
             </h2>
             <p className="text-xs text-slate-400 font-medium mt-0.5">
-              Version {versions.app || '0.4.3'} · High Performance Media Extraction Suite
+              Version {versions.app || '0.4.6'} · High Performance Media Extraction Suite
             </p>
           </div>
         </div>
@@ -1029,51 +1110,64 @@ export default function SettingsView({
                   </div>
 
                   {/* 2. NovaDrop Desktop App Card */}
-                  <div className="p-4 rounded-xl bg-surface-2/80 border border-border-subtle flex flex-col justify-between gap-3">
+                  <div className="p-4 rounded-xl bg-surface-2/80 border border-border-subtle flex flex-col justify-between gap-3 hover:border-white/10 transition-all">
                     <div>
                       <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg overflow-hidden border border-white/10 bg-black flex items-center justify-center shadow-sm shrink-0">
+                          <div className="w-8 h-8 rounded-xl overflow-hidden border border-white/10 bg-black flex items-center justify-center shadow-sm shrink-0">
                             <img src={novadropIcon} alt="NovaDrop" className="w-full h-full object-contain" />
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-100 text-xs">NovaDrop Desktop App</span>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-surface-3 text-slate-300 border border-border-subtle">
-                              v{versions.app || '0.4.0'}
-                            </span>
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-100 text-xs">NovaDrop Desktop App</span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-surface-3 text-slate-300 border border-border-subtle">
+                                v{versions.app || '0.4.6'}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-400">Core Windows 11 Runtime</span>
                           </div>
                         </div>
 
                         {/* App Status Pill */}
                         <div className="flex items-center gap-2">
                           {appState.downloading ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1.5 animate-pulse">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1.5 animate-pulse">
                               <RefreshCw className="w-3 h-3 animate-spin" />
                               Downloading…
                             </span>
                           ) : appState.installerPath ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
                               <CheckCircle2 className="w-3 h-3" />
                               Ready to Install
                             </span>
                           ) : appState.info?.update_available ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1.5">
-                              <ArrowUpCircle className="w-3 h-3" />
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5 shadow-sm">
+                              <ArrowUpCircle className="w-3 h-3 text-amber-400" />
                               v{appState.info.latest_version} Available
                             </span>
                           ) : appState.info ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
                               <Check className="w-3 h-3" />
                               Up to date
                             </span>
-                          ) : null}
+                          ) : (appState.checking || isCheckingAll) ? (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-brand-dim text-brand-acc border border-brand-border flex items-center gap-1.5 animate-pulse">
+                              <RefreshCw className="w-3 h-3 animate-spin" />
+                              Checking…
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-surface-3 text-slate-400 border border-border-subtle flex items-center gap-1.5">
+                              <ShieldCheck className="w-3 h-3 text-slate-400" />
+                              Ready
+                            </span>
+                          )}
                         </div>
                       </div>
 
                       <p className="text-[11px] text-slate-400">
                         {appState.info?.latest_version
-                          ? `Latest upstream: v${appState.info.latest_version}`
-                          : 'Native Windows desktop wrapper and core runtime'}
+                          ? `Latest release upstream: v${appState.info.latest_version}`
+                          : 'Desktop client, integrated media players, and system tray integration'}
                       </p>
                     </div>
 
@@ -1096,22 +1190,22 @@ export default function SettingsView({
                     {/* App Action Buttons */}
                     <div className="flex items-center justify-between pt-2 border-t border-border-subtle/40">
                       <span className="text-[11px] text-slate-400">
-                        {appState.installerPath ? 'Ready to install' : 'Check GitHub releases'}
+                        {appState.installerPath ? 'Ready to install' : 'Official GitHub Releases'}
                       </span>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={handleCheckApp}
-                          disabled={appState.checking || appState.downloading}
-                          className="px-3 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-4 disabled:opacity-50 text-slate-200 font-semibold text-xs flex items-center gap-1.5 transition-all"
+                          disabled={appState.checking || appState.downloading || isCheckingAll}
+                          className="px-3 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-4 disabled:opacity-50 text-slate-200 font-semibold text-xs flex items-center gap-1.5 border border-border-subtle transition-all cursor-pointer"
                         >
-                          <RefreshCw className={`w-3.5 h-3.5 ${appState.checking ? 'animate-spin text-brand-acc' : ''}`} />
-                          <span>{appState.checking ? 'Checking…' : 'Check'}</span>
+                          <RefreshCw className={`w-3.5 h-3.5 ${appState.checking || isCheckingAll ? 'animate-spin text-brand-acc' : ''}`} />
+                          <span>{appState.checking || isCheckingAll ? 'Checking…' : 'Check'}</span>
                         </button>
 
                         {appState.installerPath ? (
                           <button
                             onClick={handleInstallApp}
-                            className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-glow transition-all"
+                            className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-glow transition-all cursor-pointer"
                           >
                             <Zap className="w-3.5 h-3.5" />
                             <span>Install & Relaunch</span>
@@ -1121,7 +1215,7 @@ export default function SettingsView({
                             <button
                               onClick={handleDownloadApp}
                               disabled={appState.downloading}
-                              className="px-3 py-1.5 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-glow transition-all"
+                              className="px-3 py-1.5 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-glow transition-all cursor-pointer"
                             >
                               <Download className="w-3.5 h-3.5" />
                               <span>Download Update</span>
@@ -1133,7 +1227,7 @@ export default function SettingsView({
                                 onShowToast('Opening release page…');
                                 api.openUrlExternal(url);
                               }}
-                              className="px-3 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-4 text-brand-acc font-semibold text-xs flex items-center gap-1.5 border border-brand-acc/30 transition-all"
+                              className="px-3 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-4 text-brand-acc font-semibold text-xs flex items-center gap-1.5 border border-brand-acc/30 transition-all cursor-pointer"
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
                               <span>View on GitHub</span>
@@ -1147,9 +1241,14 @@ export default function SettingsView({
 
                 {/* 3. Individual Extractor Engines Suite (DYNAMIC RESPONSIVE GRID) */}
                 <div className="flex flex-col gap-3 w-full">
-                  <span className="text-slate-300 font-semibold text-[11px] uppercase tracking-wider">
-                    Independent Extractor Engines (3-Column Responsive Grid)
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-300 font-semibold text-[11px] uppercase tracking-wider">
+                      Independent Extractor Engines
+                    </span>
+                    <span className="text-slate-400 text-[11px]">
+                      Isolated tool binaries with automatic fallback
+                    </span>
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 w-full">
                     {ENGINE_METADATA.map((engine) => {
@@ -1157,105 +1256,180 @@ export default function SettingsView({
                       const currentVer = versions[engine.id];
                       const hasUpdate = state.info?.update_available;
                       const latestVer = state.info?.latest_version;
+                      const isUserTool = toolMeta[engine.id]?.is_user_tool;
 
                       return (
                         <div
                           key={engine.id}
-                          className="p-4 rounded-xl bg-surface-2/80 border border-border-subtle flex flex-col justify-between gap-3 hover:border-white/10 transition-all"
+                          className="p-4 rounded-xl bg-surface-2/80 border border-border-subtle flex flex-col justify-between gap-3.5 hover:border-white/10 transition-all shadow-sm"
                         >
                           <div>
+                            {/* Card Header */}
                             <div className="flex items-center justify-between gap-2 mb-2">
-                              <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 rounded-lg bg-surface-3 flex items-center justify-center text-slate-300">
-                                  <Cpu className="w-4 h-4 text-brand-acc" />
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className={`w-8 h-8 rounded-xl bg-surface-3 flex items-center justify-center shrink-0 border ${engine.color.split(' ')[0]}`}>
+                                  <Cpu className={`w-4 h-4 ${engine.iconColor}`} />
                                 </div>
-                                <span className="font-bold text-slate-100 text-xs">{engine.name}</span>
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-bold text-slate-100 text-xs truncate">{engine.name}</span>
+                                  <span className="text-[10px] text-slate-400 truncate">{engine.tag}</span>
+                                </div>
                               </div>
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${engine.color}`}>
-                                {engine.tag}
-                              </span>
+
+                              {/* Status Badge */}
+                              <div className="shrink-0">
+                                {state.updating ? (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1.5 animate-pulse">
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                    Updating…
+                                  </span>
+                                ) : (state.checking || isCheckingAll) ? (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-brand-dim text-brand-acc border border-brand-border flex items-center gap-1.5 animate-pulse">
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                    Checking…
+                                  </span>
+                                ) : hasUpdate ? (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5 shadow-sm">
+                                    <ArrowUpCircle className="w-3 h-3 text-amber-400" />
+                                    Update Available
+                                  </span>
+                                ) : state.info ? (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    Up to date
+                                  </span>
+                                ) : state.error ? (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1.5">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    Check failed
+                                  </span>
+                                ) : (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-surface-3 text-slate-400 border border-border-subtle flex items-center gap-1.5">
+                                    <ShieldCheck className="w-3 h-3 text-slate-400" />
+                                    Ready
+                                  </span>
+                                )}
+                              </div>
                             </div>
 
-                            <p className="text-[11px] text-slate-400 min-h-[32px]">{engine.desc}</p>
+                            <p className="text-[11px] text-slate-400 min-h-[32px] line-clamp-2">{engine.desc}</p>
                           </div>
 
-                          {/* Status & Version Box */}
-                          <div className="bg-surface-3/50 p-2.5 rounded-lg border border-border-subtle/50 flex flex-col gap-1.5">
-                            <div className="flex items-center justify-between text-xs font-mono">
-                              <span className="text-slate-400 text-[10px]">Installed:</span>
-                              <span className="text-slate-200 font-semibold text-[11px]">{currentVer || 'Installed'}</span>
+                          {/* Version & Status Matrix Box */}
+                          <div className="bg-surface-3/40 p-3 rounded-xl border border-border-subtle/60 flex flex-col gap-2.5">
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              {/* Installed Box */}
+                              <div className="flex flex-col gap-1 p-2 rounded-lg bg-surface-1/50 border border-border-subtle/40">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Installed</span>
+                                  {isUserTool !== undefined && (
+                                    <span className={`text-[9px] px-1 rounded font-medium ${isUserTool ? 'bg-brand-dim text-brand-acc' : 'bg-surface-3 text-slate-400'}`}>
+                                      {isUserTool ? 'Patch' : 'Core'}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  {isLoadingVersions ? (
+                                    <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                                      <RefreshCw className="w-3 h-3 animate-spin text-brand-acc" /> Detecting…
+                                    </span>
+                                  ) : (
+                                    <span className="font-mono text-[11px] font-semibold text-slate-200 truncate" title={currentVer}>
+                                      {currentVer || 'Not detected'}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Latest Release Box */}
+                              <div className={`flex flex-col gap-1 p-2 rounded-lg border ${
+                                hasUpdate 
+                                  ? 'bg-amber-500/10 border-amber-500/30' 
+                                  : 'bg-surface-1/50 border-border-subtle/40'
+                              }`}>
+                                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Latest Release</span>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  {(state.checking || isCheckingAll) ? (
+                                    <span className="text-[11px] text-brand-acc flex items-center gap-1">
+                                      <RefreshCw className="w-3 h-3 animate-spin" /> Scanning…
+                                    </span>
+                                  ) : latestVer ? (
+                                    <span className={`font-mono text-[11px] font-bold truncate ${hasUpdate ? 'text-amber-300' : 'text-emerald-400'}`}>
+                                      v{latestVer}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] text-slate-400 font-mono">Not checked</span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
 
-                            <div className="flex items-center justify-between text-xs font-mono">
-                              <span className="text-slate-400 text-[10px]">Latest:</span>
-                              <span className="text-brand-acc font-semibold text-[11px]">
-                                {latestVer ? `v${latestVer}` : 'Checking…'}
-                              </span>
-                            </div>
+                            {/* Notice if update available */}
+                            {hasUpdate && (
+                              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px]">
+                                <Sparkles className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                                <span className="truncate">New upstream release ready to install</span>
+                              </div>
+                            )}
 
-                            {/* Status Pill */}
-                            <div className="pt-1">
-                              {state.updating ? (
-                                <span className="w-full px-2 py-1 rounded-md text-[10px] font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center gap-1.5 animate-pulse">
-                                  <RefreshCw className="w-3 h-3 animate-spin" />
-                                  Updating Engine…
-                                </span>
-                              ) : hasUpdate ? (
-                                <span className="w-full px-2 py-1 rounded-md text-[10px] font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center gap-1.5">
-                                  <ArrowUpCircle className="w-3 h-3" />
-                                  Update Available
-                                </span>
-                              ) : state.info ? (
-                                <span className="w-full px-2 py-1 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center gap-1.5">
-                                  <Check className="w-3 h-3" />
-                                  Engine Up to Date
-                                </span>
-                              ) : null}
-                            </div>
+                            {/* Progress bar if updating */}
+                            {state.updating && state.progress && (
+                              <div className="flex flex-col gap-1.5 pt-1">
+                                <div className="flex justify-between text-[11px] text-slate-300 font-mono">
+                                  <span className="flex items-center gap-1">
+                                    <DownloadCloud className="w-3.5 h-3.5 text-brand-acc animate-bounce" />
+                                    Downloading…
+                                  </span>
+                                  <span className="font-semibold text-brand-acc">
+                                    {state.progress.percent}% · {state.progress.speed}
+                                  </span>
+                                </div>
+                                <div className="w-full h-1.5 rounded-full bg-surface-3 overflow-hidden">
+                                  <div
+                                    className="h-full bg-brand-acc rounded-full transition-all duration-200"
+                                    style={{ width: `${state.progress.percent}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Error display */}
+                            {state.error && (
+                              <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px]">
+                                {state.error}
+                              </div>
+                            )}
                           </div>
 
-                          {/* Download Progress Bar */}
-                          {state.updating && state.progress && (
-                            <div className="flex flex-col gap-1.5">
-                              <div className="flex justify-between text-[11px] text-slate-400 font-mono">
-                                <span>Downloading {engine.name}…</span>
-                                <span>{state.progress.percent}% · {state.progress.speed}</span>
-                              </div>
-                              <div className="w-full h-1.5 rounded-full bg-surface-3 overflow-hidden">
-                                <div
-                                  className="h-full bg-brand-acc rounded-full transition-all duration-200"
-                                  style={{ width: `${state.progress.percent}%` }}
-                                />
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Error Banner */}
-                          {state.error && (
-                            <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px]">
-                              {state.error}
-                            </div>
-                          )}
-
-                          {/* Actions */}
-                          <div className="flex items-center justify-between pt-1 gap-2">
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-2 pt-1">
                             <button
                               onClick={() => handleCheckSingleEngine(engine.id)}
-                              disabled={state.checking || state.updating}
-                              className="flex-1 px-3 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-4 disabled:opacity-50 text-slate-200 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all"
+                              disabled={state.checking || state.updating || isCheckingAll}
+                              className="flex-1 px-3 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-4 disabled:opacity-50 text-slate-200 font-semibold text-xs flex items-center justify-center gap-1.5 border border-border-subtle transition-all cursor-pointer"
                             >
-                              <RefreshCw className={`w-3.5 h-3.5 ${state.checking ? 'animate-spin text-brand-acc' : ''}`} />
-                              <span>{state.checking ? 'Checking…' : 'Check'}</span>
+                              <RefreshCw className={`w-3.5 h-3.5 ${state.checking || isCheckingAll ? 'animate-spin text-brand-acc' : ''}`} />
+                              <span>{state.checking || isCheckingAll ? 'Checking…' : 'Check'}</span>
                             </button>
 
-                            {hasUpdate && (
+                            {hasUpdate ? (
                               <button
                                 onClick={() => handleUpdateSingleEngine(engine.id)}
                                 disabled={state.updating}
-                                className="flex-1 px-3 py-1.5 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-glow transition-all"
+                                className="flex-1 px-3 py-1.5 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-glow transition-all cursor-pointer"
                               >
                                 <Download className="w-3.5 h-3.5" />
                                 <span>Update</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleUpdateSingleEngine(engine.id)}
+                                disabled={state.updating || state.checking || isCheckingAll}
+                                title="Re-download and verify this engine binary"
+                                className="px-3 py-1.5 rounded-xl bg-surface-3/70 hover:bg-surface-3 disabled:opacity-40 text-slate-300 hover:text-white text-xs flex items-center justify-center gap-1.5 border border-border-subtle/50 transition-all cursor-pointer"
+                              >
+                                <Download className="w-3 h-3 text-slate-400" />
+                                <span>Re-sync</span>
                               </button>
                             )}
                           </div>
@@ -1396,13 +1570,22 @@ export default function SettingsView({
                   </button>
                 </div>
 
-                <div className="pt-1.5">
+                <div className="flex items-center flex-wrap gap-2.5 pt-1.5">
                   <button
                     type="button"
-                    onClick={() => api.openUrlExternal('https://github.com/Brandon-Morision/Media-Downloader#license')}
-                    className="text-brand-acc hover:underline cursor-pointer text-left font-normal transition-colors w-fit"
+                    onClick={() => setShowTermsModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-4 text-slate-200 hover:text-white font-semibold text-xs border border-border-subtle transition-all cursor-pointer shadow-sm"
                   >
-                    Terms of Service
+                    <FileText className="w-3.5 h-3.5 text-brand-acc" />
+                    <span>Terms of Use & Legal Notices</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => api.openUrlExternal('https://github.com/Brandon-Morision/Media-Downloader')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-2 hover:bg-surface-3 text-slate-400 hover:text-slate-200 text-xs border border-border-subtle/60 transition-all cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>GitHub Repository</span>
                   </button>
                 </div>
               </div>
@@ -1410,6 +1593,129 @@ export default function SettingsView({
           </div>
         </div>
       </div>
+
+      {/* ── TERMS OF USE & LEGAL MODAL ── */}
+      {showTermsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
+          <div className="bg-surface-1/95 border border-white/10 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden select-text">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle/80 bg-surface-2/60">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-brand-dim border border-brand-border flex items-center justify-center text-brand-acc">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-slate-100">NovaDrop — Terms of Use & Legal Notices</span>
+                  <span className="text-[11px] text-slate-400">Software License, Acceptable Use & Privacy Disclosure</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                className="w-8 h-8 rounded-lg bg-surface-3 hover:bg-surface-4 text-slate-400 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body (Scrollable) */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs text-slate-300 leading-relaxed font-sans">
+              <div className="p-3.5 rounded-xl bg-brand-dim/50 border border-brand-border/70 text-slate-200">
+                <p className="font-semibold text-brand-acc mb-1">Important Summary for Users</p>
+                <p className="text-[11px] text-slate-300 leading-normal">
+                  NovaDrop is a local-first client-side desktop software utility. You are solely responsible for all content retrieved. The software does not host or proxy media and operates strictly on your local machine.
+                </p>
+              </div>
+
+              {/* Section 1 */}
+              <div>
+                <h3 className="font-bold text-slate-100 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <span className="text-brand-acc">1.</span> Nature of the Software & Client Architecture
+                </h3>
+                <p className="text-slate-400">
+                  NovaDrop functions as a client-side automation parser. It does not operate remote servers, cache media streams, index third-party works, or distribute audio/video content. Network requests occur directly between your device and upstream host servers. The browser companion bridge operates strictly on loopback interface (<code className="text-brand-acc font-mono">127.0.0.1:6789</code>) protected by cryptographic tokens.
+                </p>
+              </div>
+
+              {/* Section 2 */}
+              <div>
+                <h3 className="font-bold text-slate-100 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <span className="text-brand-acc">2.</span> Copyright Compliance & User Responsibility
+                </h3>
+                <p className="text-slate-400">
+                  You agree to respect intellectual property rights. You warrant that you hold legitimate licenses, permissions, or valid statutory exemptions (such as Fair Use, fair dealing, or personal format shifting in your jurisdiction) for any media URLs you submit. The software must not be used for unauthorized commercial distribution or monetization.
+                </p>
+              </div>
+
+              {/* Section 3 */}
+              <div>
+                <h3 className="font-bold text-slate-100 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <span className="text-brand-acc">3.</span> Acceptable Use & DRM Policy
+                </h3>
+                <p className="text-slate-400">
+                  You agree not to use NovaDrop to circumvent Digital Rights Management (DRM) or access controls (such as Widevine or FairPlay) in violation of applicable laws (e.g. 17 U.S.C. § 1201). You agree not to overwhelm remote servers, abuse network bandwidth, or violate applicable rate limits.
+                </p>
+              </div>
+
+              {/* Section 4 */}
+              <div>
+                <h3 className="font-bold text-slate-100 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <span className="text-brand-acc">4.</span> Third-Party Open Source Engines
+                </h3>
+                <p className="text-slate-400">
+                  NovaDrop interacts with independent open-source projects including <strong className="text-slate-200">yt-dlp</strong> (The Unlicense), <strong className="text-slate-200">gallery-dl</strong> (GPL-2.0), and <strong className="text-slate-200">FFmpeg</strong> (LGPL-2.1+/GPL). These components remain subject to their respective upstream licenses.
+                </p>
+              </div>
+
+              {/* Section 5 */}
+              <div>
+                <h3 className="font-bold text-slate-100 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <span className="text-brand-acc">5.</span> Privacy & Zero-Telemetry Guarantee
+                </h3>
+                <p className="text-slate-400">
+                  NovaDrop enforces a strict zero-telemetry policy. We do not collect, monitor, track, or transmit your URLs, download history, or personal identifiers. All configuration files and media libraries are saved strictly on your local disk.
+                </p>
+              </div>
+
+              {/* Section 6 */}
+              <div>
+                <h3 className="font-bold text-slate-100 text-xs uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <span className="text-brand-acc">6.</span> Warranty Disclaimer & Limitation of Liability
+                </h3>
+                <p className="text-slate-400">
+                  The software is provided "AS IS", without warranty of any kind. To the fullest extent permitted by law, Brandon Morision and contributors disclaim liability for any direct, indirect, incidental, or consequential damages resulting from the use or inability to use this software.
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-border-subtle/80 bg-surface-2/60">
+              <span className="text-[11px] text-slate-400">
+                Author: Brandon Morision · © 2024–2026
+              </span>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    api.openUrlExternal('https://github.com/Brandon-Morision/Media-Downloader/blob/main/TERMS_OF_USE.md');
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-4 text-slate-300 hover:text-white text-xs font-semibold border border-border-subtle transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Full Document</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(false)}
+                  className="px-4 py-1.5 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 text-xs font-bold shadow-glow transition-all cursor-pointer"
+                >
+                  I Understand & Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

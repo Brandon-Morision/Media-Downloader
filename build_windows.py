@@ -128,10 +128,10 @@ def run_pyinstaller():
 
 
 def main():
-    logger.info("Starting Media Downloader Windows build process")
+    logger.info("Starting NovaDrop Windows build process")
     print()
     print("  " + "=" * 56)
-    print("   Media Downloader — Windows build")
+    print("   NovaDrop — Windows build")
     print("  " + "=" * 56)
     print()
 
@@ -140,14 +140,14 @@ def main():
     check_bundled_tools()
     run_pyinstaller()
 
-    dist_dir = os.path.join(HERE, "dist", "MediaDownloader")
+    dist_dir = os.path.join(HERE, "dist", "NovaDrop")
     logger.info(f"Build completed successfully. Output: {dist_dir}")
     print()
     print("  " + "=" * 56)
     print("  Build complete.")
     print(f"  Output: {dist_dir}")
-    print("  Run MediaDownloader.exe from inside that folder to test it,")
-    print("  or hand the whole MediaDownloader folder to an installer")
+    print("  Run NovaDrop.exe from inside that folder to test it,")
+    print("  or hand the whole NovaDrop folder to an installer")
     print("  builder (Inno Setup, etc.) — see README_BUILD.md.")
     print("  " + "=" * 56)
     print()

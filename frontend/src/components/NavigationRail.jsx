@@ -237,7 +237,7 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
                   <Moon className="w-3.5 h-3.5 animate-pulse" />
                 </div>
               )}
-              <span className="text-[10px] font-mono text-slate-500 tracking-wider">v0.4.3</span>
+              <span className="text-[10px] font-mono text-slate-500 tracking-wider">v0.4.6</span>
             </div>
           </div>
         ) : (

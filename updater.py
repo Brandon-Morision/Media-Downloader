@@ -39,13 +39,13 @@ logger = get_logger(__name__)
 # Constants
 USER_DATA_DIR = Path.home() / ".media_downloader"
 USER_TOOLS_DIR = USER_DATA_DIR / "tools"
-TEMP_UPDATES_DIR = Path(tempfile.gettempdir()) / "MediaDownloader_Updates"
+TEMP_UPDATES_DIR = Path(tempfile.gettempdir()) / "NovaDrop_Updates"
 
 # Create directories
 USER_TOOLS_DIR.mkdir(parents=True, exist_ok=True)
 TEMP_UPDATES_DIR.mkdir(parents=True, exist_ok=True)
 
-USER_AGENT = f"MediaDownloader/{__version__} (Windows; x64)"
+USER_AGENT = f"NovaDrop/{__version__} (Windows; x64)"
 
 CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
@@ -550,23 +550,52 @@ def check_app_update(github_repo: Optional[str] = None) -> dict:
     result["html_url"] = html_url
 
     # Robust Windows installer asset matching
-    # Priority: 1. Setup.exe / MediaDownloader.Setup.exe
-    #           2. *installer*.exe
-    #           3. Any .exe file attached to release
+    # Priority: 1. *novadrop* and *setup*.exe (e.g., NovaDrop Setup.exe)
+    #           2. *novadrop*.exe
+    #           3. *setup*.exe (backward compatibility e.g. MediaDownloader Setup.exe)
+    #           4. *installer*.exe
+    #           5. Any .exe file attached to release
     best_asset = None
-    for asset in data.get("assets", []):
-        name = asset.get("name", "")
-        name_lower = name.lower()
-        if not name_lower.endswith(".exe"):
-            continue
-        if "setup" in name_lower:
+    assets = data.get("assets", [])
+    
+    # Pass 1: novadrop + setup
+    for asset in assets:
+        nl = (asset.get("name") or "").lower()
+        if nl.endswith(".exe") and "novadrop" in nl and "setup" in nl:
             best_asset = asset
             break
-        elif "installer" in name_lower:
-            best_asset = asset
-            break
-        elif not best_asset:
-            best_asset = asset
+            
+    # Pass 2: novadrop in name
+    if not best_asset:
+        for asset in assets:
+            nl = (asset.get("name") or "").lower()
+            if nl.endswith(".exe") and "novadrop" in nl:
+                best_asset = asset
+                break
+
+    # Pass 3: setup in name (backwards compatible with MediaDownloader Setup.exe)
+    if not best_asset:
+        for asset in assets:
+            nl = (asset.get("name") or "").lower()
+            if nl.endswith(".exe") and "setup" in nl:
+                best_asset = asset
+                break
+
+    # Pass 4: installer in name
+    if not best_asset:
+        for asset in assets:
+            nl = (asset.get("name") or "").lower()
+            if nl.endswith(".exe") and "installer" in nl:
+                best_asset = asset
+                break
+
+    # Pass 5: any .exe
+    if not best_asset:
+        for asset in assets:
+            nl = (asset.get("name") or "").lower()
+            if nl.endswith(".exe"):
+                best_asset = asset
+                break
 
     if best_asset:
         result["asset_name"] = best_asset.get("name", "")
@@ -595,16 +624,16 @@ def check_app_update(github_repo: Optional[str] = None) -> dict:
 
 def download_app_installer(
     asset_url: str,
-    asset_name: str = "MediaDownloader_Setup.exe",
+    asset_name: str = "NovaDrop_Setup.exe",
     on_progress: Optional[Callable[[dict], None]] = None,
 ) -> dict:
     """
-    Download the MediaDownloader Setup.exe installer into TEMP_UPDATES_DIR.
+    Download the NovaDrop Setup.exe installer into TEMP_UPDATES_DIR.
     """
     if not asset_url:
         return {"ok": False, "error": "No installer asset URL provided."}
 
-    dest_file = TEMP_UPDATES_DIR / (asset_name or "MediaDownloader_Setup.exe")
+    dest_file = TEMP_UPDATES_DIR / (asset_name or "NovaDrop_Setup.exe")
     logger.info(f"Downloading app installer from {asset_url} to {dest_file}")
 
     try:

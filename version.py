@@ -18,8 +18,8 @@ Usage:
     print(f"Media Downloader {get_version_string()}")
 """
 
-__version__ = "0.4.3"
-__app_name__ = "Media Downloader"
+__version__ = "0.4.6"
+__app_name__ = "NovaDrop"
 __author__ = "Brandon"
 __copyright__ = "2024"
 __github_repo__ = "Brandon-Morision/Media-Downloader"

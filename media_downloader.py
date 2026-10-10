@@ -602,9 +602,10 @@ def build_gallery_dl_cmd(url: str, cfg: dict) -> list:
     if cfg.get("cookies"):
         cmd += ["--cookies-from-browser", cfg["cookies"]]
     # Rate limiting — adds a delay between requests to avoid 429 errors
-    sleep = cfg.get("sleep", 2)
+    # 0.5s is still polite but ~4x faster than the 2s default for bulk gallery downloads
+    sleep = cfg.get("sleep", 0.5)
     cmd += ["-o", f"sleep-request={sleep}"]
-    cmd += ["-o", "retries=5"]
+    cmd += ["-o", "retries=8"]
     cmd += ["-o", "retry-codes=[429, 500, 502, 503]"]
     if cfg.get("custom_args"):
         import shlex
@@ -657,14 +658,22 @@ def build_ytdlp_cmd(url: str, cfg: dict) -> list:
         cmd += extra_headers
         logger.info("Added custom headers for known site requirements")
 
-    # HLS-specific flags for streaming sites
+    # HLS-specific flags for streaming sites — and general speed improvements
+    # --concurrent-fragments lets yt-dlp download multiple DASH/HLS segments in parallel.
+    # 4 is a safe, broadly-supported default; HLS sites get more (8) since they
+    # have many small segments that benefit most from parallelism.
+    concurrent = "8" if ("1flex.org" in url or any(site in url for site in ["youtube.com", "twitch.tv"])) else "4"
+    cmd += [
+        "--concurrent-fragments", concurrent,  # parallel fragment/segment downloads
+        "--buffer-size", "16K",                # larger I/O buffer for higher throughput
+        "--socket-timeout", "30",              # fail fast on stalled connections
+        "--retries", "10",                     # retry failed segments / requests
+        "--fragment-retries", "10",            # retry failed individual fragments
+    ]
     if "1flex.org" in url or any(site in url for site in ["youtube.com", "twitch.tv"]):
-        cmd += [
-            "--hls-use-mpegts",  # Force MPEG-TS merging for HLS
-            "--concurrent-fragments", "8",  # Download 8 segments at once
-            "--retries", "10",  # Retry failed segments
-        ]
+        cmd += ["--hls-use-mpegts"]
         logger.debug("Added HLS streaming flags")
+    logger.debug(f"Using {concurrent} concurrent fragments")
 
     if cfg.get("playlist_items"):
         cmd += ["--playlist-items", str(cfg["playlist_items"])]
@@ -1483,10 +1492,20 @@ def download_from_ui(url: str, cfg: dict, tool_override: str = "", on_line=None,
             logger.error(f"Download job {job_id} failed: {job.error}")
             _scan_output_dir_for_files(job, output_dir)
             job.finished_at = time.time()
+
+            # Detect rate limits (e.g. exit code 4, Tumblr/Twitter reset times, 429)
+            rate_limit_info = None
+            try:
+                from rate_limit_scheduler import parse_rate_limit
+                rate_limit_info = parse_rate_limit(job.error)
+            except Exception:
+                pass
+
             return {
                 "ok": False, "tool": tool, "command": cmd_str, "output_dir": output_dir,
                 "error": job.error, "job_id": job_id, "state": "error",
                 "files": job.files,
+                "rate_limit_info": rate_limit_info,
             }
 
         job.state = "done"

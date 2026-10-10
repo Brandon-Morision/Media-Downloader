@@ -107,6 +107,22 @@ export const api = {
     return window.pywebview.api?.apply_window_backdrop?.(backdrop);
   },
 
+  // Rate Limit Auto-Scheduler
+  async getScheduledDownloads() {
+    if (!isDesktopApp()) return { ok: true, jobs: [] };
+    return window.pywebview.api?.get_scheduled_downloads?.() || { ok: true, jobs: [] };
+  },
+
+  async cancelScheduledDownload(jobId) {
+    if (!isDesktopApp()) return { ok: true };
+    return window.pywebview.api?.cancel_scheduled_download?.(jobId);
+  },
+
+  async startScheduledDownloadNow(jobId) {
+    if (!isDesktopApp()) return { ok: true };
+    return window.pywebview.api?.start_scheduled_download_now?.(jobId);
+  },
+
   // History
   async listHistory() {
     await waitForApi(6000);
@@ -306,9 +322,9 @@ export const api = {
     if (!isDesktopApp()) {
       return {
         "yt-dlp": "2026.08.20 (mock)",
-        "gallery-dl": "1.32.13 (mock)",
-        ffmpeg: "8.1.2 (mock)",
-        app: "0.3.7",
+        "gallery-dl": "1.32.16 (mock)",
+        ffmpeg: "9.0.2 (mock)",
+        app: "0.4.6",
       };
     }
     try {
@@ -316,17 +332,37 @@ export const api = {
       if (fn) {
         const res = await fn();
         return {
-          "yt-dlp": res?.['yt-dlp']?.version || res?.['yt-dlp'] || 'Unknown',
-          "gallery-dl": res?.['gallery-dl']?.version || res?.['gallery-dl'] || 'Unknown',
-          ffmpeg: res?.ffmpeg?.version || res?.ffmpeg || 'Unknown',
-          app: res?.app?.version || res?.app || '0.3.7',
+          "yt-dlp": res?.['yt-dlp']?.version || res?.['yt-dlp'] || 'Not detected',
+          "gallery-dl": res?.['gallery-dl']?.version || res?.['gallery-dl'] || 'Not detected',
+          ffmpeg: res?.ffmpeg?.version || res?.ffmpeg || 'Not detected',
+          app: res?.app?.version || res?.app || '0.4.6',
           raw: res,
         };
       }
     } catch (err) {
       console.warn('Error fetching installed versions:', err);
     }
-    return { "yt-dlp": "Installed", "gallery-dl": "Installed", ffmpeg: "Installed", app: "0.3.7" };
+    return { "yt-dlp": "Not detected", "gallery-dl": "Not detected", ffmpeg: "Not detected", app: "0.4.6" };
+  },
+
+  async getYtdlpVersion() {
+    const v = await this.getInstalledVersions();
+    return v['yt-dlp'];
+  },
+
+  async getGalleryDlVersion() {
+    const v = await this.getInstalledVersions();
+    return v['gallery-dl'];
+  },
+
+  async getFfmpegVersion() {
+    const v = await this.getInstalledVersions();
+    return v['ffmpeg'];
+  },
+
+  async getAppVersion() {
+    const v = await this.getInstalledVersions();
+    return v['app'];
   },
 
   async checkUpdates() {

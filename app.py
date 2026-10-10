@@ -529,6 +529,7 @@ class Api:
         self._jobs_lock = threading.Lock()
         logger.info(f"NovaDrop {get_version_string()} initialized")
         self._recover_interrupted_history()
+        self._init_rate_limit_scheduler()
 
     def _recover_interrupted_history(self):
         """Transition any leftover 'running' downloads from an earlier abnormal app exit to 'cancelled'."""
@@ -546,6 +547,51 @@ class Api:
                 logger.info("Recovered previous interrupted download(s) in history")
         except Exception as e:
             logger.debug(f"History recovery check error: {e}")
+
+    def _init_rate_limit_scheduler(self):
+        """Configure and start the automatic rate-limit scheduler."""
+        try:
+            from rate_limit_scheduler import scheduler
+
+            def _on_notify(job):
+                jid = job.get("job_id")
+                title = job.get("title") or job.get("url")
+                # 1. Native Windows 10/11 Rich Toast Notification
+                try:
+                    from toast_manager import toast
+                    toast.show_toast(
+                        title="NovaDrop • Scheduled Download Starting Soon",
+                        message=f"Rate limit is clearing for {title}.\nResuming download automatically in 1 minute."
+                    )
+                except Exception:
+                    pass
+                # 2. Push to UI
+                self._push_js(f"window.onScheduledDownloadStartingSoon?.({_js(jid)}, {_js(title)})")
+
+            def _on_start(job):
+                jid = job.get("job_id")
+                url = job.get("url")
+                cfg = job.get("cfg", {})
+                tool = job.get("tool", "")
+                title = job.get("title") or url
+                # 1. Native Windows 10/11 Rich Toast Notification
+                try:
+                    from toast_manager import toast
+                    toast.show_toast(
+                        title="NovaDrop • Download Resumed",
+                        message=f"Rate limit reset window reached.\nNow downloading: {title}"
+                    )
+                except Exception:
+                    pass
+                # 2. Push to UI
+                self._push_js(f"window.onScheduledDownloadResumed?.({_js(jid)}, {_js(title)})")
+                # 3. Start download job
+                self.start_download(url, cfg, tool_override=tool, client_job_id=jid)
+
+            scheduler.set_callbacks(on_notify=_on_notify, on_start=_on_start)
+            scheduler.start()
+        except Exception as e:
+            logger.debug(f"Failed to initialize rate limit scheduler: {e}")
 
     def set_window(self, window):
         global _bridge_api_ref
@@ -897,11 +943,38 @@ class Api:
                     else:
                         display_name = initial_name
 
-                    status_label = (
-                        "done" if result.get("ok")
-                        else "cancelled" if (result.get("state") == "cancelled" or result.get("error") == "Cancelled by user." or status.get("state") == "cancelled")
-                        else "error"
-                    )
+                    # Rate limit automatic scheduling check
+                    rate_limit_info = result.get("rate_limit_info")
+                    if not rate_limit_info and not result.get("ok"):
+                        try:
+                            from rate_limit_scheduler import parse_rate_limit
+                            rate_limit_info = parse_rate_limit(result.get("error"))
+                        except Exception:
+                            pass
+
+                    is_rate_limited = bool(rate_limit_info)
+                    if is_rate_limited:
+                        status_label = "scheduled"
+                        try:
+                            from rate_limit_scheduler import scheduler
+                            scheduler.schedule(
+                                job_id=job_id,
+                                url=url,
+                                cfg=validated_cfg,
+                                tool=tool_override or tool,
+                                reset_info=rate_limit_info,
+                                title=display_name,
+                                history_id=history_id,
+                            )
+                        except Exception as e:
+                            logger.debug(f"Failed to schedule rate-limited job {job_id}: {e}")
+                    else:
+                        status_label = (
+                            "done" if result.get("ok")
+                            else "cancelled" if (result.get("state") == "cancelled" or result.get("error") == "Cancelled by user." or status.get("state") == "cancelled")
+                            else "error"
+                        )
+
                     thumb_url = resolve_entry_thumbnail_url(files, output_dir=result.get("output_dir") or out_dir) or initial_thumb
                     detected_cat = Api._detect_entry_category(files, display_name)
                     hist_payload = {
@@ -913,7 +986,7 @@ class Api:
                         "files": files,
                         "size_bytes": sum((f.get("size") or 0) for f in files),
                         "status": status_label,
-                        "error": result.get("error"),
+                        "error": (f"Rate limit resets at {rate_limit_info['reset_time_str']} — scheduled" if is_rate_limited else result.get("error")),
                         "thumbnail": thumb_url,
                         "started_at": status.get("started_at"),
                         "finished_at": status.get("finished_at") or time.time(),
@@ -929,10 +1002,23 @@ class Api:
                     with self._jobs_lock:
                         self._active_job_history.pop(job_id, None)
 
+            if is_rate_limited:
+                self._push_js(
+                    f"window.onDownloadScheduled?.({_js(job_id)}, "
+                    f"{_js(rate_limit_info['target_timestamp'])}, "
+                    f"{_js(rate_limit_info['reset_time_str'])}, "
+                    f"{_js(display_name)})"
+                )
+
+            error_msg_val = (
+                f"Rate limit resets at {rate_limit_info['reset_time_str']} — scheduled"
+                if is_rate_limited
+                else (result.get('error') or '')
+            )
             self._push_js(
                 f"window.onDownloadDone?.({_js(job_id)}, "
                 f"{_js(bool(result['ok']))}, "
-                f"{_js(result.get('error') or '')}, "
+                f"{_js(error_msg_val)}, "
                 f"{_js(result.get('output_dir') or '')}, "
                 f"{_js(files)}, "
                 f"{_js(history_id)}, "
@@ -942,7 +1028,12 @@ class Api:
             # Windows 10/11 Native Interactive Rich Toast Notification
             try:
                 from toast_manager import toast
-                if result.get("ok"):
+                if is_rate_limited:
+                    toast.show_toast(
+                        title="NovaDrop • Rate Limit Reached",
+                        message=f"{display_name}\nRate limit resets at {rate_limit_info['reset_time_str']}. Automatically scheduled to resume."
+                    )
+                elif result.get("ok"):
                     toast.show_download_complete(
                         title=display_name,
                         files=files,
@@ -1055,6 +1146,41 @@ class Api:
                 window_effects.apply_fluent_effects(hwnd, backdrop=backdrop)
                 return {"ok": True}
             return {"ok": False, "error": "HWND not found"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── rate limit scheduler controls ──
+    def get_scheduled_downloads(self) -> dict:
+        """Return list of all rate-limited downloads scheduled to resume."""
+        try:
+            from rate_limit_scheduler import scheduler
+            return {"ok": True, "jobs": scheduler.list_jobs()}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "jobs": []}
+
+    def cancel_scheduled_download(self, job_id: str) -> dict:
+        """Cancel a scheduled rate-limited download."""
+        try:
+            from rate_limit_scheduler import scheduler
+            success = scheduler.cancel(job_id)
+            return {"ok": success}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def start_scheduled_download_now(self, job_id: str) -> dict:
+        """Force start a scheduled rate-limited download immediately."""
+        try:
+            from rate_limit_scheduler import scheduler
+            job = scheduler.get_job(job_id)
+            if job:
+                scheduler.cancel(job_id)
+                return self.start_download(
+                    job["url"],
+                    job.get("cfg", {}),
+                    tool_override=job.get("tool", ""),
+                    client_job_id=job_id,
+                )
+            return {"ok": False, "error": "Scheduled job not found"}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -2467,6 +2593,18 @@ def _startup_update_check(api):
 
 
 def main():
+    if os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("NovaDrop")
+        except Exception:
+            pass
+        try:
+            from toast_manager import _ensure_aumid_registered
+            _ensure_aumid_registered()
+        except Exception:
+            pass
+
     _start_bridge_server()
     api = Api()
 

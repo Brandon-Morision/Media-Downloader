@@ -40,7 +40,7 @@ except ImportError:
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_ICON_PATH = os.path.join(HERE, "build_assets", "icon.ico")
 DEFAULT_BACKUP_PATH = os.path.join(HERE, "build_assets", "icon.ico.bak")
-DEFAULT_EXE_PATH = os.path.join(HERE, "dist", "MediaDownloader", "MediaDownloader.exe")
+DEFAULT_EXE_PATH = os.path.join(HERE, "dist", "NovaDrop", "NovaDrop.exe")
 
 # Standard Windows icon sizes
 STANDARD_SIZES = [16, 32, 48, 64, 128, 256]

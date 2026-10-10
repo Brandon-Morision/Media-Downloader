@@ -235,7 +235,16 @@ export function friendlyError(err = "") {
     return "Permission denied writing to download folder";
   }
 
-  // 8. Clean up raw tool CLI noise (e.g. [tumblr][error] Aborting - ...)
+  // 8. Rate limits
+  if (/rate limit.*?reset.*?at\s+(\d{1,2}:\d{2}(?::\d{2})?)/i.test(s)) {
+    const m = s.match(/rate limit.*?reset.*?at\s+(\d{1,2}:\d{2}(?::\d{2})?)/i);
+    return `Rate limit resets at ${m[1]} — scheduled`;
+  }
+  if (/rate limit/i.test(s) || /429/i.test(s)) {
+    return "Rate limit reached — scheduled to resume";
+  }
+
+  // 9. Clean up raw tool CLI noise (e.g. [tumblr][error] Aborting - ...)
   let clean = s
     .replace(/^\[.*?\]\[(?:error|warning|info)\]\s*/i, "")
     .replace(/^ERROR:\s*/i, "")

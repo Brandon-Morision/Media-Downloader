@@ -1,15 +1,15 @@
 ; ─────────────────────────────────────────────────────────────────
-; MediaDownloader.iss — Inno Setup 7
+; NovaDrop.iss — Inno Setup 7
 ; Installs the app AND automatically installs the browser extension
 ; into Chrome and Edge via Windows registry (no developer mode needed)
 ; ─────────────────────────────────────────────────────────────────
 
 ; Version is managed centrally in version.py - update that file to change versions
-#define AppName      "Media Downloader"
-#define AppVersion   "0.4.3"
+#define AppName      "NovaDrop"
+#define AppVersion   "0.4.6"
 #define AppPublisher "Brandon"
-#define AppExeName   "MediaDownloader.exe"
-#define SourceDir    "dist\MediaDownloader"
+#define AppExeName   "NovaDrop.exe"
+#define SourceDir    "dist\NovaDrop"
 #define ExtDir       "browser_extension"
 
 ; Chrome/Edge install the extension by reading this registry path.
@@ -26,12 +26,12 @@ DefaultDirName                    = {autopf}\{#AppName}
 DefaultGroupName                  = {#AppName}
 DisableProgramGroupPage           = yes
 OutputDir                         = installer
-OutputBaseFilename                = MediaDownloader Setup
+OutputBaseFilename                = NovaDrop Setup
 SetupIconFile                     = build_assets\icon.ico
 ; NOTE: SetupIconFile above only sets the icon on Setup.exe itself (the
 ; installer wizard) — it has no effect on the installed app, its
 ; shortcuts, or its taskbar entry. Those all come from whatever icon
-; resource is embedded in MediaDownloader.exe (set in MediaDownloader.spec
+; resource is embedded in NovaDrop.exe (set in MediaDownloader.spec
 ; at build time), or — as a fallback that doesn't depend on that build
 ; step succeeding — from the .ico file we now bundle and point shortcuts
 ; at explicitly below.
@@ -46,6 +46,7 @@ MinVersion                        = 10.0.17134
 WizardStyle                       = modern
 WizardImageFile                   = build_assets\wizard.bmp,build_assets\wizard-2x.bmp
 WizardSmallImageFile              = build_assets\wizard-small.bmp,build_assets\wizard-small-2x.bmp
+LicenseFile                       = build_assets\license.txt
 ShowLanguageDialog                = no
 
 [Languages]
@@ -64,6 +65,9 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 ; Start Menu/desktop shortcuts below have a guaranteed-good icon source,
 ; independent of whether MediaDownloader.exe itself embeds one correctly.
 Source: "build_assets\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+
+; Terms of Use and software license documentation
+Source: "TERMS_OF_USE.md"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Browser extension — installed to a subfolder the browser reads from
 Source: "{#ExtDir}\*"; DestDir: "{app}\extension"; Flags: ignoreversion recursesubdirs createallsubdirs; Tasks: chromeext or edgeext
@@ -119,7 +123,7 @@ var
 begin
   if not WebView2IsInstalled then
   begin
-    Msg := 'Media Downloader requires the Microsoft Edge WebView2 Runtime.' + #13#10 + #13#10 + 'It ships with Windows 11 and most updated Windows 10 systems.' + #13#10 + 'If the app does not display correctly after installation, download it from:' + #13#10 + 'https://developer.microsoft.com/microsoft-edge/webview2/' + #13#10 + #13#10 + 'Installation will continue. You can install WebView2 later.';
+    Msg := 'NovaDrop requires the Microsoft Edge WebView2 Runtime.' + #13#10 + #13#10 + 'It ships with Windows 11 and most updated Windows 10 systems.' + #13#10 + 'If the app does not display correctly after installation, download it from:' + #13#10 + 'https://developer.microsoft.com/microsoft-edge/webview2/' + #13#10 + #13#10 + 'Installation will continue. You can install WebView2 later.';
     MsgBox(Msg, mbInformation, MB_OK);
   end;
 end;

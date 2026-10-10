@@ -15,16 +15,34 @@ from logger import get_logger
 
 logger = get_logger(__name__)
 
-# NovaDrop default icon path
+# NovaDrop default icon paths
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _ICON_256 = os.path.join(_BASE_DIR, "icons", "icon_256.png")
+_ICON_LOGO = os.path.join(_BASE_DIR, "icons", "novadrop_logo.png")
 _ICON_ICO = os.path.join(_BASE_DIR, "icon.ico")
+
+
+def _ensure_aumid_registered():
+    """Ensure NovaDrop AUMID is registered in Windows Registry so toast header shows 'NovaDrop' and its icon."""
+    if os.name != "nt":
+        return
+    try:
+        import winreg
+        icon_path = _ICON_256 if os.path.isfile(_ICON_256) else (_ICON_LOGO if os.path.isfile(_ICON_LOGO) else _ICON_ICO)
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\AppUserModelId\NovaDrop") as key:
+            winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, "NovaDrop")
+            if icon_path and os.path.isfile(icon_path):
+                winreg.SetValueEx(key, "IconUri", 0, winreg.REG_SZ, icon_path)
+            winreg.SetValueEx(key, "ShowInSettings", 0, winreg.REG_DWORD, 1)
+    except Exception as e:
+        logger.debug(f"Failed to register NovaDrop AUMID: {e}")
 
 
 class ToastManager:
     def __init__(self):
         self._enabled = True
-        self._app_id = "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe"
+        self._app_id = "NovaDrop"
+        _ensure_aumid_registered()
 
     def set_enabled(self, enabled: bool):
         self._enabled = bool(enabled)
@@ -47,7 +65,7 @@ class ToastManager:
         return html.escape(str(text))
 
     def _send_toast_worker(self, xml_content: str):
-        """Execute WinRT Toast via background PowerShell process."""
+        """Execute WinRT Toast via background PowerShell process with NovaDrop AUMID and fallback."""
         if os.name != "nt":
             return
 
@@ -61,8 +79,14 @@ try {{
     $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
     $xml.LoadXml($template)
     $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
-    $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{self._app_id}')
-    $notifier.Show($toast)
+    try {{
+        $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{self._app_id}')
+        $notifier.Show($toast)
+    }} catch {{
+        # Fallback to PowerShell AUMID if custom AUMID is restricted
+        $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}}\\WindowsPowerShell\\v1.0\\powershell.exe')
+        $notifier.Show($toast)
+    }}
 }} catch {{
     # Silently ignore if Windows notification service is disabled
 }}
@@ -123,6 +147,7 @@ try {{
     <binding template="ToastGeneric">
       <text>{clean_title}</text>
       <text>{clean_msg}</text>
+      <text placement="attribution">NovaDrop</text>
       {img_element}
     </binding>
   </visual>

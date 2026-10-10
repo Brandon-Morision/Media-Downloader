@@ -347,9 +347,51 @@ export default function App() {
       showToast(`Link received from browser: ${title || url}`);
     };
 
+    window.onDownloadScheduled = (jobId, targetTimestamp, resetTimeStr, title) => {
+      setDownloads((prev) =>
+        prev.map((item) => {
+          if (item.jobId === jobId) {
+            return {
+              ...item,
+              state: 'scheduled',
+              targetTimestamp,
+              resetTimeStr,
+              error: `Rate limit will reset at ${resetTimeStr}`,
+            };
+          }
+          return item;
+        })
+      );
+      showToast(`Rate limit reached: Scheduled to resume at ${resetTimeStr}`);
+    };
+
+    window.onScheduledDownloadStartingSoon = (jobId, title) => {
+      showToast(`Scheduled download for "${title}" will start in 1 minute`);
+    };
+
+    window.onScheduledDownloadResumed = (jobId, title) => {
+      showToast(`Rate limit cleared: Resuming "${title}"`);
+      setDownloads((prev) =>
+        prev.map((item) => {
+          if (item.jobId === jobId) {
+            return {
+              ...item,
+              state: 'running',
+              error: '',
+              startedAt: Date.now(),
+            };
+          }
+          return item;
+        })
+      );
+    };
+
     return () => {
       delete window.onDownloadProgress;
       delete window.onDownloadDone;
+      delete window.onDownloadScheduled;
+      delete window.onScheduledDownloadStartingSoon;
+      delete window.onScheduledDownloadResumed;
       delete window.onClipboardUrlDetected;
       delete window.onSearchResults;
       delete window.onSearchError;
@@ -439,17 +481,51 @@ export default function App() {
   };
 
   const handlePauseDownload = async (jobId) => {
-    await api.pauseDownload(jobId);
+    if (!jobId) return;
+    // Optimistically set state to 'paused' immediately for responsive UI
     setDownloads((prev) =>
       prev.map((i) => (i.jobId === jobId ? { ...i, state: 'paused' } : i))
     );
+    try {
+      const res = await api.pauseDownload(jobId);
+      if (!res?.ok) {
+        // Rollback on failure
+        setDownloads((prev) =>
+          prev.map((i) => (i.jobId === jobId ? { ...i, state: 'running' } : i))
+        );
+        showToast(res?.error || 'Could not pause download', false);
+      }
+    } catch (e) {
+      // Rollback on error
+      setDownloads((prev) =>
+        prev.map((i) => (i.jobId === jobId ? { ...i, state: 'running' } : i))
+      );
+      showToast('Failed to pause download', false);
+    }
   };
 
   const handleResumeDownload = async (jobId) => {
-    await api.resumeDownload(jobId);
+    if (!jobId) return;
+    // Optimistically set state to 'running' immediately for responsive UI
     setDownloads((prev) =>
       prev.map((i) => (i.jobId === jobId ? { ...i, state: 'running' } : i))
     );
+    try {
+      const res = await api.resumeDownload(jobId);
+      if (!res?.ok) {
+        // Rollback on failure
+        setDownloads((prev) =>
+          prev.map((i) => (i.jobId === jobId ? { ...i, state: 'paused' } : i))
+        );
+        showToast(res?.error || 'Could not resume download', false);
+      }
+    } catch (e) {
+      // Rollback on error
+      setDownloads((prev) =>
+        prev.map((i) => (i.jobId === jobId ? { ...i, state: 'paused' } : i))
+      );
+      showToast('Failed to resume download', false);
+    }
   };
 
   const handleDeleteDownload = async (id) => {

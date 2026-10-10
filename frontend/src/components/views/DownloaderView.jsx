@@ -3,7 +3,7 @@ import {
   Download, Play, Pause, X, RotateCcw, Folder, Image,
   ChevronDown, ChevronUp, Trash2, Search, CheckCircle2,
   AlertCircle, AlertTriangle, XCircle, Clock, Link as LinkIcon, Sparkles, ListMusic,
-  Film, Music, MoreVertical, Check, ExternalLink, Layers, ListVideo
+  Film, Music, MoreVertical, Check, ExternalLink, Layers, ListVideo, Bell, Zap
 } from 'lucide-react';
 import {
   fmtBytes, fmtDate, fmtViews, fmtDuration, toolLabel,
@@ -12,6 +12,40 @@ import {
 } from '../../lib/formatters';
 import { api } from '../../lib/api';
 import MediaThumbnail from '../common/MediaThumbnail';
+
+function ScheduledCountdown({ scheduledTime, scheduledTimeStr }) {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    function calc() {
+      if (!scheduledTime) {
+        setTimeLeft(scheduledTimeStr || 'Pending');
+        return;
+      }
+      const target = new Date(scheduledTime).getTime();
+      const diff = Math.max(0, Math.floor((target - Date.now()) / 1000));
+      if (diff <= 0) {
+        setTimeLeft('Resuming shortly…');
+        return;
+      }
+      const hours = Math.floor(diff / 3600);
+      const minutes = Math.floor((diff % 3600) / 60);
+      const seconds = diff % 60;
+      if (hours > 0) {
+        setTimeLeft(`${hours}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`);
+      } else if (minutes > 0) {
+        setTimeLeft(`${minutes}m ${seconds.toString().padStart(2, '0')}s`);
+      } else {
+        setTimeLeft(`${seconds}s`);
+      }
+    }
+    calc();
+    const timer = setInterval(calc, 1000);
+    return () => clearInterval(timer);
+  }, [scheduledTime, scheduledTimeStr]);
+
+  return <span>{timeLeft}</span>;
+}
 
 export default function DownloaderView({
   downloads,
@@ -245,11 +279,36 @@ export default function DownloaderView({
   };
 
   // Filter queue items by state
-  const activeDownloads = downloads.filter((item) => ['pending', 'running', 'paused'].includes(item.state));
+  const scheduledDownloads = downloads.filter((item) => item.state === 'scheduled');
+  const activeDownloads = downloads.filter((item) => ['pending', 'running', 'paused', 'scheduled'].includes(item.state));
   const completedDownloads = downloads.filter((item) => item.state === 'done');
   const failedDownloads = downloads.filter((item) => item.state === 'error');
   const cancelledDownloads = downloads.filter((item) => item.state === 'cancelled');
   const historyDownloads = downloads.filter((item) => ['done', 'cancelled', 'error'].includes(item.state));
+
+  const handleStartScheduledNow = async (jobId) => {
+    try {
+      const res = await api.startScheduledDownloadNow(jobId);
+      if (res && res.error) {
+        if (onShowToast) onShowToast(res.error, 'error');
+      } else {
+        if (onShowToast) onShowToast('Resuming scheduled download now…');
+        if (onRefreshHistory) onRefreshHistory();
+      }
+    } catch (err) {
+      if (onShowToast) onShowToast(String(err), 'error');
+    }
+  };
+
+  const handleCancelScheduled = async (jobId, itemId) => {
+    try {
+      await api.cancelScheduledDownload(jobId);
+      if (onCancelDownload) onCancelDownload(itemId);
+      if (onShowToast) onShowToast('Scheduled download cancelled');
+    } catch (err) {
+      if (onShowToast) onShowToast(String(err), 'error');
+    }
+  };
 
   const currentSectionDownloads = (() => {
     let list = [];
@@ -257,6 +316,7 @@ export default function DownloaderView({
     else if (queueTab === 'completed') list = completedDownloads;
     else if (queueTab === 'failed') list = failedDownloads;
     else if (queueTab === 'cancelled') list = cancelledDownloads;
+    else if (queueTab === 'scheduled') list = scheduledDownloads;
     else return [];
 
     if (searchQuery.trim()) {
@@ -948,6 +1008,25 @@ export default function DownloaderView({
                   </span>
                 )}
               </button>
+
+              {scheduledDownloads.length > 0 && (
+                <button
+                  onClick={() => setQueueTab('scheduled')}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                    queueTab === 'scheduled'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm font-bold'
+                      : 'text-slate-400 hover:text-amber-400'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Scheduled</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                    queueTab === 'scheduled' ? 'bg-slate-950 text-amber-400 font-bold' : 'bg-amber-500/20 text-amber-400'
+                  }`}>
+                    {scheduledDownloads.length}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -983,20 +1062,21 @@ export default function DownloaderView({
         {/* Animated content area — re-mounts on tab change */}
         <div key={queueTab} className="flex flex-col gap-5 animate-tab-enter">
 
-        {/* ── 1. ACTIVE DOWNLOADS SECTION ── */}
-        {(queueTab === 'all' || queueTab === 'active') && activeDownloads.length > 0 && (
+        {/* ── 1. ACTIVE / SCHEDULED DOWNLOADS SECTION ── */}
+        {(queueTab === 'all' || queueTab === 'active' || queueTab === 'scheduled') && (queueTab === 'scheduled' ? scheduledDownloads : activeDownloads).length > 0 && (
           <div className="flex flex-col gap-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Active Downloads
+              {queueTab === 'scheduled' ? 'Scheduled Downloads' : 'Active Downloads'}
             </h3>
 
             <div className="flex flex-col gap-3">
-              {activeDownloads.map((item) => {
+              {(queueTab === 'scheduled' ? scheduledDownloads : activeDownloads).map((item) => {
                 const pct = typeof item.progressPercent === 'number'
                   ? item.progressPercent
                   : (parseFloat(item.progressPercent) || 0);
 
                 const isPaused = item.state === 'paused';
+                const isScheduled = item.state === 'scheduled';
                 const isMusic = (item.filename || '').endsWith('.mp3') || (item.filename || '').endsWith('.m4a');
                 const isGallery = item.tool === 'gallery-dl' || (!item.limit && item.itemsDone > 0);
                 const isIndeterminate = isGallery && (!item.limit || item.limit <= 0);
@@ -1004,16 +1084,28 @@ export default function DownloaderView({
                 return (
                   <div
                     key={item.id}
-                    className="bg-surface-1 border border-border-subtle rounded-2xl p-4 flex flex-col gap-3 shadow-md hover:border-border transition-all"
+                    className={`border rounded-2xl p-4 flex flex-col gap-3 shadow-md transition-all ${
+                      isScheduled
+                        ? 'bg-amber-950/20 border-amber-500/30 hover:border-amber-500/50'
+                        : isPaused
+                          ? 'bg-surface-1 border border-amber-500/40 hover:border-amber-500/60'
+                          : 'bg-surface-1 border border-border-subtle hover:border-border'
+                    }`}
                   >
                     <div className="flex items-center gap-3">
-                      {/* Thumbnail or Music Icon */}
-                      <div className="w-12 h-12 rounded-xl bg-surface-3 shrink-0 overflow-hidden flex items-center justify-center relative shadow-sm">
-                        <MediaThumbnail
-                          item={item}
-                          className="w-full h-full object-cover"
-                          iconClassName="w-5 h-5"
-                        />
+                      {/* Thumbnail or Music/Clock Icon */}
+                      <div className={`w-12 h-12 rounded-xl shrink-0 overflow-hidden flex items-center justify-center relative shadow-sm ${
+                        isScheduled ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-surface-3'
+                      }`}>
+                        {isScheduled && !item.thumbnail ? (
+                          <Clock className="w-5 h-5 text-amber-400 animate-pulse" />
+                        ) : (
+                          <MediaThumbnail
+                            item={item}
+                            className="w-full h-full object-cover"
+                            iconClassName={`w-5 h-5 ${isScheduled ? 'text-amber-400' : ''}`}
+                          />
+                        )}
                         {(item.itemsDone > 1 || (item.files && item.files.length > 1)) && (
                           <div className="absolute bottom-0.5 right-0.5 px-1 py-0.2 rounded bg-black/85 backdrop-blur-xs text-[9px] font-bold text-white flex items-center gap-0.5 border border-white/10 shadow-sm">
                             <Layers className="w-2.5 h-2.5 text-brand-acc" />
@@ -1039,52 +1131,97 @@ export default function DownloaderView({
                             </button>
                           )}
                         </div>
-                        <p className="text-xs text-slate-400 font-mono mt-0.5">
-                          {item.downloadedBytes
-                            ? fmtBytes(item.downloadedBytes)
-                            : item.sizeBytes
-                              ? fmtBytes(item.sizeBytes)
-                              : item.itemsDone > 0
-                                ? `${item.itemsDone} file${item.itemsDone === 1 ? '' : 's'} downloaded`
-                                : item.tool === 'gallery-dl'
-                                  ? 'Gallery extractor running…'
-                                  : 'Extracting stream…'}
-                        </p>
+                        {isScheduled ? (
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              <Clock className="w-3 h-3" />
+                              Resets at {item.scheduled_time_str || fmtDate(item.scheduled_time)}
+                            </span>
+                            <span className="text-xs text-amber-300/80 font-mono flex items-center gap-1">
+                              <span>Auto-resumes in</span>
+                              <ScheduledCountdown scheduledTime={item.scheduled_time} scheduledTimeStr={item.scheduled_time_str} />
+                            </span>
+                          </div>
+                        ) : (
+                          <p className={`text-xs font-mono mt-0.5 ${isPaused ? 'text-amber-400/80' : 'text-slate-400'}`}>
+                            {isPaused
+                              ? 'Paused'
+                              : item.downloadedBytes
+                                ? fmtBytes(item.downloadedBytes)
+                                : item.sizeBytes
+                                  ? fmtBytes(item.sizeBytes)
+                                  : item.itemsDone > 0
+                                    ? `${item.itemsDone} file${item.itemsDone === 1 ? '' : 's'} downloaded`
+                                    : item.tool === 'gallery-dl'
+                                      ? 'Gallery extractor running…'
+                                      : 'Extracting stream…'}
+                          </p>
+                        )}
                       </div>
 
-                      {/* Pause & Cancel Controls */}
+                      {/* Controls */}
                       <div className="flex items-center gap-2 shrink-0">
-                        {isPaused ? (
-                          <button
-                            onClick={() => onResumeDownload(item.id)}
-                            className="p-2 rounded-xl bg-surface-2 hover:bg-surface-3 text-brand-acc transition-colors"
-                            title="Resume"
-                          >
-                            <Play className="w-4 h-4 fill-current" />
-                          </button>
+                        {isScheduled ? (
+                          <>
+                            <button
+                              onClick={() => handleStartScheduledNow(item.jobId || item.id)}
+                              className="px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1.5 border border-amber-500/30 transition-all hover:scale-[1.02]"
+                              title="Bypass schedule and start immediately"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>Start Now</span>
+                            </button>
+                            <button
+                              onClick={() => handleCancelScheduled(item.jobId || item.id, item.id)}
+                              className="p-2 rounded-xl bg-surface-2 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
+                              title="Cancel scheduled download"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
                         ) : (
-                          <button
-                            onClick={() => onPauseDownload(item.jobId)}
-                            className="p-2 rounded-xl bg-surface-2 hover:bg-surface-3 text-slate-300 hover:text-white transition-colors"
-                            title="Pause"
-                          >
-                            <Pause className="w-4 h-4" />
-                          </button>
-                        )}
+                          <>
+                            {isPaused ? (
+                              <button
+                                onClick={() => onResumeDownload(item.jobId)}
+                                className="p-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 hover:text-amber-300 transition-colors"
+                                title="Resume download"
+                              >
+                                <Play className="w-4 h-4 fill-current" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => onPauseDownload(item.jobId)}
+                                disabled={!item.jobId || item.state === 'pending'}
+                                className="p-2 rounded-xl bg-surface-2 hover:bg-surface-3 text-slate-300 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                title={item.jobId ? 'Pause download' : 'Waiting to start…'}
+                              >
+                                <Pause className="w-4 h-4" />
+                              </button>
+                            )}
 
-                        <button
-                          onClick={() => onCancelDownload(item.id)}
-                          className="p-2 rounded-xl bg-surface-2 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
-                          title="Cancel"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                            <button
+                              onClick={() => onCancelDownload(item.id)}
+                              className="p-2 rounded-xl bg-surface-2 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
+                              title="Cancel"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
 
-                    {/* Emerald Progress Bar */}
+                    {/* Progress Bar */}
                     <div className="w-full h-2 rounded-full bg-surface-3 overflow-hidden">
-                      {isIndeterminate ? (
+                      {isScheduled ? (
+                        <div className="h-full w-full bg-gradient-to-r from-amber-500/30 via-amber-400 to-amber-500/30 animate-pulse rounded-full" />
+                      ) : isPaused ? (
+                        <div
+                          className="h-full bg-amber-500/50 transition-all duration-300 rounded-full"
+                          style={{ width: `${Math.max(1, Math.min(100, pct))}%` }}
+                        />
+                      ) : isIndeterminate ? (
                         <div className="h-full w-full bg-gradient-to-r from-brand-dim via-brand-acc to-brand-dim animate-pulse rounded-full" />
                       ) : (
                         <div
@@ -1096,7 +1233,17 @@ export default function DownloaderView({
 
                     {/* Progress Metrics */}
                     <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-                      {isIndeterminate ? (
+                      {isScheduled ? (
+                        <>
+                          <span className="flex items-center gap-1 text-[11px] text-amber-400/90">
+                            <Bell className="w-3 h-3 text-amber-400" />
+                            Notification alert will sound 1 minute prior to resumption
+                          </span>
+                          <span className="text-[11px] text-amber-400/80 font-medium">
+                            Rate limit standby
+                          </span>
+                        </>
+                      ) : isIndeterminate ? (
                         <>
                           <span className="text-brand-acc font-medium">
                             {item.itemsDone > 0
@@ -1104,6 +1251,14 @@ export default function DownloaderView({
                               : 'Downloading media…'}
                           </span>
                           <span>{item.speedStr || 'Active'}</span>
+                        </>
+                      ) : isPaused ? (
+                        <>
+                          <span className="text-amber-400/70 flex items-center gap-1">
+                            <Pause className="w-3 h-3" />
+                            {pct > 0 ? `${pct.toFixed(0)}% saved` : 'Paused — click ▶ to resume'}
+                          </span>
+                          <span className="text-amber-400/50">{item.downloadedBytes && item.totalBytes ? `${fmtBytes(item.downloadedBytes)} / ${fmtBytes(item.totalBytes)}` : ''}</span>
                         </>
                       ) : (
                         <>
@@ -1124,6 +1279,14 @@ export default function DownloaderView({
           <div className="py-12 border border-dashed border-border-subtle rounded-2xl flex flex-col items-center justify-center text-slate-500 gap-2">
             <Download className="w-8 h-8 opacity-40 text-brand-acc" />
             <p className="text-xs font-medium">No active downloads in progress</p>
+          </div>
+        )}
+
+        {/* Empty state when on Scheduled tab and no scheduled downloads */}
+        {queueTab === 'scheduled' && scheduledDownloads.length === 0 && (
+          <div className="py-12 border border-dashed border-border-subtle rounded-2xl flex flex-col items-center justify-center text-slate-500 gap-2">
+            <Clock className="w-8 h-8 opacity-40 text-amber-400" />
+            <p className="text-xs font-medium">No rate-limited scheduled downloads</p>
           </div>
         )}
 
