@@ -4,7 +4,7 @@ import {
   DownloadCloud, ArrowUpCircle, ExternalLink, ShieldCheck, Box,
   ChevronRight, ChevronDown, Bell, HardDrive, Info, Sparkles, Puzzle,
   Cpu, ArrowDownCircle, CheckCircle2, AlertTriangle, Zap, Download,
-  Volume2, FileText, X
+  Volume2, FileText, X, Film, Music, Play, RotateCcw
 } from 'lucide-react';
 import { api, waitForApi } from '../../lib/api';
 import novadropBanner from '../../assets/novadrop-banner.png';
@@ -140,6 +140,23 @@ export default function SettingsView({
   const [notifyOnError, setNotifyOnError] = useState(() => localStorage.getItem('md_notify_error') !== 'false');
   const [soundOnComplete, setSoundOnComplete] = useState(() => localStorage.getItem('md_sound_complete') === 'true');
   const [preventSleep, setPreventSleep] = useState(() => localStorage.getItem('md_prevent_sleep') !== 'false');
+
+  // Player fullscreen exit behavior preferences
+  const [playerAudioExit, setPlayerAudioExit] = useState(() => localStorage.getItem('md_player_audio_exit') || 'mini');
+  const [playerVideoExit, setPlayerVideoExit] = useState(() => localStorage.getItem('md_player_video_exit') || 'ask');
+
+  useEffect(() => {
+    const handlePlayerSettingsChanged = () => {
+      setPlayerAudioExit(localStorage.getItem('md_player_audio_exit') || 'mini');
+      setPlayerVideoExit(localStorage.getItem('md_player_video_exit') || 'ask');
+    };
+    window.addEventListener('md-player-settings-changed', handlePlayerSettingsChanged);
+    window.addEventListener('storage', handlePlayerSettingsChanged);
+    return () => {
+      window.removeEventListener('md-player-settings-changed', handlePlayerSettingsChanged);
+      window.removeEventListener('storage', handlePlayerSettingsChanged);
+    };
+  }, []);
 
   useEffect(() => {
     loadVersions();
@@ -983,6 +1000,192 @@ export default function SettingsView({
                     className="px-3.5 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-4 text-slate-200 hover:text-white font-semibold text-xs border border-border-subtle transition-all shrink-0"
                   >
                     Send Test Toast
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── SECTION 2: PLAYER BEHAVIOR (WINDOWS 11 STYLE) ── */}
+      <div className="flex flex-col gap-2.5 w-full">
+        <span className="text-xs font-bold text-slate-400/90 uppercase tracking-wider pl-1 select-none">
+          Player Behavior
+        </span>
+        <div className="flex flex-col gap-3">
+          {/* Row: When Leaving Fullscreen */}
+          <div className="flex flex-col w-full">
+            <div
+              onClick={() => toggleSection('player')}
+              className="px-5 py-4 min-h-[68px] sm:min-h-[72px] flex items-center justify-between cursor-pointer hover:bg-surface-2/60 transition-colors select-none gap-4 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle hover:border-white/10 shadow-sm"
+            >
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-surface-2/90 border border-border-subtle/70 flex items-center justify-center text-slate-300 shrink-0 shadow-sm">
+                  <Play className="w-5 h-5 text-brand-acc" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[15px] font-semibold text-slate-100 tracking-tight leading-snug">
+                    When Leaving Fullscreen
+                  </span>
+                  <span className="text-xs text-slate-400 font-normal leading-normal mt-0.5 truncate">
+                    Configure Back button and Escape key transitions for audio and video
+                  </span>
+                </div>
+              </div>
+
+              {/* Status Badge & Chevron */}
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-surface-2 text-slate-300 border border-border-subtle">
+                  Audio: {playerAudioExit === 'exit' ? 'Exit' : 'Mini-Player'} · Video: {playerVideoExit === 'mini' ? 'Mini-Player' : playerVideoExit === 'exit' ? 'Exit' : 'Ask Every Time'}
+                </span>
+                <ChevronDown
+                  className={`w-4.5 h-4.5 text-slate-400 transition-transform duration-200 ${
+                    activeSection === 'player' ? 'rotate-180 text-brand-acc' : ''
+                  }`}
+                />
+              </div>
+            </div>
+
+            {activeSection === 'player' && (
+              <div className="mt-1.5 p-6 rounded-2xl bg-surface-1/90 backdrop-blur-md border border-border-subtle shadow-md flex flex-col gap-6 text-xs animate-fade-in">
+                {/* Audio subsection */}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2 text-slate-200 font-semibold text-xs">
+                    <Music className="w-4 h-4 text-sky-400" />
+                    <span>For audio files and songs:</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {[
+                      {
+                        id: 'mini',
+                        label: 'Switch to mini-player (recommended)',
+                        sub: 'Keep audio playing smoothly in the floating mini-player',
+                      },
+                      {
+                        id: 'exit',
+                        label: 'Exit player',
+                        sub: 'Stop audio playback and close player completely',
+                      },
+                    ].map((opt) => {
+                      const isSelected = playerAudioExit === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setPlayerAudioExit(opt.id);
+                            localStorage.setItem('md_player_audio_exit', opt.id);
+                            window.dispatchEvent(new Event('md-player-settings-changed'));
+                            onShowToast(opt.id === 'mini' ? 'Audio will switch to mini-player on leave' : 'Audio will exit on leave');
+                          }}
+                          className={`flex items-start justify-between p-3.5 rounded-xl border text-left transition-all ${
+                            isSelected
+                              ? 'bg-surface-3/90 text-white border-brand-acc/50 ring-1 ring-brand-acc/30 shadow-sm'
+                              : 'bg-surface-2/60 text-slate-300 border-border-subtle hover:bg-surface-2 hover:border-white/10'
+                          }`}
+                        >
+                          <div className="flex flex-col gap-0.5 pr-2">
+                            <span className="font-semibold text-slate-100 text-xs">{opt.label}</span>
+                            <span className="text-[11px] text-slate-400 leading-relaxed">{opt.sub}</span>
+                          </div>
+                          <div
+                            className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                              isSelected ? 'border-brand-acc bg-brand-dim' : 'border-slate-500/60 bg-transparent'
+                            }`}
+                          >
+                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-brand-acc" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Video subsection */}
+                <div className="flex flex-col gap-3 pt-4 border-t border-border-subtle/40">
+                  <div className="flex items-center gap-2 text-slate-200 font-semibold text-xs">
+                    <Film className="w-4 h-4 text-sky-400" />
+                    <span>For video files:</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {[
+                      {
+                        id: 'ask',
+                        label: 'Ask every time (default)',
+                        sub: 'Display confirmation prompt to choose mini-player or exit',
+                      },
+                      {
+                        id: 'mini',
+                        label: 'Switch to mini-player',
+                        sub: 'Seamlessly continue video in picture-in-picture mini-player',
+                      },
+                      {
+                        id: 'exit',
+                        label: 'Exit player',
+                        sub: 'Stop video playback and return to the application immediately',
+                      },
+                    ].map((opt) => {
+                      const isSelected = playerVideoExit === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            setPlayerVideoExit(opt.id);
+                            localStorage.setItem('md_player_video_exit', opt.id);
+                            window.dispatchEvent(new Event('md-player-settings-changed'));
+                            onShowToast(
+                              opt.id === 'mini'
+                                ? 'Video will switch to mini-player on leave'
+                                : opt.id === 'exit'
+                                ? 'Video will exit on leave'
+                                : 'Video will prompt on leave'
+                            );
+                          }}
+                          className={`flex items-start justify-between p-3.5 rounded-xl border text-left transition-all ${
+                            isSelected
+                              ? 'bg-surface-3/90 text-white border-brand-acc/50 ring-1 ring-brand-acc/30 shadow-sm'
+                              : 'bg-surface-2/60 text-slate-300 border-border-subtle hover:bg-surface-2 hover:border-white/10'
+                          }`}
+                        >
+                          <div className="flex flex-col gap-0.5 pr-2">
+                            <span className="font-semibold text-slate-100 text-xs">{opt.label}</span>
+                            <span className="text-[11px] text-slate-400 leading-relaxed">{opt.sub}</span>
+                          </div>
+                          <div
+                            className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                              isSelected ? 'border-brand-acc bg-brand-dim' : 'border-slate-500/60 bg-transparent'
+                            }`}
+                          >
+                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-brand-acc" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Reset to Defaults button */}
+                <div className="flex items-center justify-between pt-4 border-t border-border-subtle/40">
+                  <div className="flex flex-col">
+                    <span className="text-slate-200 font-medium text-xs">Restore Default Behavior</span>
+                    <span className="text-slate-400 text-[11px]">Revert audio to mini-player and video to ask every time</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPlayerAudioExit('mini');
+                      setPlayerVideoExit('ask');
+                      localStorage.setItem('md_player_audio_exit', 'mini');
+                      localStorage.setItem('md_player_video_exit', 'ask');
+                      window.dispatchEvent(new Event('md-player-settings-changed'));
+                      onShowToast('Player behavior restored to defaults');
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-4 text-slate-300 hover:text-white font-semibold text-xs border border-border-subtle transition-all flex items-center gap-1.5"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Restore Defaults</span>
                   </button>
                 </div>
               </div>

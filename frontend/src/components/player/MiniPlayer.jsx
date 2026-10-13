@@ -244,7 +244,7 @@ export default function MiniPlayer({
           ref={miniVideoRef}
           muted
           playsInline
-          className="w-full h-full object-contain"
+          className="w-full h-full object-contain pointer-events-none"
         />
 
         {/* Overlay: play/pause indicator on hover or when paused */}
@@ -336,6 +336,14 @@ export default function MiniPlayer({
           )}
 
           <div className="w-[1px] h-4 bg-white/10 mx-0.5" />
+
+          <button
+            onClick={onExpand}
+            className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-surface-3 transition-colors"
+            title="Reopen full player"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
 
           <button
             onClick={onClose}

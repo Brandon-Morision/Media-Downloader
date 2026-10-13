@@ -5,7 +5,30 @@ This document summarizes the high priority improvements implemented to enhance t
 
 ## Completed Improvements
 
-### 0. ✅ Windows 11 Native Integration Suite, SMTC & Compact Navigation Rail (v0.4.3)
+### 0. ✅ Full-Screen Player Transitions, Minimized Hit-Test Fix & Behavior Settings (v0.5.2)
+**Status:** Completed
+
+**Changes:**
+- **Full-Screen Exit Transitions**: Audio transitions seamlessly to floating mini-player preserving playback time, state, and volume; video prompts Windows 11 confirmation dialog ("Continue watching?") with mini-player, exit, cancel, and remember choice options.
+- **Player Behavior Settings**: Added configurable preferences in Settings under "When Leaving Fullscreen" for audio and video with real-time sync and Restore Defaults.
+- **Minimized Player Hit-Test Fix**: Resolved non-responsive button bug when player is minimized by applying pointer-events isolation (`invisible pointer-events-none opacity-0 -z-50`) to the global container and suppressing overlays.
+- **Maximized Controls**: Added explicit `Maximize2` expand button to mini-player.
+- **Scoped Keyboard Handlers**: Guarded Escape and Back keyboard listeners against accidental capture when minimized.
+
+---
+
+### 0.0. ✅ Explore Screen Overhaul, Downloads Queue & Security Hardening (v0.5.0)
+**Status:** Completed
+
+**Changes:**
+- **Explore Screen Overhaul**: Unified YouTube search, live query history, and stream quality inspector into Explore view.
+- **Streamlined Downloads**: Focused downloads view with sticky status filter pills and live queue search.
+- **Companion Bridge Security**: Hardened DNS rebinding protection and strict extension origin validation.
+- **Error Recovery**: Added download history salvage with `.bak` recovery and corrupt file quarantine.
+
+---
+
+### 0.0.0. ✅ Windows 11 Native Integration Suite, SMTC & Compact Navigation Rail (v0.4.3)
 **Status:** Completed
 
 **Changes:**

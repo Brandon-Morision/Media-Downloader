@@ -94,6 +94,8 @@ export default function GlobalMediaPlayer({
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [showExitConfirmDialog, setShowExitConfirmDialog] = useState(false);
+  const [rememberChoice, setRememberChoice] = useState(false);
 
   const [mediaUrl, setMediaUrl] = useState('');
   const [playbackError, setPlaybackError] = useState('');
@@ -367,6 +369,9 @@ export default function GlobalMediaPlayer({
     if (isFullscreen || getFullscreenElement()) {
       await exitFullscreenSafe();
     }
+    setIsQueueOpen(false);
+    setShowSpeedMenu(false);
+    setShowExitConfirmDialog(false);
     setIsMinimized(true);
   };
 
@@ -400,12 +405,54 @@ export default function GlobalMediaPlayer({
     }
     setIsPlaying(false);
     setIsMinimized(false);
+    setShowExitConfirmDialog(false);
     if ('mediaSession' in navigator) {
       try {
         navigator.mediaSession.playbackState = 'none';
       } catch (e) {}
     }
     if (onClose) onClose();
+  };
+
+  const handleBackOrEscape = () => {
+    // If confirmation dialog is open, cancel/dismiss it
+    if (showExitConfirmDialog) {
+      setShowExitConfirmDialog(false);
+      return;
+    }
+    // If speed menu or queue drawer is open, close them first
+    if (showSpeedMenu) {
+      setShowSpeedMenu(false);
+      return;
+    }
+    if (isQueueOpen) {
+      setIsQueueOpen(false);
+      return;
+    }
+    // If native OS/browser fullscreen is active, exit native fullscreen
+    if (isFullscreen || getFullscreenElement()) {
+      exitFullscreenSafe();
+    }
+
+    if (isAudio) {
+      const audioPref = localStorage.getItem('md_player_audio_exit') || 'mini';
+      if (audioPref === 'exit') {
+        handleFullClose();
+      } else {
+        handleMinimizeToMini();
+      }
+    } else {
+      const videoPref = localStorage.getItem('md_player_video_exit') || 'ask';
+      if (videoPref === 'mini') {
+        handleMinimizeToMini();
+      } else if (videoPref === 'exit') {
+        handleFullClose();
+      } else {
+        // 'ask' (default): prompt with confirmation dialog
+        setRememberChoice(false);
+        setShowExitConfirmDialog(true);
+      }
+    }
   };
 
   // ── Windows System Media Transport Controls (SMTC) via MediaSession API ──
@@ -541,7 +588,7 @@ export default function GlobalMediaPlayer({
 
   // Keyboard shortcuts
   useEffect(() => {
-    if (!active) return;
+    if (!active || isMinimized) return;
     const handleKeyDown = (e) => {
       if (['INPUT', 'TEXTAREA'].includes(e.target?.tagName)) return;
       if (e.code === 'Space') {
@@ -580,20 +627,28 @@ export default function GlobalMediaPlayer({
         handleForward30();
       } else if (e.key === 'Escape') {
         e.preventDefault();
+        if (showExitConfirmDialog) {
+          setShowExitConfirmDialog(false);
+          return;
+        }
         if (showSpeedMenu) {
           setShowSpeedMenu(false);
-        } else if (isQueueOpen) {
-          setIsQueueOpen(false);
-        } else if (isFullscreen || getFullscreenElement()) {
-          exitFullscreenSafe();
-        } else {
-          handleFullClose();
+          return;
         }
+        if (isQueueOpen) {
+          setIsQueueOpen(false);
+          return;
+        }
+        if (isFullscreen || getFullscreenElement()) {
+          exitFullscreenSafe();
+          return;
+        }
+        handleBackOrEscape();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [active, isFullscreen, duration, togglePlay, isMuted, handleRewind10, handleForward30, handleNext, handlePrev, isQueueOpen, showSpeedMenu]);
+  }, [active, isMinimized, isFullscreen, duration, togglePlay, isMuted, handleRewind10, handleForward30, handleNext, handlePrev, isQueueOpen, showSpeedMenu, showExitConfirmDialog, isAudio]);
 
   if (!active) return null;
 
@@ -624,11 +679,13 @@ export default function GlobalMediaPlayer({
 
       {/* Main Fullscreen / Media Player Surface */}
       <div
-        className={`fixed inset-0 z-50 bg-black flex items-center justify-center select-none transition-all duration-300 ${
-          isMinimized ? 'opacity-0 pointer-events-none -z-50 scale-95' : 'opacity-100 z-50 scale-100'
+        className={`fixed inset-0 bg-black flex items-center justify-center select-none transition-all duration-300 ${
+          isMinimized
+            ? 'invisible pointer-events-none opacity-0 -z-50 scale-95'
+            : 'visible pointer-events-auto opacity-100 z-50 scale-100'
         }`}
-        onMouseMove={handleUserActivity}
-        onClick={handleUserActivity}
+        onMouseMove={isMinimized ? undefined : handleUserActivity}
+        onClick={isMinimized ? undefined : handleUserActivity}
       >
         <div
           ref={modalContainerRef}
@@ -639,14 +696,16 @@ export default function GlobalMediaPlayer({
           {/* ── WINDOWS 11 MEDIA PLAYER TOP BAR ── */}
           <div
             className={`absolute top-0 left-0 right-0 z-30 h-16 px-5 bg-gradient-to-b from-black/90 via-black/50 to-transparent flex items-center justify-between transition-all duration-300 ${
-              controlsVisible ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'
+              controlsVisible && !isMinimized
+                ? 'opacity-100 translate-y-0 pointer-events-auto'
+                : 'opacity-0 -translate-y-2 pointer-events-none'
             }`}
           >
             {/* Top Left: Back Arrow + App Icon + "Media Player" */}
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleFullClose}
+                onClick={handleBackOrEscape}
                 className="w-9 h-9 rounded-full flex items-center justify-center text-slate-200 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
                 title="Back (Esc)"
               >
@@ -791,7 +850,7 @@ export default function GlobalMediaPlayer({
             )}
 
             {/* Slide-out Queue / Playlist Drawer (Windows 11 Media Player side drawer) */}
-            {safeFiles.length > 1 && (
+            {safeFiles.length > 1 && !isMinimized && (
               <div
                 className={`absolute top-0 right-0 bottom-0 w-80 max-w-[85vw] z-40 bg-[#111216]/95 backdrop-blur-2xl border-l border-white/10 shadow-2xl flex flex-col transition-transform duration-300 ${
                   isQueueOpen ? 'translate-x-0' : 'translate-x-full'
@@ -865,9 +924,11 @@ export default function GlobalMediaPlayer({
           {/* ── WINDOWS 11 MEDIA PLAYER BOTTOM CONTROLS BAR ── */}
           <div
             className={`absolute bottom-0 left-0 right-0 z-30 pt-12 pb-4 bg-gradient-to-t from-black/95 via-black/65 to-transparent transition-all duration-300 ${
-              controlsVisible ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-2 pointer-events-none'
+              controlsVisible && !isMinimized
+                ? 'opacity-100 translate-y-0 pointer-events-auto'
+                : 'opacity-0 translate-y-2 pointer-events-none'
             }`}
-            onClick={(e) => e.stopPropagation()}
+            onClick={isMinimized ? undefined : (e) => e.stopPropagation()}
           >
             {/* ROW 1: FULL-WIDTH PRECISE SEEKBAR */}
             <div className="px-5 sm:px-8 pt-3 pb-1 flex items-center gap-3.5 w-full">
@@ -1083,7 +1144,7 @@ export default function GlobalMediaPlayer({
                   </button>
 
                   {/* Windows 11 Fluent Context Menu */}
-                  {showSpeedMenu && (
+                  {showSpeedMenu && !isMinimized && (
                     <div
                       className="absolute right-0 bottom-11 w-44 bg-[#18191e]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-1.5 flex flex-col gap-1 z-50 text-xs animate-fade-in"
                       onClick={(e) => e.stopPropagation()}
@@ -1117,6 +1178,90 @@ export default function GlobalMediaPlayer({
           </div>
         </div>
       </div>
+
+      {/* ── VIDEO FULLSCREEN EXIT CONFIRMATION DIALOG ── */}
+      {showExitConfirmDialog && !isMinimized && (
+        <div
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 select-none animate-fade-in"
+          onClick={() => setShowExitConfirmDialog(false)}
+        >
+          <div
+            className="bg-[#18191e]/95 border border-white/15 rounded-2xl p-6 shadow-2xl max-w-md w-full flex flex-col gap-4 text-left animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0 mt-0.5">
+                <Film className="w-5 h-5" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <h3 className="text-base font-bold text-slate-100">Continue watching?</h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Your video is still playing. Would you like to switch to the mini-player or exit the player?
+                </p>
+              </div>
+            </div>
+
+            {/* Remember my choice checkbox */}
+            <label className="flex items-start gap-2.5 pt-1 cursor-pointer select-none group">
+              <input
+                type="checkbox"
+                checked={rememberChoice}
+                onChange={(e) => setRememberChoice(e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded border-white/20 bg-surface-2 cursor-pointer accent-sky-400 text-sky-400 focus:ring-0"
+              />
+              <div className="flex flex-col">
+                <span className="text-xs font-semibold text-slate-200 group-hover:text-white transition-colors">
+                  Remember my choice
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  You can change this anytime in Settings.
+                </span>
+              </div>
+            </label>
+
+            {/* Action buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setShowExitConfirmDialog(false)}
+                className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-white/5 transition-colors order-3 sm:order-1"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (rememberChoice) {
+                    localStorage.setItem('md_player_video_exit', 'exit');
+                    window.dispatchEvent(new Event('md-player-settings-changed'));
+                  }
+                  setShowExitConfirmDialog(false);
+                  handleFullClose();
+                }}
+                className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-semibold bg-surface-3 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-white/10 transition-colors order-2"
+              >
+                Exit player
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (rememberChoice) {
+                    localStorage.setItem('md_player_video_exit', 'mini');
+                    window.dispatchEvent(new Event('md-player-settings-changed'));
+                  }
+                  setShowExitConfirmDialog(false);
+                  handleMinimizeToMini();
+                }}
+                className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold bg-brand-acc text-slate-950 hover:brightness-110 shadow-glow transition-all order-1 sm:order-3"
+              >
+                Switch to mini-player
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
