@@ -62,7 +62,15 @@ function flashBadge(text, color) {
 // ── send URL to desktop app ───────────────────────────────────────────────────
 
 async function sendUrl(url, title) {
-  if (!url) return { ok: false, error: "Empty URL" };
+  if (!url || typeof url !== "string") return { ok: false, error: "Empty or invalid URL" };
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "http:" && u.protocol !== "https:") {
+      return { ok: false, error: "Unsupported URL scheme" };
+    }
+  } catch {
+    return { ok: false, error: "Malformed URL" };
+  }
 
   let token = await ensureToken();
   if (!token) {

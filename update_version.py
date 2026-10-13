@@ -45,6 +45,7 @@ FILES_TO_UPDATE = {
     'manifest.json': 'version',
     'browser_extension/manifest.json': 'version',
     'installer.iss': 'AppVersion',
+    'frontend/package.json': 'version',
 }
 
 # Files that MUST exist and update successfully for the run to be

@@ -2,12 +2,27 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward,
   Volume2, VolumeX, Maximize2, Minimize2, X, Music, Film,
-  Repeat, Shuffle, Heart, ArrowLeft, MoreHorizontal, Check, ListMusic, ListVideo
+  Repeat, Shuffle, Heart, ArrowLeft, MoreHorizontal, Check, ListMusic, ListVideo,
+  AlertCircle, ExternalLink
 } from 'lucide-react';
 import { AUDIO_EXT } from '../../lib/formatters';
 import { api } from '../../lib/api';
 import AudioVisualizer from './AudioVisualizer';
 import MiniPlayer from './MiniPlayer';
+
+function Equalizer({ playing }) {
+  return (
+    <span className="flex items-end gap-[2px] h-3">
+      {[60, 100, 40].map((h, i) => (
+        <span
+          key={i}
+          className={`w-[2px] bg-current rounded-full ${playing ? 'animate-pulse' : ''}`}
+          style={{ height: `${h}%`, animationDelay: `${i * 150}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
 
 // Format time precisely as Windows 11 Media Player: HH:MM:SS (e.g. 00:00:05, 00:03:52)
 function fmtWin11Time(seconds) {
@@ -64,6 +79,7 @@ export default function GlobalMediaPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [buffered, setBuffered] = useState(0);
   const [volume, setVolume] = useState(() => {
     const saved = localStorage.getItem('md_player_volume');
     return saved !== null ? parseFloat(saved) : 1;
@@ -87,6 +103,7 @@ export default function GlobalMediaPlayer({
   const mediaRef = useRef(null);
   const modalContainerRef = useRef(null);
   const idleTimerRef = useRef(null);
+  const queueItemRefs = useRef([]);
 
   // Normalize files or provide fallback
   const safeFiles = Array.isArray(files) && files.length > 0 ? files : [];
@@ -112,6 +129,7 @@ export default function GlobalMediaPlayer({
       setIsLoading(true);
       setPlaybackError('');
       setCoverArtUrl(null);
+      setBuffered(0);
 
       try {
         const streamRes = await api.getMediaUrl(currentFile.path);
@@ -182,13 +200,13 @@ export default function GlobalMediaPlayer({
   const handleUserActivity = useCallback(() => {
     setControlsVisible(true);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    if (isPlaying) {
+    if (isPlaying && !isAudio) {
       idleTimerRef.current = setTimeout(() => {
         setControlsVisible(false);
         setShowSpeedMenu(false);
-      }, 3200);
+      }, 3000);
     }
-  }, [isPlaying]);
+  }, [isPlaying, isAudio]);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -201,6 +219,26 @@ export default function GlobalMediaPlayer({
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
   }, [isPlaying, handleUserActivity]);
+
+  // Buffered segment calculation
+  const updateBuffered = useCallback(() => {
+    const m = mediaRef.current;
+    if (!m || !Number.isFinite(m.duration) || m.duration <= 0) return;
+    let end = 0;
+    for (let i = 0; i < m.buffered.length; i += 1) {
+      if (m.buffered.start(i) <= m.currentTime && m.buffered.end(i) >= m.currentTime) {
+        end = m.buffered.end(i);
+      }
+    }
+    setBuffered((end / m.duration) * 100);
+  }, []);
+
+  // Scroll active item into view when queue is opened or index changes
+  useEffect(() => {
+    if (isQueueOpen && queueItemRefs.current[currentIndex]) {
+      queueItemRefs.current[currentIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [currentIndex, isQueueOpen]);
 
   // Play / Pause toggle
   const togglePlay = useCallback(() => {
@@ -528,9 +566,23 @@ export default function GlobalMediaPlayer({
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         toggleFullscreen();
+      } else if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        handleNext();
+      } else if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        handlePrev();
+      } else if (e.key === 'j' || e.key === 'J') {
+        e.preventDefault();
+        handleRewind10();
+      } else if (e.key === 'l' || e.key === 'L') {
+        e.preventDefault();
+        handleForward30();
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        if (isQueueOpen) {
+        if (showSpeedMenu) {
+          setShowSpeedMenu(false);
+        } else if (isQueueOpen) {
           setIsQueueOpen(false);
         } else if (isFullscreen || getFullscreenElement()) {
           exitFullscreenSafe();
@@ -541,11 +593,12 @@ export default function GlobalMediaPlayer({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [active, isFullscreen, duration, togglePlay, isMuted, handleRewind10, handleForward30, isQueueOpen]);
+  }, [active, isFullscreen, duration, togglePlay, isMuted, handleRewind10, handleForward30, handleNext, handlePrev, isQueueOpen, showSpeedMenu]);
 
   if (!active) return null;
 
   const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
+  const bufferedPercent = Math.max(progressPercent, Math.min(100, Math.max(0, buffered)));
 
   return (
     <>
@@ -579,12 +632,14 @@ export default function GlobalMediaPlayer({
       >
         <div
           ref={modalContainerRef}
-          className="w-full h-full bg-[#0a0a0c] flex flex-col justify-between overflow-hidden relative"
+          className={`w-full h-full bg-black relative overflow-hidden select-none ${
+            !controlsVisible && isPlaying && !isAudio ? 'cursor-none' : ''
+          }`}
         >
           {/* ── WINDOWS 11 MEDIA PLAYER TOP BAR ── */}
           <div
-            className={`absolute top-0 left-0 right-0 z-30 h-14 px-5 bg-gradient-to-b from-black/85 via-black/45 to-transparent flex items-center justify-between transition-opacity duration-300 ${
-              controlsVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            className={`absolute top-0 left-0 right-0 z-30 h-16 px-5 bg-gradient-to-b from-black/90 via-black/50 to-transparent flex items-center justify-between transition-all duration-300 ${
+              controlsVisible ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'
             }`}
           >
             {/* Top Left: Back Arrow + App Icon + "Media Player" */}
@@ -636,18 +691,38 @@ export default function GlobalMediaPlayer({
           </div>
 
           {/* ── MEDIA CANVAS (VIDEO / AUDIO VISUALIZER) ── */}
-          <div className="flex-1 w-full h-full relative bg-black flex items-center justify-center overflow-hidden">
+          <div className="absolute inset-0 w-full h-full bg-black flex items-center justify-center overflow-hidden">
             {playbackError ? (
-              <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-[#0d0e12] gap-3 select-none">
-                <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-center text-rose-400 shadow-lg">
-                  <Film className="w-7 h-7" />
+              <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-[#0d0e12] gap-4 select-none">
+                <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-center text-rose-400 shadow-lg">
+                  <AlertCircle className="w-8 h-8" />
                 </div>
                 <div className="flex flex-col gap-1 max-w-sm">
                   <h4 className="text-sm font-bold text-slate-100">Unable to Play File</h4>
                   <p className="text-xs text-slate-400 leading-relaxed">{playbackError}</p>
-                  <p className="text-[11px] font-mono text-slate-500 truncate mt-1 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5 max-w-xs">
+                  <p className="text-[11px] font-mono text-slate-500 truncate mt-1 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5 max-w-xs mx-auto">
                     {currentFile?.path || currentFile?.name}
                   </p>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  {currentFile?.path && (
+                    <button
+                      type="button"
+                      onClick={() => api.openFile(currentFile.path)}
+                      className="h-9 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-2 bg-white/10 text-slate-200 hover:bg-white/15 hover:text-white transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4" /> Open in default app
+                    </button>
+                  )}
+                  {safeFiles.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={handleNext}
+                      className="h-9 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-2 bg-brand-acc text-slate-950 hover:brightness-110 active:scale-95 transition-all"
+                    >
+                      <SkipForward className="w-4 h-4 fill-current" /> Next track
+                    </button>
+                  )}
                 </div>
               </div>
             ) : isAudio ? (
@@ -658,7 +733,13 @@ export default function GlobalMediaPlayer({
                   title={trackDisplayName}
                   aria-label={trackDisplayName}
                   crossOrigin="anonymous"
-                  onTimeUpdate={() => mediaRef.current && setCurrentTime(mediaRef.current.currentTime)}
+                  onTimeUpdate={() => {
+                    if (mediaRef.current) {
+                      setCurrentTime(mediaRef.current.currentTime);
+                      updateBuffered();
+                    }
+                  }}
+                  onProgress={updateBuffered}
                   onDurationChange={() => mediaRef.current && setDuration(mediaRef.current.duration)}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
@@ -684,8 +765,14 @@ export default function GlobalMediaPlayer({
                   title={trackDisplayName}
                   aria-label={trackDisplayName}
                   crossOrigin="anonymous"
-                  className="w-full h-full object-contain max-h-screen"
-                  onTimeUpdate={() => mediaRef.current && setCurrentTime(mediaRef.current.currentTime)}
+                  className="w-full h-full object-contain"
+                  onTimeUpdate={() => {
+                    if (mediaRef.current) {
+                      setCurrentTime(mediaRef.current.currentTime);
+                      updateBuffered();
+                    }
+                  }}
+                  onProgress={updateBuffered}
                   onDurationChange={() => mediaRef.current && setDuration(mediaRef.current.duration)}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
@@ -729,9 +816,12 @@ export default function GlobalMediaPlayer({
                   {safeFiles.map((file, idx) => {
                     const isActive = currentIndex === idx;
                     const itemName = file.name ? file.name.replace(/\.[^/.]+$/, '') : `Item ${idx + 1}`;
+                    const fExt = (file.name?.split('.').pop() || '').toLowerCase();
+                    const isAudioItem = AUDIO_EXT.includes(fExt);
                     return (
                       <div
                         key={idx}
+                        ref={(el) => { queueItemRefs.current[idx] = el; }}
                         onClick={() => {
                           setCurrentIndex(idx);
                         }}
@@ -748,15 +838,19 @@ export default function GlobalMediaPlayer({
                             }`}
                           >
                             {isActive ? (
-                              <Play className="w-3 h-3 fill-current ml-0.5" />
+                              <Equalizer playing={isPlaying} />
                             ) : (
                               <span className="text-xs font-mono">{idx + 1}</span>
                             )}
                           </div>
                           <div className="flex flex-col min-w-0">
                             <span className="text-xs truncate">{itemName}</span>
-                            <span className="text-[10px] text-slate-400">
-                              {isActive ? 'Now Playing' : `Track #${idx + 1}`}
+                            <span className="text-[10px] text-slate-400 flex items-center gap-1.5">
+                              <span>{isActive ? 'Now Playing' : `Track #${idx + 1}`}</span>
+                              <span className="opacity-40">·</span>
+                              <span className="uppercase text-[9px] font-mono tracking-wider opacity-75">
+                                {isAudioItem ? 'Audio' : 'Video'}{fExt ? ` · ${fExt}` : ''}
+                              </span>
                             </span>
                           </div>
                         </div>
@@ -770,8 +864,8 @@ export default function GlobalMediaPlayer({
 
           {/* ── WINDOWS 11 MEDIA PLAYER BOTTOM CONTROLS BAR ── */}
           <div
-            className={`w-full z-30 bg-[#0e0f14]/90 backdrop-blur-2xl border-t border-white/5 transition-opacity duration-300 ${
-              controlsVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            className={`absolute bottom-0 left-0 right-0 z-30 pt-12 pb-4 bg-gradient-to-t from-black/95 via-black/65 to-transparent transition-all duration-300 ${
+              controlsVisible ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-2 pointer-events-none'
             }`}
             onClick={(e) => e.stopPropagation()}
           >
@@ -793,7 +887,7 @@ export default function GlobalMediaPlayer({
                   onChange={handleSeek}
                   className="w-full h-1 group-hover:h-1.5 rounded-full appearance-none cursor-pointer bg-white/20 transition-all focus:outline-none"
                   style={{
-                    background: `linear-gradient(to right, var(--acc, #38bdf8) 0%, var(--acc, #38bdf8) ${progressPercent}%, rgba(255,255,255,0.2) ${progressPercent}%, rgba(255,255,255,0.2) 100%)`,
+                    background: `linear-gradient(to right, var(--acc, #38bdf8) 0%, var(--acc, #38bdf8) ${progressPercent}%, rgba(255,255,255,0.28) ${progressPercent}%, rgba(255,255,255,0.28) ${bufferedPercent}%, rgba(255,255,255,0.12) ${bufferedPercent}%)`,
                     accentColor: 'var(--acc, #38bdf8)',
                   }}
                 />
@@ -978,14 +1072,14 @@ export default function GlobalMediaPlayer({
                   <button
                     type="button"
                     onClick={() => setShowSpeedMenu((prev) => !prev)}
-                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
-                      showSpeedMenu
-                        ? 'text-white bg-white/15'
+                    className={`h-9 min-w-[44px] px-2 rounded-full flex items-center justify-center gap-0.5 text-xs font-semibold tabular-nums transition-all ${
+                      showSpeedMenu || playbackRate !== 1
+                        ? 'text-brand-acc bg-brand-acc/15 border border-brand-acc/30'
                         : 'text-slate-400 hover:text-white hover:bg-white/10'
                     }`}
-                    title="More Options"
+                    title="Playback Speed"
                   >
-                    <MoreHorizontal className="w-4.5 h-4.5" />
+                    <span>{playbackRate}×</span>
                   </button>
 
                   {/* Windows 11 Fluent Context Menu */}

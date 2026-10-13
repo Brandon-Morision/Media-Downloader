@@ -59,3 +59,21 @@ def add_query(query: str) -> None:
 def list_queries() -> list:
     with _LOCK:
         return _load()
+
+
+def delete_query(query: str) -> None:
+    """Delete a query, de-duplicated case-insensitively."""
+    query = (query or "").strip()
+    if not query:
+        return
+    with _LOCK:
+        items = _load()
+        items = [q for q in items if q.lower() != query.lower()]
+        _save(items)
+
+
+def clear_queries() -> None:
+    """Clear all persisted search queries."""
+    with _LOCK:
+        _save([])
+

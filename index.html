@@ -809,8 +809,10 @@ select { appearance:none; }
 .player-card {
   background:var(--s1); border:1px solid var(--border-hi); border-radius:var(--r-xl);
   width:min(720px, 90vw); max-height:86vh; display:flex; flex-direction:column; overflow:hidden;
-  box-shadow:0 20px 60px rgba(0,0,0,.6);
+  box-shadow:0 20px 60px rgba(0,0,0,.6); transition:width .25s ease;
 }
+/* wider modal for audio mode */
+.player-card.audio-mode { width:min(840px, 94vw); }
 .player-head {
   display:flex; align-items:center; gap:12px; padding:12px 16px;
   border-bottom:1px solid var(--border); flex-shrink:0;
@@ -852,9 +854,15 @@ select { appearance:none; }
   display:flex; align-items:center; justify-content:center; overflow:hidden;
 }
 .mini-player-art svg { width:18px; height:18px; }
+/* mini-player info block with title + artist */
+.mini-player-info { display:flex; flex-direction:column; gap:1px; min-width:0; flex-shrink:1; }
 .mini-player-title {
   font-size:11.5px; color:var(--t1); font-weight:500; white-space:nowrap;
-  overflow:hidden; text-overflow:ellipsis; max-width:130px; flex-shrink:1;
+  overflow:hidden; text-overflow:ellipsis; max-width:130px;
+}
+.mini-player-artist {
+  font-size:9.5px; color:var(--t3); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; max-width:130px;
 }
 .mini-player-btn {
   width:28px; height:28px; flex-shrink:0; cursor:pointer;
@@ -940,6 +948,98 @@ select { appearance:none; }
   font-size:10.5px; font-family:inherit; padding:4px 6px; flex-shrink:0; cursor:pointer;
 }
 .mp-speed-select:hover { border-color:var(--border-hi); color:var(--t1); }
+
+/* ────────────────────────────────────────────────────────────────
+   WIN11-STYLE NOW PLAYING — two-column audio player layout
+   Left column: cover art (square) + waveform visualizer strip
+   Right column: metadata (title, artist, album, year, genre) + tech
+──────────────────────────────────────────────────────────────── */
+.mp-audio-layout {
+  display:flex; flex-direction:row; align-items:stretch; width:100%;
+  min-height:0; background:var(--s1);
+}
+.mp-audio-left {
+  flex-shrink:0; width:220px; display:flex; flex-direction:column;
+  background:var(--s2); position:relative; overflow:hidden;
+}
+.mp-audio-right {
+  flex:1; min-width:0; display:flex; flex-direction:column; gap:0;
+  padding:18px 20px 14px; overflow:hidden;
+}
+/* Blurred art backdrop */
+.mp-art-backdrop {
+  position:absolute; inset:-10px; background-size:cover; background-position:center;
+  filter:blur(28px) brightness(.55) saturate(1.4); z-index:0;
+  transition:background-image .3s ease;
+}
+/* Square cover art */
+.mp-cover-square {
+  position:relative; z-index:1; width:100%; aspect-ratio:1;
+  display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(135deg, rgba(124,109,250,.3), rgba(244,114,182,.3));
+  overflow:hidden; flex-shrink:0;
+}
+.mp-cover-square img { width:100%; height:100%; object-fit:cover; display:block; transition:opacity .3s ease; }
+.mp-cover-icon { display:flex; align-items:center; justify-content:center; width:100%; height:100%; }
+/* Visualizer strip below cover */
+.mp-audio-vis-strip {
+  flex:1; position:relative; z-index:1; min-height:60px;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.18);
+}
+.mp-vis-canvas-sm { width:100%; height:100%; display:block; position:absolute; inset:0; }
+/* Now-playing labels */
+.mp-now-playing-label {
+  font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.1em;
+  color:var(--acc); margin-bottom:6px; display:flex; align-items:center; gap:5px;
+}
+.mp-now-playing-dot {
+  width:5px; height:5px; border-radius:50%; background:var(--acc);
+  animation:pulse 1.8s ease infinite;
+}
+.mp-track-title {
+  font-size:18px; font-weight:700; color:var(--t1); line-height:1.25;
+  letter-spacing:-.02em; margin-bottom:2px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.mp-track-artist {
+  font-size:13.5px; font-weight:500; color:var(--acc); margin-bottom:10px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.mp-meta-chips { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:12px; }
+.mp-meta-chip {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:2px 8px; border-radius:99px; border:1px solid var(--border);
+  background:var(--s2); color:var(--t2); font-size:10.5px; font-weight:500;
+}
+.mp-tech-row {
+  display:flex; flex-wrap:wrap; gap:6px; padding-top:10px;
+  border-top:1px solid var(--border); margin-top:auto;
+}
+.mp-tech-badge {
+  padding:2px 7px; border-radius:4px; background:var(--s3);
+  color:var(--t2); font-size:10px; font-weight:500;
+  font-family:'JetBrains Mono',monospace;
+}
+/* Rich audio playlist */
+.player-playlist-btn.audio-pl-btn {
+  display:flex; align-items:center; gap:8px; white-space:normal;
+  padding:7px 10px;
+}
+.pl-track-num {
+  flex-shrink:0; width:18px; text-align:right;
+  font-size:10px; font-family:'JetBrains Mono',monospace; color:var(--t3);
+}
+.pl-track-num.playing { color:var(--acc); }
+.pl-track-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+.pl-track-name {
+  font-size:11.5px; color:var(--t2); font-weight:500;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.pl-track-sub { font-size:10px; color:var(--t3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pl-track-dur { flex-shrink:0; font-size:10px; font-family:'JetBrains Mono',monospace; color:var(--t3); }
+.player-playlist-btn.audio-pl-btn.active .pl-track-name { color:var(--t1); }
+.player-playlist-btn.audio-pl-btn.active .pl-track-num { color:var(--acc); }
 
 /* ─────────────────────────────────────────────
    GALLERY VIEW — grid of downloaded images/videos + lightbox
@@ -2093,7 +2193,10 @@ select { appearance:none; }
      nothing rebuilt -->
 <div class="mini-player" id="mini-player" onclick="expandPlayer()" title="Click to reopen the full player">
   <div class="mini-player-art" id="mini-player-art">&nbsp;</div>
-  <div class="mini-player-title" id="mini-player-title">Now playing</div>
+  <div class="mini-player-info">
+    <div class="mini-player-title" id="mini-player-title">Now playing</div>
+    <div class="mini-player-artist" id="mini-player-artist"></div>
+  </div>
   <button class="mp-btn mini-player-btn mini-player-btn-secondary" id="mini-player-prev" onclick="miniPlayerPrev(event)" title="Previous">&nbsp;</button>
   <button class="mp-btn mini-player-btn" id="mini-player-playpause" onclick="miniPlayerTogglePlay(event)" title="Play/Pause"></button>
   <button class="mp-btn mini-player-btn mini-player-btn-secondary" id="mini-player-next" onclick="miniPlayerNext(event)" title="Next">&nbsp;</button>
@@ -2647,18 +2750,27 @@ function setLibFilter(f) {
 }
 
 function getMediaCategory(item) {
-  if (item.tool === "gallery-dl") return "gallery";
+  if (item.category === "gallery" || item.isAlbum || item.tool === "gallery-dl") return "gallery";
   const files = item.files || [];
   const candidates = files.map(f => (typeof f === "string" ? f : (f.path || f.name || "")));
   if (item.filename) candidates.push(item.filename);
 
+  let hasVideo = false;
+  let hasAudio = false;
+  let hasImage = false;
+
   for (const p of candidates) {
     if (!p) continue;
     const ext = p.split(".").pop().toLowerCase();
-    if (["mp4", "mkv", "webm", "avi", "mov", "flv", "m4v"].includes(ext)) return "video";
-    if (["mp3", "m4a", "flac", "wav", "opus", "ogg", "aac"].includes(ext)) return "audio";
-    if (["jpg", "jpeg", "png", "webp", "gif", "zip"].includes(ext)) return "gallery";
+    if (["mp4", "mkv", "webm", "avi", "mov", "flv", "m4v"].includes(ext)) hasVideo = true;
+    if (["mp3", "m4a", "flac", "wav", "opus", "ogg", "aac"].includes(ext)) hasAudio = true;
+    if (["jpg", "jpeg", "png", "webp", "gif", "zip"].includes(ext)) hasImage = true;
   }
+  if (hasImage && hasVideo) return "gallery";
+  if (hasImage) return "gallery";
+  if (hasVideo) return "video";
+  if (hasAudio) return "audio";
+
   if (item.tool === "yt-dlp") {
     if (item.cfg?.format === "mp3" || item.cfg?.format === "m4a" || item.cfg?.format === "flac" || item.cfg?.format === "wav") return "audio";
     return "video";
@@ -2747,7 +2859,7 @@ function renderLibrary() {
     const sizeStr = item.sizeBytes ? fmtBytes(item.sizeBytes) : "";
     const playable = playableFilesFor(item);
     const hasPlayable = playable.length > 0;
-    const isGallery = cat === "gallery" || (item.files && item.files.length > 1 && !hasPlayable);
+    const isGallery = cat === "gallery" || item.isAlbum || (item.files && item.files.length > 1 && !hasPlayable);
 
     let catIcon = '';
     if (cat === "video") {
@@ -2759,10 +2871,10 @@ function renderLibrary() {
     }
 
     let playActionHtml = '';
-    if (hasPlayable) {
-      playActionHtml = `<button class="lib-btn primary" onclick="playDownloadItem('${escHtml(item.id)}')">▶ Play</button>`;
-    } else if (isGallery) {
+    if (isGallery) {
       playActionHtml = `<button class="lib-btn primary" onclick="openGallery('${escHtml(item.id)}')">🖼 Gallery</button>`;
+    } else if (hasPlayable) {
+      playActionHtml = `<button class="lib-btn primary" onclick="playDownloadItem('${escHtml(item.id)}')">▶ Play</button>`;
     }
 
     const folderActionHtml = (item.outputDir || item.cfg?.output)
@@ -4942,8 +5054,8 @@ async function loadInitialHistory() {
       id: entry.id, historyId: entry.id,
       url: entry.url, tool: entry.tool || "gallery-dl",
       cfg: { output: entry.output_dir }, toolOverride: null,
-      state: entry.status === "done" ? "done" : entry.status === "cancelled" ? "cancelled" : "error",
-      jobId: null, outputDir: entry.output_dir, itemsDone: (entry.files || []).length,
+      state: entry.status === "done" ? "done" : entry.status === "cancelled" ? "cancelled" : entry.status === "running" ? "running" : entry.status === "scheduled" ? "scheduled" : entry.status === "pending" ? "pending" : "error",
+      jobId: entry.job_id || null, outputDir: entry.output_dir, itemsDone: (entry.files || []).length,
       limit: 0, files: entry.files || [], filename: entry.filename || "",
       sizeBytes: entry.size_bytes || 0, error: entry.error || "",
       startedAt: (entry.started_at || 0) * 1000, finishedAt: (entry.finished_at || 0) * 1000,
@@ -5191,26 +5303,48 @@ function buildPlayerControls(mediaEl, onFatalError, onEnded, onPrev, onNext) {
 }
 
 let playerFiles = [];
-let mpPlaylistIndex = -1; // which entry in playerFiles is currently active — shared by the full player's playlist and the mini player's Prev/Next
+let mpPlaylistIndex = -1; // which entry in playerFiles is currently active
 let mpVolumeLevel = 1;
 let mpVolumeMuted = false;
+let mpCurrentMetadata = null; // ffprobe metadata for the current track
+// Cache: path -> metadata result (so switching tracks doesn't re-probe already-known files)
+const mpMetadataCache = {};
 
 async function openPlayer(files, title) {
   hideMiniPlayer();
   playerFiles = files;
   $("player-title").textContent = title || "Now playing";
   $("player-overlay").classList.add("show");
-  renderPlaylist();
+  // We'll set/remove audio-mode after the first track loads so we know the type
   if (files.length) await playPlaylistIndex(0);
 }
-function renderPlaylist() {
+function renderPlaylist(activeIndex) {
   const wrap = $("player-playlist");
   wrap.innerHTML = "";
   if (playerFiles.length <= 1) return;
+  const ai = activeIndex ?? mpPlaylistIndex;
+  const isAudioAll = playerFiles.every(f => AUDIO_EXT.includes((f.name.split(".").pop() || "").toLowerCase()));
   playerFiles.forEach((f, i) => {
     const btn = document.createElement("button");
-    btn.className = "player-playlist-btn" + (i === 0 ? " active" : "");
-    btn.textContent = f.name;
+    if (isAudioAll) {
+      // Rich audio track button: track# | title+artist | duration
+      btn.className = "player-playlist-btn audio-pl-btn" + (i === ai ? " active" : "");
+      const meta = mpMetadataCache[f.path];
+      const trackNum = (meta?.track) || (i + 1);
+      const trackName = meta?.title || f.name.replace(/\.[^.]+$/, "");
+      const artist = meta?.artist || "";
+      const dur = (meta?.duration) ? mpFmtTime(meta.duration) : "";
+      btn.innerHTML =
+        `<span class="pl-track-num${i === ai ? " playing" : ""}">` + escHtml(String(trackNum)) + `</span>` +
+        `<span class="pl-track-info">` +
+          `<span class="pl-track-name">${escHtml(trackName)}</span>` +
+          (artist ? `<span class="pl-track-sub">${escHtml(artist)}</span>` : "") +
+        `</span>` +
+        (dur ? `<span class="pl-track-dur">${escHtml(dur)}</span>` : "");
+    } else {
+      btn.className = "player-playlist-btn" + (i === ai ? " active" : "");
+      btn.textContent = f.name;
+    }
     btn.onclick = () => playPlaylistIndex(i);
     wrap.appendChild(btn);
   });
@@ -5221,19 +5355,28 @@ function renderPlaylist() {
 async function playPlaylistIndex(i) {
   if (i < 0 || i >= playerFiles.length) return;
   mpPlaylistIndex = i;
-  $("player-playlist").querySelectorAll(".player-playlist-btn").forEach((b, idx) => b.classList.toggle("active", idx === i));
+  // Immediately highlight the active row (will be re-rendered with metadata later)
+  $("player-playlist").querySelectorAll(".player-playlist-btn").forEach((b, idx) => {
+    b.classList.toggle("active", idx === i);
+    const numEl = b.querySelector(".pl-track-num");
+    if (numEl) numEl.classList.toggle("playing", idx === i);
+  });
   await playMediaFile(playerFiles[i]);
   updateMiniPlayer();
 }
 function miniPlayerPrev(e) { e.stopPropagation(); playPlaylistIndex(mpPlaylistIndex - 1); }
 function miniPlayerNext(e) { e.stopPropagation(); playPlaylistIndex(mpPlaylistIndex + 1); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLAY MEDIA FILE  — Win11-style two-column audio layout with metadata panel
+// ─────────────────────────────────────────────────────────────────────────────
 async function playMediaFile(file) {
   const wrap = $("player-media-wrap");
   if (!window.pywebview?.api?.get_media_url) {
     wrap.innerHTML = '<div class="player-media-msg">The desktop app must be running to play files.</div>';
     return;
   }
-  wrap.innerHTML = '<div class="player-media-msg">Loading…</div>';
+  wrap.innerHTML = '<div class="player-media-msg">Loading\u2026</div>';
   const res = await window.pywebview.api.get_media_url(file.path);
   if (!res?.ok) {
     wrap.innerHTML = '<div class="player-media-msg" style="color:var(--red)">' + escHtml(res?.error || "Couldn't load this file") + '</div>';
@@ -5244,8 +5387,11 @@ async function playMediaFile(file) {
 
   wrap.innerHTML = "";
   mpActiveSeek = null;
+  mpCurrentMetadata = null;
   const player = document.createElement("div");
   player.className = "mp-player";
+
+  const card = $("player-card") || wrap.closest(".player-card");
 
   const mediaEl = document.createElement(isAudio ? "audio" : "video");
   mediaEl.controls = false;   // custom controls replace the native ones
@@ -5261,81 +5407,209 @@ async function playMediaFile(file) {
     if (mpCurrentMediaEl === mediaEl) mpCurrentMediaEl = null;
   };
 
-  // Auto-advance to the next track in the same album/download batch —
-  // playerFiles/mpPlaylistIndex already preserve download order (files
-  // are recorded in the order the backend reports them completing, which
-  // matches yt-dlp's own sequential playlist processing), so this just
-  // needs to walk that same order forward. No-ops on the last track
-  // (plays through and stops normally) or a single-file download.
   const onEnded = () => {
-    if (mpCurrentMediaEl !== mediaEl) return; // stale — a different track already took over
+    if (mpCurrentMediaEl !== mediaEl) return;
     if (mpPlaylistIndex >= 0 && mpPlaylistIndex < playerFiles.length - 1) {
       playPlaylistIndex(mpPlaylistIndex + 1);
     }
   };
-
-  const onPrev = () => {
-    if (mpPlaylistIndex > 0) playPlaylistIndex(mpPlaylistIndex - 1);
-  };
-  const onNext = () => {
-    if (mpPlaylistIndex >= 0 && mpPlaylistIndex < playerFiles.length - 1) playPlaylistIndex(mpPlaylistIndex + 1);
-  };
+  const onPrev = () => { if (mpPlaylistIndex > 0) playPlaylistIndex(mpPlaylistIndex - 1); };
+  const onNext = () => { if (mpPlaylistIndex >= 0 && mpPlaylistIndex < playerFiles.length - 1) playPlaylistIndex(mpPlaylistIndex + 1); };
 
   if (isAudio) {
-    const visual = document.createElement("div");
-    visual.className = "mp-audio-visual";
+    // ── Two-column Win11-style audio layout ────────────────────────────
+    document.querySelector(".player-card")?.classList.add("audio-mode");
 
-    const canvasWrap = document.createElement("div");
-    canvasWrap.className = "mp-canvas-wrap";
-    const canvas = document.createElement("canvas");
-    canvas.className = "mp-visualizer-canvas";
-    canvasWrap.appendChild(canvas);
-    visual.appendChild(canvasWrap);
+    // Left column: cover art + visualizer
+    const left = document.createElement("div");
+    left.className = "mp-audio-left";
 
-    const disc = document.createElement("div");
-    disc.className = "mp-audio-disc";
-    disc.innerHTML = MP_ICON_NOTE;
-    visual.appendChild(disc);
-    mediaEl.style.display = "none"; // no visual surface of its own — the disc and canvas above are it
-    player.appendChild(visual);
+    const backdrop = document.createElement("div");
+    backdrop.className = "mp-art-backdrop";
+    left.appendChild(backdrop);
+
+    const coverSquare = document.createElement("div");
+    coverSquare.className = "mp-cover-square";
+    const coverIcon = document.createElement("div");
+    coverIcon.className = "mp-cover-icon";
+    coverIcon.innerHTML = MP_ICON_NOTE;
+    coverSquare.appendChild(coverIcon);
+    left.appendChild(coverSquare);
+
+    const visStrip = document.createElement("div");
+    visStrip.className = "mp-audio-vis-strip";
+    const visCanvas = document.createElement("canvas");
+    visCanvas.className = "mp-vis-canvas-sm";
+    visStrip.appendChild(visCanvas);
+    left.appendChild(visStrip);
+
+    // Right column: metadata display
+    const right = document.createElement("div");
+    right.className = "mp-audio-right";
+
+    const nowPlayingLabel = document.createElement("div");
+    nowPlayingLabel.className = "mp-now-playing-label";
+    nowPlayingLabel.innerHTML = '<span class="mp-now-playing-dot"></span> Now Playing';
+    right.appendChild(nowPlayingLabel);
+
+    const trackTitle = document.createElement("div");
+    trackTitle.className = "mp-track-title";
+    trackTitle.textContent = file.name.replace(/\.[^.]+$/, "");
+    right.appendChild(trackTitle);
+
+    const trackArtist = document.createElement("div");
+    trackArtist.className = "mp-track-artist";
+    trackArtist.textContent = "";
+    right.appendChild(trackArtist);
+
+    const metaChips = document.createElement("div");
+    metaChips.className = "mp-meta-chips";
+    right.appendChild(metaChips);
+
+    const techRow = document.createElement("div");
+    techRow.className = "mp-tech-row";
+    right.appendChild(techRow);
+
+    const layout = document.createElement("div");
+    layout.className = "mp-audio-layout";
+    layout.appendChild(left);
+    layout.appendChild(right);
+
+    mediaEl.style.display = "none";
+    player.appendChild(layout);
     player.appendChild(mediaEl);
-    wrap.appendChild(player); // in the DOM before buildPlayerControls calls safePlay()/wires fullscreen
+    wrap.appendChild(player);
 
     const controls = buildPlayerControls(mediaEl, onFatalError, onEnded, onPrev, onNext);
-    controls.addEventListener("mp-play",  () => { disc.classList.add("playing"); updateMiniPlayer(); });
-    controls.addEventListener("mp-pause", () => { disc.classList.remove("playing"); updateMiniPlayer(); });
+    controls.addEventListener("mp-play",  () => { updateMiniPlayer(); });
+    controls.addEventListener("mp-pause", () => { updateMiniPlayer(); });
     player.appendChild(controls);
 
-    // Initialize Web Audio API canvas visualizer
-    initAudioVisualizer(mediaEl, canvas);
+    // Visualizer on the small strip
+    initAudioVisualizer(mediaEl, visCanvas);
 
-    // Real embedded cover art (mp3 ID3 APIC / m4a covr atom), extracted
-    // via the already-bundled ffmpeg — falls back to the generic note
-    // icon above when there's genuinely none, which is the common case
-    // for anything that wasn't downloaded as mp3/m4a with thumbnail embedding.
+    // Helper: update the metadata panel from a metadata result
+    function applyMetadata(meta) {
+      if (!meta?.ok) return;
+      mpCurrentMetadata = meta;
+
+      // Title
+      if (meta.title) trackTitle.textContent = meta.title;
+
+      // Artist
+      if (meta.artist) {
+        trackArtist.textContent = meta.artist;
+      } else {
+        trackArtist.textContent = "";
+      }
+
+      // Chips: album, year, genre, track
+      metaChips.innerHTML = "";
+      if (meta.album) {
+        const c = document.createElement("span");
+        c.className = "mp-meta-chip";
+        c.innerHTML = '\uD83D\uDCBF ' + escHtml(meta.album);
+        metaChips.appendChild(c);
+      }
+      if (meta.year) {
+        const c = document.createElement("span");
+        c.className = "mp-meta-chip";
+        c.innerHTML = '&#128197; ' + escHtml(meta.year);
+        metaChips.appendChild(c);
+      }
+      if (meta.genre) {
+        const c = document.createElement("span");
+        c.className = "mp-meta-chip";
+        c.innerHTML = '\uD83C\uDFB5 ' + escHtml(meta.genre);
+        metaChips.appendChild(c);
+      }
+      if (meta.track) {
+        const c = document.createElement("span");
+        c.className = "mp-meta-chip";
+        c.textContent = 'Track ' + meta.track;
+        metaChips.appendChild(c);
+      }
+
+      // Tech badges
+      techRow.innerHTML = "";
+      if (meta.codec) {
+        const b = document.createElement("span");
+        b.className = "mp-tech-badge";
+        b.textContent = meta.codec.replace(/ \(.*\)$/, ""); // shorten e.g. "MP3 (MPEG audio layer 3)"
+        techRow.appendChild(b);
+      }
+      if (meta.bitrate_kbps) {
+        const b = document.createElement("span");
+        b.className = "mp-tech-badge";
+        b.textContent = meta.bitrate_kbps + " kbps";
+        techRow.appendChild(b);
+      }
+      if (meta.sample_rate) {
+        const b = document.createElement("span");
+        b.className = "mp-tech-badge";
+        b.textContent = (meta.sample_rate / 1000).toFixed(1) + " kHz";
+        techRow.appendChild(b);
+      }
+      if (meta.channels) {
+        const b = document.createElement("span");
+        b.className = "mp-tech-badge";
+        b.textContent = meta.channels === 1 ? "Mono" : meta.channels === 2 ? "Stereo" : meta.channels + "ch";
+        techRow.appendChild(b);
+      }
+
+      // Update player title bar with track title
+      const displayTitle = [meta.artist, meta.title].filter(Boolean).join(" — ") ||
+                           file.name.replace(/\.[^.]+$/, "");
+      $("player-title").textContent = displayTitle;
+
+      // Re-render playlist with full metadata
+      renderPlaylist(mpPlaylistIndex);
+      updateMiniPlayer();
+    }
+
+    // Fetch metadata (cached per path)
+    if (mpMetadataCache[file.path]) {
+      applyMetadata(mpMetadataCache[file.path]);
+    } else if (window.pywebview?.api?.get_media_metadata) {
+      window.pywebview.api.get_media_metadata(file.path).then(meta => {
+        if (mpCurrentMediaEl !== mediaEl) return; // track changed
+        mpMetadataCache[file.path] = meta;
+        applyMetadata(meta);
+      }).catch(() => {});
+    }
+
+    // Cover art
     if (window.pywebview?.api?.get_cover_art_url) {
       window.pywebview.api.get_cover_art_url(file.path).then(artRes => {
-        if (mpCurrentMediaEl !== mediaEl) return; // track changed while this was in flight
+        if (mpCurrentMediaEl !== mediaEl) return;
         if (artRes?.ok && artRes.url) {
           mpCoverArtUrl = artRes.url;
-          disc.style.background = `center/cover no-repeat url("${artRes.url}")`;
-          disc.innerHTML = "";
-          disc.classList.add("has-art");
+          // Replace the icon with a real img in the square
+          coverSquare.innerHTML = `<img src="${escHtml(artRes.url)}" alt="Cover art">`;
+          // Blurred backdrop
+          backdrop.style.backgroundImage = `url("${escHtml(artRes.url)}")`;
           updateMiniPlayer();
         }
       }).catch(() => {});
     }
+
+    // Seed the playlist immediately (even without metadata)
+    renderPlaylist(mpPlaylistIndex);
   } else {
+    // ── Video mode (unchanged) ───────────────────────────────────────────
+    document.querySelector(".player-card")?.classList.remove("audio-mode");
     mediaEl.className = "mp-video";
     player.appendChild(mediaEl);
     wrap.appendChild(player);
     player.appendChild(buildPlayerControls(mediaEl, onFatalError, onEnded, onPrev, onNext));
+    renderPlaylist(mpPlaylistIndex);
   }
 
   updateMiniPlayer();
 }
 function closePlayer() {
   $("player-overlay").classList.remove("show");
+  document.querySelector(".player-card")?.classList.remove("audio-mode");
   $("player-media-wrap").innerHTML = "";
   if (mpAnimFrameId) {
     cancelAnimationFrame(mpAnimFrameId);
@@ -5347,6 +5621,7 @@ function closePlayer() {
   mpCurrentMediaEl = null;
   mpCurrentFile = null;
   mpCoverArtUrl = null;
+  mpCurrentMetadata = null;
   hideMiniPlayer();
 }
 
@@ -5387,7 +5662,13 @@ function updateMiniPlayer() {
     art.style.background = "";
     art.innerHTML = MP_ICON_NOTE;
   }
-  $("mini-player-title").textContent = (mpCurrentFile && mpCurrentFile.name) || $("player-title").textContent || "Now playing";
+  // Show title: prefer metadata title, fall back to filename stem
+  const metaTitle = mpCurrentMetadata?.title;
+  const metaArtist = mpCurrentMetadata?.artist || "";
+  const displayTitle = metaTitle || (mpCurrentFile?.name?.replace(/\.[^.]+$/, "") || $("player-title").textContent || "Now playing");
+  $("mini-player-title").textContent = displayTitle;
+  const artistEl = $("mini-player-artist");
+  if (artistEl) artistEl.textContent = metaArtist;
   $("mini-player-playpause").innerHTML = (mpCurrentMediaEl && !mpCurrentMediaEl.paused) ? MP_ICON_PAUSE : MP_ICON_PLAY;
 
   const prevBtn = $("mini-player-prev");

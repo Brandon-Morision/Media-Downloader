@@ -34,8 +34,15 @@
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   function isInteresting(url, contentType = "") {
-    if (!url || typeof url !== "string" || !url.startsWith("http")) return false;
+    if (!url || typeof url !== "string" || url.length > 4096) return false;
     if (url.includes("blob:") || url.includes("data:")) return false;
+
+    try {
+      const u = new URL(url);
+      if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    } catch {
+      return false;
+    }
 
     // Skip non-media assets
     if (/\.(js|css|woff2?|ttf|png|jpe?g|gif|svg|ico|webp|json)(\?|$)/i.test(url)) return false;
@@ -103,7 +110,64 @@
 
   // ── Network Sniffing ──────────────────────────────────────────────────────
   function hookNetwork() {
-    // Intercept window.fetch
+    // 1. Listen for events dispatched from main-world page script
+    window.addEventListener("__mdl_media_detected__", (e) => {
+      if (e.detail?.url) {
+        addStream(e.detail.url, e.detail.contentType || "");
+      }
+    });
+
+    // 2. Inject main-world interceptor script (best-effort; works on standard sites and gracefully handled if CSP restricts)
+    try {
+      const script = document.createElement("script");
+      script.textContent = `
+        (() => {
+          if (window.__MDL_MAIN_SNIFFER_HOOKED__) return;
+          window.__MDL_MAIN_SNIFFER_HOOKED__ = true;
+          const notify = (u, ct) => {
+            if (!u || typeof u !== "string") return;
+            try {
+              window.dispatchEvent(new CustomEvent("__mdl_media_detected__", {
+                detail: { url: u, contentType: ct || "" }
+              }));
+            } catch {}
+          };
+
+          const origFetch = window.fetch;
+          if (origFetch) {
+            window.fetch = async function (...args) {
+              const res = await origFetch.apply(this, args);
+              try {
+                const u = typeof args[0] === "string" ? args[0] : args[0]?.url;
+                const ct = res.headers?.get?.("content-type") || "";
+                notify(u, ct);
+              } catch {}
+              return res;
+            };
+          }
+
+          const origOpen = XMLHttpRequest.prototype.open;
+          const origSend = XMLHttpRequest.prototype.send;
+          XMLHttpRequest.prototype.open = function (m, u, ...rest) {
+            this._mdl_u = u;
+            return origOpen.call(this, m, u, ...rest);
+          };
+          XMLHttpRequest.prototype.send = function (...args) {
+            this.addEventListener("load", () => {
+              try {
+                const ct = this.getResponseHeader("content-type") || "";
+                notify(this._mdl_u, ct);
+              } catch {}
+            });
+            return origSend.apply(this, args);
+          };
+        })();
+      `;
+      (document.head || document.documentElement).appendChild(script);
+      script.remove();
+    } catch {}
+
+    // 3. Isolated-world fetch & XHR hooks
     const origFetch = window.fetch;
     window.fetch = async function (...args) {
       const url = typeof args[0] === "string" ? args[0] : args[0]?.url;
@@ -129,7 +193,6 @@
       return res;
     };
 
-    // Intercept XMLHttpRequest
     const origOpen = XMLHttpRequest.prototype.open;
     const origSend = XMLHttpRequest.prototype.send;
 
@@ -161,11 +224,27 @@
     };
   }
 
+  // ── Performance Timing Sniffing (covers all resource requests in real-time) ──
+  function observePerformance() {
+    try {
+      if (typeof PerformanceObserver !== "undefined") {
+        const perfObserver = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (entry.name) {
+              addStream(entry.name, entry.initiatorType === "video" ? "video/" : "");
+            }
+          }
+        });
+        perfObserver.observe({ entryTypes: ["resource"] });
+      }
+    } catch {}
+  }
+
   // ── DOM & Performance Scanning ────────────────────────────────────────────
   function scanExistingMedia() {
     // Check DOM tags
-    document.querySelectorAll("video, audio, source").forEach((el) => {
-      const src = el.currentSrc || el.src || el.getAttribute("src");
+    document.querySelectorAll("video, audio, source, iframe").forEach((el) => {
+      const src = el.currentSrc || el.src || el.getAttribute("src") || el.getAttribute("data-src");
       if (src) addStream(src);
     });
 
@@ -214,7 +293,7 @@
   function scanRedGifsPage() {
     try {
       document.querySelectorAll("video source, video").forEach((el) => {
-        const src = el.src || el.currentSrc || el.getAttribute("src");
+        const src = el.src || el.currentSrc || el.getAttribute("src") || el.getAttribute("data-src");
         if (src && src.includes(".mp4")) {
           addStream(src, "video/mp4");
         }
@@ -225,20 +304,31 @@
   function observeDOM() {
     const obs = new MutationObserver((mutations) => {
       for (const m of mutations) {
-        m.addedNodes.forEach((node) => {
-          if (node.nodeType !== 1) return;
-          if (node.matches?.("video, audio, source")) {
-            const src = node.currentSrc || node.src || node.getAttribute("src");
-            if (src) addStream(src);
-          }
-          node.querySelectorAll?.("video, audio, source").forEach((el) => {
-            const src = el.currentSrc || el.src || el.getAttribute("src");
-            if (src) addStream(src);
+        if (m.type === "attributes" && m.target) {
+          const el = m.target;
+          const src = el.currentSrc || el.src || el.getAttribute("src") || el.getAttribute("data-src");
+          if (src) addStream(src);
+        } else if (m.type === "childList") {
+          m.addedNodes.forEach((node) => {
+            if (node.nodeType !== 1) return;
+            if (node.matches?.("video, audio, source, iframe")) {
+              const src = node.currentSrc || node.src || node.getAttribute("src") || node.getAttribute("data-src");
+              if (src) addStream(src);
+            }
+            node.querySelectorAll?.("video, audio, source, iframe").forEach((el) => {
+              const src = el.currentSrc || el.src || el.getAttribute("src") || el.getAttribute("data-src");
+              if (src) addStream(src);
+            });
           });
-        });
+        }
       }
     });
-    obs.observe(document.documentElement, { childList: true, subtree: true });
+    obs.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["src", "data-src"],
+    });
   }
 
   // ── Shadow DOM UI Construction ───────────────────────────────────────────
@@ -699,6 +789,7 @@
       panelOpen = !panelOpen;
       panelEl.classList.toggle("open", panelOpen);
       if (panelOpen) {
+        scanExistingMedia();
         updatePanelPosition();
       }
     });
@@ -968,6 +1059,20 @@
 
   // ── Communication with Desktop App ─────────────────────────────────────────
   async function sendToApp(url, title) {
+    if (!url || typeof url !== "string") {
+      showToast("Invalid URL", false);
+      return;
+    }
+    try {
+      const u = new URL(url);
+      if (u.protocol !== "http:" && u.protocol !== "https:") {
+        showToast("Invalid URL scheme", false);
+        return;
+      }
+    } catch {
+      showToast("Malformed URL", false);
+      return;
+    }
     try {
       const res = await chrome.runtime.sendMessage({
         type: "SEND_URL",
@@ -988,6 +1093,7 @@
   // ── Initialization ────────────────────────────────────────────────────────
   function boot() {
     hookNetwork();
+    observePerformance();
     createUI();
 
     // Scan initially after brief delay

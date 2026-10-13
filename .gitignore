@@ -38,3 +38,6 @@ Thumbs.db
 *.toc
 *.pyz
 *.manifest
+
+# Scratch / test scratchpad
+scratch/

@@ -235,7 +235,21 @@ export const api = {
 
   async pickFolder() {
     if (!isDesktopApp()) return "C:\\Users\\Mock\\Downloads";
-    return window.pywebview.api.pick_folder();
+    return window.pywebview.api.pick_folder?.() ?? window.pywebview.api.choose_folder?.();
+  },
+
+  async chooseFolder(defaultPath) {
+    return this.pickFolder();
+  },
+
+  async listQuarantinedHistories() {
+    if (!isDesktopApp()) return { ok: true, files: [] };
+    return window.pywebview.api.list_quarantined_histories?.() || { ok: true, files: [] };
+  },
+
+  async salvageHistory(filepath = "") {
+    if (!isDesktopApp()) return { ok: false, error: "Not in desktop app" };
+    return window.pywebview.api.salvage_history?.(filepath) || { ok: false, error: "Method unavailable" };
   },
 
   async openOutputFolder(path) {
@@ -324,7 +338,7 @@ export const api = {
         "yt-dlp": "2026.08.20 (mock)",
         "gallery-dl": "1.32.16 (mock)",
         ffmpeg: "9.0.2 (mock)",
-        app: "0.4.6",
+        app: "0.5.0",
       };
     }
     try {
@@ -335,14 +349,14 @@ export const api = {
           "yt-dlp": res?.['yt-dlp']?.version || res?.['yt-dlp'] || 'Not detected',
           "gallery-dl": res?.['gallery-dl']?.version || res?.['gallery-dl'] || 'Not detected',
           ffmpeg: res?.ffmpeg?.version || res?.ffmpeg || 'Not detected',
-          app: res?.app?.version || res?.app || '0.4.6',
+          app: res?.app?.version || res?.app || '0.5.0',
           raw: res,
         };
       }
     } catch (err) {
       console.warn('Error fetching installed versions:', err);
     }
-    return { "yt-dlp": "Not detected", "gallery-dl": "Not detected", ffmpeg: "Not detected", app: "0.4.6" };
+    return { "yt-dlp": "Not detected", "gallery-dl": "Not detected", ffmpeg: "Not detected", app: "0.5.0" };
   },
 
   async getYtdlpVersion() {

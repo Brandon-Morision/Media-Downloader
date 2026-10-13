@@ -11,6 +11,8 @@ import sys
 import threading
 import subprocess
 import html
+import base64
+import re
 from logger import get_logger
 
 logger = get_logger(__name__)
@@ -62,34 +64,44 @@ class ToastManager:
     def _escape_xml(self, text: str) -> str:
         if text is None:
             return ""
-        return html.escape(str(text))
+        # Strip ASCII control characters not valid in XML 1.0 (preserve \t, \n, \r)
+        s = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F]', '', str(text))
+        return html.escape(s, quote=True)
 
     def _send_toast_worker(self, xml_content: str):
         """Execute WinRT Toast via background PowerShell process with NovaDrop AUMID and fallback."""
         if os.name != "nt":
             return
 
-        ps_script = f"""
+        # Encode XML payload as Base64 and feed via standard input to eliminate PowerShell code injection
+        try:
+            b64_xml = base64.b64encode(xml_content.encode("utf-8")).decode("ascii")
+        except Exception as e:
+            logger.debug(f"Failed to encode toast XML: {e}")
+            return
+
+        ps_script = """
 [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
 [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
-$template = @"
-{xml_content}
-"@
-try {{
+try {
+    $raw = [Console]::In.ReadToEnd()
+    if ([string]::IsNullOrWhiteSpace($raw)) { exit 0 }
+    $bytes = [Convert]::FromBase64String($raw.Trim())
+    $xmlText = [System.Text.Encoding]::UTF8.GetString($bytes)
     $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-    $xml.LoadXml($template)
+    $xml.LoadXml($xmlText)
     $toast = New-Object Windows.UI.Notifications.ToastNotification $xml
-    try {{
-        $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{self._app_id}')
+    try {
+        $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('NovaDrop')
         $notifier.Show($toast)
-    }} catch {{
+    } catch {
         # Fallback to PowerShell AUMID if custom AUMID is restricted
-        $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}}\\WindowsPowerShell\\v1.0\\powershell.exe')
+        $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe')
         $notifier.Show($toast)
-    }}
-}} catch {{
+    }
+} catch {
     # Silently ignore if Windows notification service is disabled
-}}
+}
 """
         try:
             startupinfo = None
@@ -100,6 +112,8 @@ try {{
 
             subprocess.run(
                 ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+                input=b64_xml,
+                text=True,
                 startupinfo=startupinfo,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 capture_output=True,
@@ -128,7 +142,8 @@ try {{
         elif os.path.isfile(_ICON_ICO):
             icon_uri = self._to_file_uri(_ICON_ICO)
 
-        img_element = f'<image placement="appLogoOverride" hint-crop="circle" src="{icon_uri}"/>' if icon_uri else ""
+        clean_icon_uri = self._escape_xml(icon_uri)
+        img_element = f'<image placement="appLogoOverride" hint-crop="circle" src="{clean_icon_uri}"/>' if clean_icon_uri else ""
 
         actions_xml = ""
         if actions:
@@ -136,11 +151,11 @@ try {{
             for act in actions:
                 c = self._escape_xml(act.get("content", ""))
                 arg = self._escape_xml(act.get("arguments", ""))
-                act_type = act.get("type", "protocol")
+                act_type = self._escape_xml(act.get("type", "protocol"))
                 if c and arg:
                     action_tags.append(f'<action content="{c}" arguments="{arg}" activationType="{act_type}"/>')
             if action_tags:
-                actions_xml = f"<actions>\n    " + "\n    ".join(action_tags) + "\n  </actions>"
+                actions_xml = "<actions>\n    " + "\n    ".join(action_tags) + "\n  </actions>"
 
         xml = f"""<toast duration="short">
   <visual>

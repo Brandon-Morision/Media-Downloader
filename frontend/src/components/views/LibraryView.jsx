@@ -33,12 +33,15 @@ export function getBundleInfo(item) {
 
   // File-content authoritative category detection
   let cat = item.category;
+  const hasImagesAndVideos = imageFilesCount > 0 && videoFilesCount > 0;
   if (audioFilesCount > videoFilesCount && audioFilesCount >= imageFilesCount) {
     cat = 'music';
-  } else if (videoFilesCount > audioFilesCount && videoFilesCount >= imageFilesCount) {
-    cat = 'video';
+  } else if (hasImagesAndVideos) {
+    cat = 'image';
   } else if (imageFilesCount > videoFilesCount && imageFilesCount > audioFilesCount) {
     cat = 'image';
+  } else if (videoFilesCount > audioFilesCount && videoFilesCount >= imageFilesCount) {
+    cat = 'video';
   } else if (!cat) {
     const detected = getMediaCategory(item);
     cat = detected === 'audio' ? 'music' : detected === 'gallery' ? 'image' : detected;
@@ -50,8 +53,8 @@ export function getBundleInfo(item) {
   const isImageCat = cat === 'image' || cat === 'gallery';
 
   const isAudioBundle = audioFilesCount > 1 || (isAudioCat && totalCount > 1 && videoFilesCount === 0);
-  const isVideoBundle = videoFilesCount > 1 || (isVideoCat && (totalCount > 1 || playableList.length > 1) && audioFilesCount === 0);
-  const isImageBundle = imageFilesCount > 1 || (isImageCat && (totalCount > 1 || item.isAlbum) && videoFilesCount === 0 && audioFilesCount === 0);
+  const isVideoBundle = !hasImagesAndVideos && (videoFilesCount > 1 || (isVideoCat && (totalCount > 1 || playableList.length > 1) && audioFilesCount === 0));
+  const isImageBundle = hasImagesAndVideos || imageFilesCount > 1 || (isImageCat && (totalCount > 1 || item.isAlbum) && audioFilesCount === 0);
   const isMixedBundle = !isVideoBundle && !isAudioBundle && !isImageBundle && totalCount > 1;
 
   const count = isAudioBundle
@@ -59,7 +62,7 @@ export function getBundleInfo(item) {
     : isVideoBundle
     ? (videoFilesCount || playableList.length || totalCount)
     : isImageBundle
-    ? (imageFilesCount || totalCount || (item.isAlbum ? 6 : 1))
+    ? (totalCount || (item.isAlbum ? 6 : 1))
     : totalCount;
 
   return {
@@ -74,6 +77,9 @@ export function getBundleInfo(item) {
     isAudioBundle,
     isImageBundle,
     isMixedBundle,
+    hasImagesAndVideos,
+    imageFilesCount,
+    videoFilesCount,
     count,
   };
 }
@@ -180,7 +186,7 @@ export default function LibraryView({
 
     if (filter === 'video' && cat !== 'video') return false;
     if (filter === 'music' && cat !== 'music' && cat !== 'audio') return false;
-    if (filter === 'image' && cat !== 'image' && cat !== 'gallery') return false;
+    if (filter === 'image' && cat !== 'image' && cat !== 'gallery' && !info.hasImagesAndVideos && info.imageFilesCount === 0) return false;
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -414,6 +420,9 @@ export default function LibraryView({
               isAudioBundle,
               isImageBundle,
               isMixedBundle,
+              hasImagesAndVideos,
+              imageFilesCount,
+              videoFilesCount,
               count,
               playableList,
             } = info;
@@ -446,13 +455,18 @@ export default function LibraryView({
                   {/* Gradient Blend into the bottom of the card where it meets words */}
                   <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-surface-1 via-surface-1/70 to-transparent pointer-events-none transition-colors duration-200 group-hover:from-surface-2 group-hover:via-surface-2/70" />
 
-                  {/* Album Layer Indicator: Top-left badge for Image Albums */}
-                  {isImageBundle && (
+                  {/* Album Layer Indicator: Top-left badge for Image / Mixed Albums */}
+                  {hasImagesAndVideos ? (
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-md border border-brand-border text-[10.5px] font-bold text-brand-acc flex items-center gap-1.5 shadow-lg z-10">
+                      <Layers className="w-3.5 h-3.5 text-brand-acc" />
+                      <span>{imageFilesCount} Photos, {videoFilesCount} Videos</span>
+                    </div>
+                  ) : isImageBundle ? (
                     <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-lg bg-black/80 backdrop-blur-md border border-brand-border text-[10.5px] font-bold text-brand-acc flex items-center gap-1.5 shadow-lg z-10">
                       <Layers className="w-3.5 h-3.5 text-brand-acc" />
                       <span>{count} Photos</span>
                     </div>
-                  )}
+                  ) : null}
 
                   {/* Video Series Indicator: Top-left badge for Multi-video Batch / Series */}
                   {isVideoBundle && (
@@ -551,7 +565,9 @@ export default function LibraryView({
                   <div className="flex items-center justify-between text-[11px] text-slate-400 mt-0.5 font-medium">
                     <span>{fmtBytes(item.sizeBytes)}</span>
                     <span className="font-mono text-[11px]">
-                      {isImageBundle ? (
+                      {hasImagesAndVideos ? (
+                        <span className="text-brand-acc font-semibold">{imageFilesCount} Photos · {videoFilesCount} Videos · Album</span>
+                      ) : isImageBundle ? (
                         <span className="text-brand-acc font-semibold">{count} Photos · Album</span>
                       ) : isVideoBundle ? (
                         <span className="text-sky-400 font-semibold">{count} Videos · Bundle</span>
@@ -588,6 +604,9 @@ export default function LibraryView({
               isAudioBundle,
               isImageBundle,
               isMixedBundle,
+              hasImagesAndVideos,
+              imageFilesCount,
+              videoFilesCount,
               count,
             } = info;
 
@@ -621,7 +640,9 @@ export default function LibraryView({
                     </span>
                     <span className="text-xs text-slate-400 font-mono">
                       {fmtBytes(item.sizeBytes)} ·{' '}
-                      {isImageBundle
+                      {hasImagesAndVideos
+                        ? `${imageFilesCount} Photos · ${videoFilesCount} Videos · Album`
+                        : isImageBundle
                         ? `${count} Photos · Album`
                         : isVideoBundle
                         ? `${count} Videos · Bundle`

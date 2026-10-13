@@ -15,6 +15,7 @@ const ACCENT_OPTIONS = [
 export default function HeaderBar({ currentView, themeAccent, setThemeAccent, outputDir, runningCount }) {
   const titles = {
     home: 'Home',
+    explore: 'Explore',
     downloader: 'Downloads',
     library: 'Library',
     settings: 'Settings',

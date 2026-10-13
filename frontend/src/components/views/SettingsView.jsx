@@ -104,7 +104,7 @@ export default function SettingsView({
     'yt-dlp': '',
     'gallery-dl': '',
     ffmpeg: '',
-    app: '0.4.6',
+    app: '0.5.0',
   });
   const [toolMeta, setToolMeta] = useState({});
   const [isLoadingVersions, setIsLoadingVersions] = useState(true);
@@ -360,7 +360,7 @@ export default function SettingsView({
         'yt-dlp': v['yt-dlp'] && v['yt-dlp'] !== 'Not detected' ? v['yt-dlp'] : 'Not detected',
         'gallery-dl': v['gallery-dl'] && v['gallery-dl'] !== 'Not detected' ? v['gallery-dl'] : 'Not detected',
         ffmpeg: v['ffmpeg'] && v['ffmpeg'] !== 'Not detected' ? v['ffmpeg'] : 'Not detected',
-        app: v['app'] || '0.4.6',
+        app: v['app'] || '0.5.0',
       });
       if (v.raw) {
         setToolMeta(v.raw);
@@ -377,6 +377,7 @@ export default function SettingsView({
       const folder = await api.chooseFolder(outputDir);
       if (folder) {
         setOutputDir(folder);
+        localStorage.setItem('md_output_folder', folder);
         localStorage.setItem('md_output_dir', folder);
         onShowToast('Download directory updated');
       }
@@ -553,7 +554,7 @@ export default function SettingsView({
               Nova<span className="text-sky-400">Drop</span>
             </h2>
             <p className="text-xs text-slate-400 font-medium mt-0.5">
-              Version {versions.app || '0.4.6'} · High Performance Media Extraction Suite
+              Version {versions.app || '0.5.0'} · High Performance Media Extraction Suite
             </p>
           </div>
         </div>
@@ -735,6 +736,25 @@ export default function SettingsView({
                   >
                     <Folder className="w-3.5 h-3.5" />
                     <span>Open in Explorer</span>
+                  </button>
+                </div>
+                <div className="flex items-center justify-between py-2 border-t border-border-subtle/40">
+                  <div className="flex flex-col">
+                    <span className="text-slate-200 font-medium text-xs">Salvage Quarantined History</span>
+                    <span className="text-slate-400 text-[11px]">Recover entries from quarantined corrupt history backups</span>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const res = await api.salvageHistory();
+                      if (res?.ok) {
+                        onShowToast(`Salvaged ${res.salvaged_count || 0} entries (${res.added_count || 0} restored)`);
+                      } else {
+                        onShowToast(res?.error || 'No quarantined history to restore', false);
+                      }
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-surface-3 hover:bg-surface-4 text-slate-200 font-semibold border border-border-subtle transition-colors text-xs"
+                  >
+                    Salvage Quarantined
                   </button>
                 </div>
                 <div className="flex items-center justify-between py-2 border-t border-border-subtle/40">
@@ -1121,7 +1141,7 @@ export default function SettingsView({
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-slate-100 text-xs">NovaDrop Desktop App</span>
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-surface-3 text-slate-300 border border-border-subtle">
-                                v{versions.app || '0.4.6'}
+                                v{versions.app || '0.5.0'}
                               </span>
                             </div>
                             <span className="text-[10px] text-slate-400">Core Windows 11 Runtime</span>

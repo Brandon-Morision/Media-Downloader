@@ -6,7 +6,7 @@
 
 ; Version is managed centrally in version.py - update that file to change versions
 #define AppName      "NovaDrop"
-#define AppVersion   "0.4.6"
+#define AppVersion   "0.5.0"
 #define AppPublisher "Brandon"
 #define AppExeName   "NovaDrop.exe"
 #define SourceDir    "dist\NovaDrop"

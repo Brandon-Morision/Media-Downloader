@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Home, Download, Library, Settings, Moon, Menu } from 'lucide-react';
+import { Home, Download, Library, Compass, Settings, Moon, Menu } from 'lucide-react';
 import novadropIcon from '../assets/novadrop-icon.png';
 
 export default function NavigationRail({ currentView, setView, activeCount, libraryCount, nightOwlEnabled, hasUpdate }) {
@@ -25,6 +25,7 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
 
   const mainNavItems = [
     { id: 'home', label: 'Home', icon: Home },
+    { id: 'explore', label: 'Explore', icon: Compass },
     { id: 'downloader', label: 'Downloads', icon: Download, badge: activeCount },
     { id: 'library', label: 'Library', icon: Library, badge: libraryCount },
   ];
@@ -70,6 +71,12 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
     } else if (item.id === 'home') {
       animClass = isActive ? 'animate-fluent-home' : '';
       hoverClass = 'group-hover:-translate-y-0.5 group-hover:scale-110';
+      staticClass = isActive
+        ? 'text-brand-acc'
+        : 'text-slate-400 group-hover:text-slate-200';
+    } else if (item.id === 'explore') {
+      animClass = isActive ? 'animate-pulse' : '';
+      hoverClass = 'group-hover:rotate-12 group-hover:scale-110';
       staticClass = isActive
         ? 'text-brand-acc'
         : 'text-slate-400 group-hover:text-slate-200';
@@ -237,7 +244,7 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
                   <Moon className="w-3.5 h-3.5 animate-pulse" />
                 </div>
               )}
-              <span className="text-[10px] font-mono text-slate-500 tracking-wider">v0.4.6</span>
+              <span className="text-[10px] font-mono text-slate-500 tracking-wider">v0.5.0</span>
             </div>
           </div>
         ) : (

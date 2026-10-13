@@ -14,7 +14,7 @@ import NightOwlModal from './components/modals/NightOwlModal';
 import ShutdownWarningModal from './components/modals/ShutdownWarningModal';
 import { Toast, ClipboardToast } from './components/toasts/Toast';
 import { api, waitForApi } from './lib/api';
-import { detectTool } from './lib/formatters';
+import { detectTool, isLikelyUrl } from './lib/formatters';
 
 export default function App() {
   const [currentView, setCurrentView] = useState(() => localStorage.getItem('md_current_view') || 'home');
@@ -24,6 +24,7 @@ export default function App() {
   const [onFinishAction, setOnFinishAction] = useState(() => localStorage.getItem('md_on_finish') || 'nothing');
   const [clipAutostart, setClipAutostart] = useState(() => localStorage.getItem('md_clip_autostart') === 'true');
   const [initialAnalyzeUrl, setInitialAnalyzeUrl] = useState('');
+  const [initialSearchQuery, setInitialSearchQuery] = useState('');
 
   const [downloads, setDownloads] = useState([]);
   const [libraryItems, setLibraryItems] = useState([]);
@@ -96,11 +97,6 @@ export default function App() {
     localStorage.setItem('md_current_view', currentView);
   }, [currentView]);
 
-  const handleAnalyzeUrl = useCallback((url) => {
-    setInitialAnalyzeUrl(url);
-    setCurrentView('downloader');
-  }, []);
-
   const showToast = useCallback((message, isSuccess = true) => {
     setToast({ message, isSuccess });
   }, []);
@@ -110,29 +106,59 @@ export default function App() {
     try {
       await waitForApi(10000);
       const historyRes = await api.listHistory();
+      if (historyRes?.warning) {
+        showToast(historyRes.warning, false);
+      }
       if (historyRes?.ok && Array.isArray(historyRes.entries)) {
-        const seeded = historyRes.entries.map((entry) => ({
-          id: entry.id,
-          historyId: entry.id,
-          url: entry.url,
-          tool: entry.tool || 'gallery-dl',
-          state: entry.status === 'done' ? 'done' : entry.status === 'cancelled' ? 'cancelled' : 'error',
-          jobId: null,
-          outputDir: entry.output_dir,
-          itemsDone: entry.files?.length || 0,
-          files: entry.files || [],
-          filename: entry.filename || '',
-          sizeBytes: entry.size_bytes || 0,
-          thumbnail: entry.thumbnail || '',
-          error: entry.error || '',
-          finishedAt: (entry.finished_at || 0) * 1000,
-        }));
+        const seeded = historyRes.entries.map((entry) => {
+          let state = 'error';
+          if (entry.status === 'done') state = 'done';
+          else if (entry.status === 'cancelled') state = 'cancelled';
+          else if (entry.status === 'running') state = 'running';
+          else if (entry.status === 'scheduled') state = 'scheduled';
+          else if (entry.status === 'pending') state = 'pending';
+
+          return {
+            id: entry.id,
+            historyId: entry.id,
+            url: entry.url,
+            tool: entry.tool || 'gallery-dl',
+            state,
+            jobId: entry.job_id || null,
+            outputDir: entry.output_dir,
+            itemsDone: entry.files?.length || 0,
+            files: entry.files || [],
+            filename: entry.filename || '',
+            sizeBytes: entry.size_bytes || 0,
+            thumbnail: entry.thumbnail || '',
+            error: entry.error || '',
+            finishedAt: (entry.finished_at || 0) * 1000,
+          };
+        });
 
         setDownloads((prev) => {
-          const active = prev.filter((p) => ['pending', 'running', 'paused'].includes(p.state));
-          const activeIds = new Set(active.map((a) => a.id));
-          const nonActiveSeeded = seeded.filter((s) => !activeIds.has(s.id));
-          return [...active, ...nonActiveSeeded];
+          const active = prev.filter((p) => ['pending', 'running', 'paused', 'scheduled'].includes(p.state));
+          const activeJobIds = new Set(active.map((a) => a.jobId).filter(Boolean));
+          const activeHistIds = new Set(active.map((a) => a.historyId || a.id).filter(Boolean));
+          const activeUrls = new Set(active.map((a) => a.url).filter(Boolean));
+
+          const nonActiveSeeded = seeded.filter((s) => {
+            if (s.jobId && activeJobIds.has(s.jobId)) return false;
+            if (s.historyId && activeHistIds.has(s.historyId)) return false;
+            if (s.id && activeHistIds.has(s.id)) return false;
+            if (s.state === 'running' && (activeUrls.has(s.url) || (s.jobId && activeJobIds.has(s.jobId)))) return false;
+            return true;
+          });
+
+          const updatedActive = active.map((a) => {
+            if (!a.historyId) {
+              const match = seeded.find((s) => (a.jobId && s.jobId === a.jobId) || (s.url && s.url === a.url));
+              if (match) return { ...a, historyId: match.id };
+            }
+            return a;
+          });
+
+          return [...updatedActive, ...nonActiveSeeded];
         });
       }
     } catch (err) {
@@ -400,7 +426,7 @@ export default function App() {
     };
   }, [clipAutostart, defaultFormat, showToast]);
 
-  const handleSearch = async (query, limit = 12) => {
+  const handleSearch = useCallback(async (query, limit = 12) => {
     setIsSearching(true);
     setSearchError('');
     try {
@@ -409,7 +435,20 @@ export default function App() {
       setIsSearching(false);
       setSearchError(e.message || 'Search request failed');
     }
-  };
+  }, []);
+
+  const handleAnalyzeUrl = useCallback((input) => {
+    const text = (input || '').trim();
+    if (!text) return;
+    if (isLikelyUrl(text)) {
+      setInitialAnalyzeUrl(text);
+      setCurrentView('explore');
+    } else {
+      setInitialSearchQuery(text);
+      setCurrentView('explore');
+      handleSearch(text);
+    }
+  }, [handleSearch]);
 
   // ── Queue Completion Handlers ──
   const handleQueueFinished = async () => {
@@ -452,10 +491,17 @@ export default function App() {
     try {
       const res = await api.startDownload(url, newItem.cfg, detectedTool);
       if (res?.ok && res.job_id) {
-        setDownloads((prev) =>
-          prev.map((i) => (i.id === newId ? { ...i, jobId: res.job_id, state: 'running' } : i))
-        );
-        setActiveJobId(res.job_id);
+        if (isQueuePaused) {
+          api.pauseDownload(res.job_id);
+          setDownloads((prev) =>
+            prev.map((i) => (i.id === newId ? { ...i, jobId: res.job_id, historyId: res.history_id || i.historyId, state: 'paused' } : i))
+          );
+        } else {
+          setDownloads((prev) =>
+            prev.map((i) => (i.id === newId ? { ...i, jobId: res.job_id, historyId: res.history_id || i.historyId, state: 'running' } : i))
+          );
+          setActiveJobId(res.job_id);
+        }
       } else {
         setDownloads((prev) =>
           prev.map((i) => (i.id === newId ? { ...i, state: 'error', error: res?.error || 'Failed to start' } : i))
@@ -700,6 +746,7 @@ export default function App() {
               onAnalyzeUrl={handleAnalyzeUrl}
               onAddDownload={handleAddDownload}
               onOpenPlayer={handleOpenPlayer}
+              onOpenGallery={handleOpenGallery}
               onSwitchToLibrary={() => setCurrentView('library')}
               onSwitchToDownloader={() => setCurrentView('downloader')}
               downloads={libraryItems.length > 0 ? libraryItems : downloads}
@@ -730,16 +777,6 @@ export default function App() {
               setOnFinishAction={setOnFinishAction}
               nightOwlEnabled={nightOwlSettings.enabled}
               defaultFormat={defaultFormat}
-              initialAnalyzeUrl={initialAnalyzeUrl}
-              onClearInitialAnalyzeUrl={() => setInitialAnalyzeUrl('')}
-              searchResults={searchResults}
-              isSearching={isSearching}
-              searchError={searchError}
-              onSearch={handleSearch}
-              onClearSearch={() => {
-                setSearchResults([]);
-                setSearchError('');
-              }}
               onShowToast={showToast}
               onRefreshHistory={loadHistory}
             />
@@ -751,6 +788,14 @@ export default function App() {
               isSearching={isSearching}
               searchError={searchError}
               onSearch={handleSearch}
+              onClearSearch={() => {
+                setSearchResults([]);
+                setSearchError('');
+              }}
+              initialSearchQuery={initialSearchQuery}
+              onClearInitialSearchQuery={() => setInitialSearchQuery('')}
+              initialAnalyzeUrl={initialAnalyzeUrl}
+              onClearInitialAnalyzeUrl={() => setInitialAnalyzeUrl('')}
               onAddDownload={handleAddDownload}
               onOpenPlayer={handleOpenPlayer}
               onSwitchToDownloader={() => setCurrentView('downloader')}

@@ -285,24 +285,80 @@ def resolve_entry_thumbnail_url(files: list, output_dir: str = None) -> str:
     return None
 
 
+BUNDLED_CHROME_EXTENSION_ID = "djaghggdhbcpkfeoogacpkjlojfnajki"
+
+
+def _is_allowed_origin(origin: str) -> bool:
+    """Return True only if the Origin is from a trusted extension or local loopback client."""
+    if not origin or origin == "null":
+        return False
+    # Web browser extensions (Chrome, Edge, Firefox, Brave, etc.)
+    if origin.startswith("chrome-extension://"):
+        ext_id = origin[len("chrome-extension://"):].rstrip("/")
+        if ext_id == BUNDLED_CHROME_EXTENSION_ID:
+            return True
+        allowed_env = os.environ.get("NOVADROP_ALLOWED_EXTENSIONS", "")
+        if allowed_env and ext_id in {x.strip() for x in allowed_env.split(",") if x.strip()}:
+            return True
+        if os.environ.get("NOVADROP_DEV_EXTENSIONS") == "1":
+            return len(ext_id) == 32 and all("a" <= c <= "p" for c in ext_id)
+        return False
+    if origin.startswith("moz-extension://"):
+        ext_uuid = origin[len("moz-extension://"):].rstrip("/")
+        # Firefox extension origins are standard UUIDs
+        return len(ext_uuid) == 36 and re.match(r"^[0-9a-fA-F-]{36}$", ext_uuid) is not None
+    try:
+        parsed = urllib.parse.urlsplit(origin)
+        if parsed.scheme in ("http", "https") and parsed.hostname in ("localhost", "127.0.0.1", "::1"):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _is_valid_bridge_host(host_header: str) -> bool:
+    """Protect against DNS rebinding attacks: Host header must be localhost / loopback authority."""
+    if not host_header:
+        return False
+    try:
+        parsed = urllib.parse.urlsplit(f"//{host_header}")
+        hostname = (parsed.hostname or "").lower()
+        port = parsed.port
+        if port not in (None, BRIDGE_PORT):
+            return False
+        return hostname in ("127.0.0.1", "localhost", "::1")
+    except Exception:
+        return False
+
+
 class _BridgeHandler(BaseHTTPRequestHandler):
-    """Handles requests from the browser extension."""
+    """Handles requests from the browser extension and local media streaming."""
 
     def log_message(self, fmt, *args):
         pass   # silence the default access log
 
     def _cors(self):
-        # Allow requests from browser extensions and local app for media streaming/Web Audio API
+        # Allow requests ONLY from verified browser extensions and local app origins
         origin = self.headers.get("Origin", "")
-        if origin.startswith("chrome-extension://") or origin.startswith("moz-extension://"):
+        if _is_allowed_origin(origin):
             self.send_header("Access-Control-Allow-Origin", origin)
-        else:
-            self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Token, Range")
-        self.send_header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Token, Range")
+            self.send_header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
 
     def do_OPTIONS(self):
+        if not _is_valid_bridge_host(self.headers.get("Host", "")):
+            self.send_response(403)
+            self.end_headers()
+            return
+
+        origin = self.headers.get("Origin", "")
+        if origin and not _is_allowed_origin(origin):
+            self.send_response(403)
+            self.end_headers()
+            return
+
         self.send_response(204)
         self._cors()
         self.end_headers()
@@ -311,7 +367,7 @@ class _BridgeHandler(BaseHTTPRequestHandler):
         """
         GET /token  — returns the current session token so the extension
         can pair itself on first install without the user having to copy
-        anything manually.
+        anything manually. Strictly blocked for external web origins.
 
         GET /media  — streams a local file (?path=...&token=...) for the
         built-in media player. Playback intentionally goes through this
@@ -321,11 +377,30 @@ class _BridgeHandler(BaseHTTPRequestHandler):
         unless the page itself was loaded from that exact same file://
         location. Serving over http://127.0.0.1 sidesteps that entirely,
         and lets us support Range requests so seeking actually works.
-
-        Both endpoints are only reachable from localhost so exposure is minimal.
         """
+        if not _is_valid_bridge_host(self.headers.get("Host", "")):
+            self.send_response(403)
+            self.end_headers()
+            return
+
         parsed = urllib.parse.urlsplit(self.path)
         if parsed.path == "/token":
+            origin = self.headers.get("Origin", "")
+            sec_site = self.headers.get("Sec-Fetch-Site", "")
+            # Only allowed extensions may read /token.
+            # Untrusted web origins, null origins, and cross-site requests are strictly blocked.
+            if sec_site == "cross-site":
+                logger.warning(f"Blocked cross-site access to /token from Origin: {origin}")
+                self.send_response(403)
+                self.end_headers()
+                return
+
+            if not _is_allowed_origin(origin) or not (origin.startswith("chrome-extension://") or origin.startswith("moz-extension://")):
+                logger.warning(f"Blocked non-extension or untrusted Origin attempting to fetch /token: {origin!r}")
+                self.send_response(403)
+                self.end_headers()
+                return
+
             body = json.dumps({"token": BRIDGE_TOKEN}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -340,6 +415,24 @@ class _BridgeHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def _serve_media(self, parsed):
+        if not _is_valid_bridge_host(self.headers.get("Host", "")):
+            self.send_response(403)
+            self.end_headers()
+            return
+
+        origin = self.headers.get("Origin", "")
+        sec_site = self.headers.get("Sec-Fetch-Site", "")
+        if origin and not _is_allowed_origin(origin):
+            logger.warning(f"Blocked untrusted Origin: {origin} requesting /media")
+            self.send_response(403)
+            self.end_headers()
+            return
+        if sec_site == "cross-site" and not _is_allowed_origin(origin):
+            logger.warning("Blocked cross-site request to /media")
+            self.send_response(403)
+            self.end_headers()
+            return
+
         qs = urllib.parse.parse_qs(parsed.query)
         token = (qs.get("token") or [""])[0]
         raw_path = (qs.get("path") or qs.get("p") or [""])[0]
@@ -347,7 +440,7 @@ class _BridgeHandler(BaseHTTPRequestHandler):
 
         # Allow if valid session token, OR if path is an app-generated thumbnail cache file
         is_cache_thumb = _is_app_cache_path(path or raw_path)
-        token_valid = secrets.compare_digest(token, BRIDGE_TOKEN)
+        token_valid = bool(token) and secrets.compare_digest(token, BRIDGE_TOKEN)
 
         if not token_valid and not is_cache_thumb:
             self.send_response(403); self.end_headers(); return
@@ -444,17 +537,45 @@ class _BridgeHandler(BaseHTTPRequestHandler):
             pass  # player was closed/seeked mid-stream — not an error
 
     def do_POST(self):
+        if not _is_valid_bridge_host(self.headers.get("Host", "")):
+            self.send_response(403)
+            self.end_headers()
+            return
+
         if self.path != "/add-url":
             self.send_response(404); self.end_headers(); return
 
+        origin = self.headers.get("Origin", "")
+        sec_site = self.headers.get("Sec-Fetch-Site", "")
+        if origin and not _is_allowed_origin(origin):
+            logger.warning(f"Blocked untrusted Origin: {origin} attempting /add-url")
+            self.send_response(403)
+            self.end_headers()
+            return
+        if sec_site == "cross-site" and not _is_allowed_origin(origin):
+            logger.warning("Blocked cross-site request to /add-url")
+            self.send_response(403)
+            self.end_headers()
+            return
+
         # Token check
         token = self.headers.get("X-Token", "")
-        if not secrets.compare_digest(token, BRIDGE_TOKEN):
+        if not token or not secrets.compare_digest(token, BRIDGE_TOKEN):
             logger.warning("Invalid token in /add-url request")
             self.send_response(403); self.end_headers(); return
 
+        # Validate Content-Length to avoid unbounded reads
+        content_len_hdr = self.headers.get("Content-Length", "")
+        if not content_len_hdr:
+            self.send_response(411); self.end_headers(); return
+        try:
+            length = int(content_len_hdr)
+        except ValueError:
+            self.send_response(400); self.end_headers(); return
+        if length < 0 or length > 1024 * 1024:
+            self.send_response(413); self.end_headers(); return
+
         # Read body
-        length = int(self.headers.get("Content-Length", 0))
         try:
             payload = json.loads(self.rfile.read(length))
         except Exception as e:
@@ -893,11 +1014,16 @@ class Api:
             self._push_js(f"window.onDownloadProgress?.({_js(job_id)}, {_js(payload)})")
 
         def run():
+            result = {"ok": False, "error": "Download failed.", "files": []}
             try:
-                result = download_from_ui(
-                    url, validated_cfg, tool_override=tool_override,
-                    on_line=on_line, on_progress=on_progress, job_id=job_id,
-                )
+                try:
+                    result = download_from_ui(
+                        url, validated_cfg, tool_override=tool_override,
+                        on_line=on_line, on_progress=on_progress, job_id=job_id,
+                    )
+                except Exception as dl_err:
+                    logger.error(f"Unhandled exception during download {job_id}: {dl_err}", exc_info=True)
+                    result = {"ok": False, "error": str(dl_err), "files": []}
             finally:
                 with self._jobs_lock:
                     self._active_job_ids.discard(job_id)
@@ -1049,7 +1175,7 @@ class Api:
                 logger.debug(f"Failed to display native toast notification: {e}")
 
         threading.Thread(target=run, daemon=True).start()
-        return {"ok": True, "started": True, "job_id": job_id}
+        return {"ok": True, "started": True, "job_id": job_id, "history_id": history_id}
 
     # ── job controls ──
     def pause_download(self, job_id: str) -> dict:
@@ -1206,6 +1332,10 @@ class Api:
         logger.debug("Folder picker cancelled")
         return ""
 
+    def choose_folder(self) -> str:
+        """Alias for pick_folder to support both frontend naming conventions."""
+        return self.pick_folder()
+
     def get_default_output_dir(self) -> str:
         """Return the default media download folder (~/Downloads/media)."""
         return get_default_download_dir()
@@ -1351,7 +1481,7 @@ class Api:
         threading.Thread(target=_delayed_exit, daemon=True).start()
         return {"ok": True}
 
-    def execute_completion_action(self, action: str) -> dict:
+    def execute_completion_action(self, action: str, wait_sec: int = 60) -> dict:
         """
         Execute post-download completion action.
         Allowed actions: 'nothing', 'exit', 'sleep', 'shutdown'.
@@ -1363,7 +1493,12 @@ class Api:
             logger.warning(f"Invalid completion action requested: {action}")
             return {"ok": False, "error": f"Invalid action: {action}"}
 
-        logger.info(f"Executing post-download completion action: {action}")
+        try:
+            timeout_sec = max(0, int(wait_sec))
+        except (ValueError, TypeError):
+            timeout_sec = 60
+
+        logger.info(f"Executing post-download completion action: {action} (wait_sec={timeout_sec})")
         if action == "exit":
             return self.close_app()
         elif action == "sleep":
@@ -1380,13 +1515,12 @@ class Api:
             if os.name == "nt":
                 import subprocess as _sp
                 try:
-                    # 60s countdown with custom notification message
                     _sp.run(
-                        ["shutdown", "/s", "/t", "60", "/c", "Media Downloader queue finished. Shutting down system in 60s."],
+                        ["shutdown", "/s", "/t", str(timeout_sec), "/c", f"Media Downloader queue finished. Shutting down system in {timeout_sec}s."],
                         check=False,
                         creationflags=0x08000000
                     )
-                    return {"ok": True, "action": "shutdown", "timeout": 60}
+                    return {"ok": True, "action": "shutdown", "timeout": timeout_sec}
                 except Exception as e:
                     logger.error(f"Failed to schedule system shutdown: {e}")
                     return {"ok": False, "error": str(e)}
@@ -1542,7 +1676,15 @@ class Api:
                     pass
 
             logger.debug(f"Retrieved {len(entries)} history entries with thumbnails")
-            return {"ok": True, "entries": entries}
+            status_info = download_history.get_status()
+            res = {"ok": True, "entries": entries}
+            if status_info.get("status") == "corrupt_unrecoverable":
+                res["warning"] = "Download history was corrupted and unrecoverable from backup. The original file was quarantined."
+                res["quarantine"] = status_info.get("corrupt_quarantine")
+            elif status_info.get("status") == "recovered_from_backup":
+                res["warning"] = "Download history was automatically restored from backup after primary file corruption."
+                res["quarantine"] = status_info.get("corrupt_quarantine")
+            return res
         except Exception as e:
             logger.error(f"Failed to list history: {e}")
             return {"ok": False, "error": str(e)}
@@ -1580,6 +1722,8 @@ class Api:
 
         if audio_count > video_count and audio_count >= image_count:
             return "music"
+        if image_count > 0 and video_count > 0:
+            return "gallery"
         if image_count > video_count and image_count > audio_count:
             return "image"
         if video_count > audio_count and video_count >= image_count:
@@ -1681,18 +1825,30 @@ class Api:
                 # Check if dedicated album directory itself exists and has files (never walk root media dir)
                 out_d = e.get("output_dir")
                 has_files_on_disk = len(valid_files) > 0
-                if not has_files_on_disk and out_d and os.path.isdir(out_d):
+                if out_d and os.path.isdir(out_d):
                     norm_out = os.path.normcase(os.path.abspath(out_d))
                     if norm_out != norm_target_dir and norm_out not in canonical_dirs:
+                        existing_paths = {
+                            os.path.normcase(os.path.abspath(f["path"] if isinstance(f, dict) else str(f)))
+                            for f in valid_files
+                        }
                         for root_w, _, fnames in os.walk(out_d):
                             for fn in fnames:
                                 ext_w = os.path.splitext(fn)[1].lower()
                                 if ext_w in ALL_SUPPORTED_EXTS:
                                     full_w = os.path.join(root_w, fn)
-                                    valid_files.append({"name": fn, "path": full_w, "size": os.path.getsize(full_w)})
-                                    claimed_paths.add(os.path.normcase(os.path.abspath(full_w)))
-                                    _register_known_media_path(full_w)
-                                    has_files_on_disk = True
+                                    norm_full_w = os.path.normcase(os.path.abspath(full_w))
+                                    if norm_full_w not in existing_paths:
+                                        try:
+                                            f_size = os.path.getsize(full_w)
+                                        except OSError:
+                                            f_size = 0
+                                        valid_files.append({"name": fn, "path": full_w, "size": f_size})
+                                        existing_paths.add(norm_full_w)
+                                        claimed_paths.add(norm_full_w)
+                                        _register_known_media_path(full_w)
+                                        has_files_on_disk = True
+                                        history_modified = True
 
                 if has_files_on_disk:
                     e_copy = dict(e)
@@ -1902,12 +2058,49 @@ class Api:
             logger.error(f"Failed to clear history: {e}")
             return {"ok": False, "error": str(e)}
 
-    # ── search autocomplete (recent queries only — not URLs) ──
-    def get_recent_searches(self) -> dict:
+    # ── corrupt history quarantine and recovery ──
+    def list_quarantined_histories(self) -> dict:
+        try:
+            return {"ok": True, "files": download_history.list_quarantines()}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "files": []}
+
+    def salvage_history(self, filepath: str = "") -> dict:
+        try:
+            return download_history.salvage_corrupt_history(filepath or None)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── search history bridge methods ──
+    def list_searches(self) -> dict:
         try:
             return {"ok": True, "queries": search_history.list_queries()}
         except Exception as e:
+            return {"ok": False, "error": str(e), "queries": []}
+
+    def save_search(self, query: str) -> dict:
+        try:
+            search_history.add_query(query)
+            return {"ok": True}
+        except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def delete_search(self, query: str) -> dict:
+        try:
+            search_history.delete_query(query)
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def clear_searches(self) -> dict:
+        try:
+            search_history.clear_queries()
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def get_recent_searches(self) -> dict:
+        return self.list_searches()
 
     # ── built-in media player ──
     def get_media_url(self, path: str) -> dict:
@@ -2012,6 +2205,142 @@ class Api:
             return self.get_media_url(thumb_path)
         except Exception as e:
             logger.error(f"Failed to extract video thumbnail from {path}: {e}")
+            return {"ok": False, "error": str(e)}
+
+    # ── media metadata (artist, album, track, year, genre, codec, etc.) ──
+    def get_media_metadata(self, path: str) -> dict:
+        """Extract rich metadata from an audio/video file using the bundled
+        ffprobe (same binary directory as ffmpeg). Returns artist, album,
+        title, track number, year, genre, comment, duration, codec, bitrate,
+        sample rate and channel count — whatever the container actually stores.
+
+        Uses ffprobe's JSON output mode so no separate parsing library is
+        needed. Always returns ok:True with whatever subset of fields the file
+        actually has populated; missing tags are simply absent from the dict.
+        ok:False means ffprobe is unavailable or the file can't be read at all.
+        """
+        if not path:
+            return {"ok": False}
+        expanded = resolve_existing_media_path(path)
+        if not expanded or not validate_path(expanded, must_exist=True, must_be_file=True):
+            return {"ok": False}
+
+        try:
+            from media_downloader import resolve_ffmpeg_dir
+            import subprocess
+            ffmpeg_dir = resolve_ffmpeg_dir()
+            exe_name = "ffprobe.exe" if os.name == "nt" else "ffprobe"
+            if ffmpeg_dir:
+                ffprobe = os.path.join(ffmpeg_dir, exe_name)
+            else:
+                import shutil
+                ffprobe = shutil.which("ffprobe") or ""
+            if not ffprobe or not os.path.isfile(ffprobe):
+                return {"ok": False, "error": "ffprobe not found"}
+
+            CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
+            proc = subprocess.run(
+                [
+                    ffprobe, "-v", "quiet",
+                    "-print_format", "json",
+                    "-show_format",
+                    "-show_streams",
+                    expanded,
+                ],
+                capture_output=True, timeout=10,
+                creationflags=CREATE_NO_WINDOW,
+            )
+            if proc.returncode != 0:
+                return {"ok": False, "error": "ffprobe failed"}
+
+            data = json.loads(proc.stdout.decode("utf-8", errors="replace"))
+            tags_raw = {}
+
+            # Gather tags from format (container-level) first, then streams
+            fmt = data.get("format", {})
+            tags_raw.update({k.lower(): v for k, v in (fmt.get("tags") or {}).items()})
+
+            # Technical info — walk streams for audio/video details
+            audio_stream = None
+            video_stream = None
+            for s in data.get("streams", []):
+                if s.get("codec_type") == "audio" and audio_stream is None:
+                    audio_stream = s
+                    # Stream-level tags often have the real info for MKV/OGG
+                    tags_raw.update({k.lower(): v for k, v in (s.get("tags") or {}).items()})
+                elif s.get("codec_type") == "video" and video_stream is None:
+                    video_stream = s
+
+            def tag(*keys):
+                """Return the first non-empty value from a list of tag name variants."""
+                for k in keys:
+                    v = tags_raw.get(k, "").strip()
+                    if v:
+                        return v
+                return ""
+
+            result = {"ok": True}
+
+            # ── Descriptive tags ──
+            title   = tag("title")
+            artist  = tag("artist", "album_artist", "albumartist", "author", "composer")
+            album   = tag("album")
+            track   = tag("track", "tracknumber", "trck")
+            year    = tag("date", "year", "tdrc")
+            genre   = tag("genre")
+            comment = tag("comment", "description")
+
+            if title:   result["title"]   = title
+            if artist:  result["artist"]  = artist
+            if album:   result["album"]   = album
+            if track:
+                # Normalise "3/12" → "3"
+                result["track"] = track.split("/")[0].strip()
+            if year:
+                # Normalise "2023-04-01" → "2023"
+                result["year"]  = year.split("-")[0][:4]
+            if genre:   result["genre"]   = genre
+            if comment: result["comment"] = comment
+
+            # ── Technical tags ──
+            duration_s = float(fmt.get("duration") or 0)
+            if duration_s > 0:
+                result["duration"] = round(duration_s, 2)
+
+            if audio_stream:
+                codec = audio_stream.get("codec_long_name") or audio_stream.get("codec_name", "")
+                if codec:
+                    result["codec"] = codec
+                br = int(audio_stream.get("bit_rate") or 0)
+                if br:
+                    result["bitrate_kbps"] = round(br / 1000)
+                sr = int(audio_stream.get("sample_rate") or 0)
+                if sr:
+                    result["sample_rate"] = sr
+                ch = int(audio_stream.get("channels") or 0)
+                if ch:
+                    result["channels"] = ch
+
+            if video_stream and not audio_stream:
+                # For pure-video files, expose codec + resolution
+                codec = video_stream.get("codec_long_name") or video_stream.get("codec_name", "")
+                if codec:
+                    result["codec"] = codec
+                w = video_stream.get("width")
+                h = video_stream.get("height")
+                if w and h:
+                    result["resolution"] = f"{w}×{h}"
+
+            # Overall bitrate fallback
+            if "bitrate_kbps" not in result:
+                br = int(fmt.get("bit_rate") or 0)
+                if br:
+                    result["bitrate_kbps"] = round(br / 1000)
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"get_media_metadata failed for {path}: {e}")
             return {"ok": False, "error": str(e)}
 
     # ── open a single file with the OS default app (non-playable files) ──
