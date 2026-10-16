@@ -1,15 +1,59 @@
-# Android build & local files
-.gradle/
-local.properties
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Build outputs (PyInstaller)
+/build/
+/dist/
+!frontend/dist/
+*.spec
+*.msi
+*.exe
+
+# Installer outputs (keep the folder but ignore executables and temp files)
+installer/*.exe
+installer/*.log
+installer/*.tmp
+
+# IDE/editor files
+.vscode/
 .idea/
-.kotlin/
-.artifacts/
-build/
-*/build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local config / secrets
+*.env
+.env*
+
+# PyInstaller / Inno Setup artifacts
+*.toc
+*.pyz
+*.manifest
+
+# Scratch / test scratchpad
+scratch/
+
+# Android build & local files
+android/.gradle/
+android/local.properties
+android/.idea/
+android/.kotlin/
+android/.artifacts/
+android/build/
+android/*/build/
 *.apk
 *.aab
 *.keystore
 *.jks
 *.hprof
-.cxx/
-captures/
+android/.cxx/
+android/captures/
