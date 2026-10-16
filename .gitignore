@@ -1,43 +1,15 @@
-# Python bytecode
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual environments
-.venv/
-venv/
-ENV/
-env/
-
-# Build outputs (PyInstaller)
-/build/
-/dist/
-!frontend/dist/
-*.spec
-*.msi
-*.exe
-
-# Installer outputs (keep the folder but ignore executables and temp files)
-installer/*.exe
-installer/*.log
-installer/*.tmp
-
-# IDE/editor files
-.vscode/
+# Android build & local files
+.gradle/
+local.properties
 .idea/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Local config / secrets
-*.env
-.env*
-
-# PyInstaller / Inno Setup artifacts
-*.toc
-*.pyz
-*.manifest
-
-# Scratch / test scratchpad
-scratch/
+.kotlin/
+.artifacts/
+build/
+*/build/
+*.apk
+*.aab
+*.keystore
+*.jks
+*.hprof
+.cxx/
+captures/
