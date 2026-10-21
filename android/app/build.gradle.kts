@@ -22,6 +22,19 @@ android {
         }
     }
 
+    flavorDimensions += "engine"
+    productFlavors {
+        create("standard") {
+            dimension = "engine"
+            isDefault = true
+        }
+        create("spike") {
+            dimension = "engine"
+            applicationIdSuffix = ".spike"
+            matchingFallbacks += listOf("standard")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -30,9 +43,16 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             applicationIdSuffix = ".debug"
+        }
+    }
+
+    sourceSets {
+        getByName("spike") {
+            manifest.srcFile("src/spike/AndroidManifest.xml")
         }
     }
     compileOptions {
@@ -50,10 +70,18 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 }
 
 dependencies {
+    // Isolated dependencies for spike flavor:
+    val youtubedlAndroidVersion = "0.18.1"
+    "spikeImplementation"("io.github.junkfood02.youtubedl-android:library:$youtubedlAndroidVersion")
+    "spikeImplementation"("io.github.junkfood02.youtubedl-android:ffmpeg:$youtubedlAndroidVersion")
+    "spikeImplementation"("io.github.junkfood02.youtubedl-android:aria2c:$youtubedlAndroidVersion")
     // AndroidX Core & Lifecycle
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")

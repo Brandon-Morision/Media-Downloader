@@ -16,5 +16,22 @@
 -dontwarn org.mozilla.javascript.engine.**
 -dontwarn java.beans.**
 -dontwarn javax.script.**
--dontwarn jdk.dynalink.**
 -dontwarn org.jsoup.**
+-dontwarn jdk.dynalink.**
+
+# youtubedl-android (Jackson mapper, commons-compress, JNI bindings)
+-keep class com.yausername.** { *; }
+-dontwarn com.yausername.**
+-keep class com.fasterxml.jackson.annotation.** { *; }
+-keepclassmembers class * {
+    @com.fasterxml.jackson.annotation.* <methods>;
+    @com.fasterxml.jackson.annotation.* <fields>;
+}
+-keep class org.apache.commons.compress.archivers.zip.** { *; }
+
+-dontwarn org.w3c.dom.bootstrap.**
+-dontwarn com.fasterxml.jackson.databind.ext.**
+
+# Spike Manager & Service
+-keep class com.novadrop.android.spike.** { *; }
+

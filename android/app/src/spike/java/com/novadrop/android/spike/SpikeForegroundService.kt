@@ -1,0 +1,131 @@
+package com.novadrop.android.spike
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
+import android.os.IBinder
+import android.os.PowerManager
+import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
+import com.yausername.youtubedl_android.YoutubeDLRequest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import java.io.File
+
+class SpikeForegroundService : Service() {
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    companion object {
+        const val TAG = "SpikeDozeTest"
+        const val ACTION_DOZE_TEST = "com.novadrop.android.spike.DOZE_TEST"
+        const val ACTION_CHECK_RELEASE = "com.novadrop.android.spike.CHECK_RELEASE"
+        const val CHANNEL_ID = "spike_foreground_channel"
+        const val NOTIFICATION_ID = 2001
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Spike Test Service",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            val nm = getSystemService(NotificationManager::class.java)
+            nm.createNotificationChannel(channel)
+        }
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Spike:DozeWakeLock").apply {
+            setReferenceCounted(false)
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val action = intent?.action ?: ACTION_CHECK_RELEASE
+        Log.i(TAG, "onStartCommand received action: $action")
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("NovaDrop Spike Service")
+            .setContentText("Running action: $action")
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setOngoing(true)
+            .build()
+
+        ServiceCompat.startForeground(
+            this,
+            NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        )
+
+        wakeLock?.acquire(120_000) // 2 min max
+
+        serviceScope.launch {
+            try {
+                when (action) {
+                    ACTION_DOZE_TEST -> executeDozeDownload()
+                    ACTION_CHECK_RELEASE -> executeReleaseSanityCheck()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Service execution failed: ${e.message}", e)
+            } finally {
+                wakeLock?.let { if (it.isHeld) it.release() }
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
+        }
+
+        return START_NOT_STICKY
+    }
+
+    private fun executeReleaseSanityCheck() {
+        Log.i(TAG, "=== Starting Release Sanity Check ===")
+        val ytdlpInitTime = SpikeManager.initYoutubeDL(this)
+        Log.i(TAG, "YoutubeDL.init duration: ${ytdlpInitTime}ms, version: ${SpikeManager.getYtDlpVersion(this)}")
+        val ffmpegResult = SpikeManager.initFFmpeg(this)
+        Log.i(TAG, "FFmpeg.init result: $ffmpegResult")
+        val ariaResult = SpikeManager.initAria2c(this)
+        Log.i(TAG, "Aria2c.init result: $ariaResult")
+        val gdlResult = SpikeManager.executeGalleryDl(this, listOf("--version"))
+        Log.i(TAG, "Gallery-dl exitCode: ${gdlResult.exitCode}, stdout: ${gdlResult.stdout.trim()}")
+    }
+
+    private fun executeDozeDownload() {
+        Log.i(TAG, "=== Starting Doze Mode Download Test ===")
+        SpikeManager.initYoutubeDL(this)
+        val downloadDir = File(cacheDir, "doze_test").apply { mkdirs() }
+        val targetFile = File(downloadDir, "doze_sample.bin")
+        if (targetFile.exists()) targetFile.delete()
+
+        // 5MB download rate-limited to 500K/s (~10 seconds duration)
+        val req = YoutubeDLRequest("https://speed.cloudflare.com/__down?bytes=5000000")
+        req.addOption("-o", targetFile.absolutePath)
+        req.addOption("--limit-rate", "500K")
+
+        Log.i(TAG, "Beginning download. Target: ${targetFile.absolutePath}")
+        val startTime = System.currentTimeMillis()
+        val response = SpikeManager.executeYtDlp(req) { progress, eta, speed ->
+            Log.i(TAG, "Doze download progress: $progress%, speed: $speed, eta: $eta")
+        }
+        val duration = System.currentTimeMillis() - startTime
+        Log.i(TAG, "Doze download completed: exitCode=${response.exitCode}, duration=${duration}ms, targetSize=${targetFile.length()}")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        serviceScope.cancel()
+        wakeLock?.let { if (it.isHeld) it.release() }
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+}
