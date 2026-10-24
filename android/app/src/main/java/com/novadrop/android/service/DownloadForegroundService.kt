@@ -39,6 +39,7 @@ class DownloadForegroundService : Service() {
 
         when (action) {
             ACTION_START -> {
+                updateForegroundNotification(null)
                 if (jobId != null) {
                     startJobDownload(jobId)
                 }

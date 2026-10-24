@@ -32,6 +32,9 @@ android {
             dimension = "engine"
             applicationIdSuffix = ".spike"
             matchingFallbacks += listOf("standard")
+            ndk {
+                abiFilters += listOf("arm64-v8a", "x86_64")
+            }
         }
     }
 

@@ -12,8 +12,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.schabi.newpipe.extractor.NewPipe
+import org.schabi.newpipe.extractor.ServiceList
+import org.schabi.newpipe.extractor.stream.StreamInfo
+import com.novadrop.android.engine.newpipe.NewPipeDownloaderImpl
 import java.io.File
 import java.nio.ByteBuffer
+import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class MediaMuxerUtilInstrumentedTest {
@@ -281,5 +288,105 @@ class MediaMuxerUtilInstrumentedTest {
             }
         }
         return false
+    }
+
+    @Test
+    fun testRealSeparatedVideoAudioMux_fromYouTubeStreams() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val testDir = File(context.cacheDir, "real_muxer_test").apply { mkdirs() }
+        val videoFile = File(testDir, "real_video_track.mp4")
+        val audioFile = File(testDir, "real_audio_track.m4a")
+        val outputFile = File(testDir, "real_muxed_output.mp4")
+
+        try {
+            if (videoFile.exists()) videoFile.delete()
+            if (audioFile.exists()) audioFile.delete()
+            if (outputFile.exists()) outputFile.delete()
+
+            val okHttpClient = OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build()
+            try {
+                NewPipe.init(NewPipeDownloaderImpl(okHttpClient))
+            } catch (_: Exception) {}
+
+            val streamInfo = StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=jNQXAC9IVRw")
+            val videoTrack = streamInfo.videoOnlyStreams
+                .firstOrNull { it.format?.suffix == "mp4" || it.format == org.schabi.newpipe.extractor.MediaFormat.MPEG_4 }
+                ?: streamInfo.videoOnlyStreams.first()
+            val audioTrack = streamInfo.audioStreams
+                .firstOrNull { it.format?.suffix == "m4a" }
+                ?: streamInfo.audioStreams.first()
+
+            // 1. Download genuine separate video track
+            okHttpClient.newCall(Request.Builder().url(videoTrack.content).build()).execute().use { resp ->
+                assertTrue("Video track download must succeed", resp.isSuccessful)
+                videoFile.outputStream().use { out -> resp.body!!.byteStream().copyTo(out) }
+            }
+            assertTrue("Real video file must exist and be > 0 bytes", videoFile.exists() && videoFile.length() > 0)
+
+            // 2. Download genuine separate audio track
+            okHttpClient.newCall(Request.Builder().url(audioTrack.content).build()).execute().use { resp ->
+                assertTrue("Audio track download must succeed", resp.isSuccessful)
+                audioFile.outputStream().use { out -> resp.body!!.byteStream().copyTo(out) }
+            }
+            assertTrue("Real audio file must exist and be > 0 bytes", audioFile.exists() && audioFile.length() > 0)
+
+            // 3. Call the PRODUCTION mux function used by NativeExtractorEngine
+            val muxResult = MediaMuxerUtil.mux(videoFile, audioFile, outputFile)
+            assertTrue("Mux result must be success: ${muxResult.exceptionOrNull()}", muxResult.isSuccess)
+            assertTrue("Output file must exist and be > 0 bytes", outputFile.exists() && outputFile.length() > 0)
+
+            // 4. Validate output container via MediaExtractor
+            val extractor = MediaExtractor()
+            extractor.setDataSource(outputFile.absolutePath)
+            try {
+                assertEquals("Muxed container must have exactly 2 tracks", 2, extractor.trackCount)
+                var videoTrackIdx = -1
+                var audioTrackIdx = -1
+                for (i in 0 until extractor.trackCount) {
+                    val format = extractor.getTrackFormat(i)
+                    val mime = format.getString(android.media.MediaFormat.KEY_MIME) ?: ""
+                    if (mime.startsWith("video/")) videoTrackIdx = i
+                    if (mime.startsWith("audio/")) audioTrackIdx = i
+                }
+                assertTrue("Video track must be present in muxed output", videoTrackIdx >= 0)
+                assertTrue("Audio track must be present in muxed output", audioTrackIdx >= 0)
+
+                val vFormat = extractor.getTrackFormat(videoTrackIdx)
+                val aFormat = extractor.getTrackFormat(audioTrackIdx)
+                val vDuration = vFormat.getLong(android.media.MediaFormat.KEY_DURATION)
+                val aDuration = aFormat.getLong(android.media.MediaFormat.KEY_DURATION)
+                assertTrue("Video duration must be > 0 (was $vDuration us)", vDuration > 0)
+                assertTrue("Audio duration must be > 0 (was $aDuration us)", aDuration > 0)
+
+                // 5. Verify both tracks have readable samples
+                extractor.selectTrack(videoTrackIdx)
+                val buf = ByteBuffer.allocateDirect(1024 * 1024)
+                var vSamples = 0
+                while (extractor.readSampleData(buf, 0) >= 0) {
+                    vSamples++
+                    extractor.advance()
+                }
+                extractor.unselectTrack(videoTrackIdx)
+                assertTrue("Video track must contain readable samples", vSamples > 0)
+
+                extractor.selectTrack(audioTrackIdx)
+                var aSamples = 0
+                while (extractor.readSampleData(buf, 0) >= 0) {
+                    aSamples++
+                    extractor.advance()
+                }
+                extractor.unselectTrack(audioTrackIdx)
+                assertTrue("Audio track must contain readable samples", aSamples > 0)
+            } finally {
+                extractor.release()
+            }
+        } finally {
+            if (videoFile.exists()) videoFile.delete()
+            if (audioFile.exists()) audioFile.delete()
+            if (outputFile.exists()) outputFile.delete()
+        }
     }
 }

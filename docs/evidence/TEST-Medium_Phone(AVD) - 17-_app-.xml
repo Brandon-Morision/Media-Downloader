@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.novadrop.android.engine.muxer.MediaMuxerUtilInstrumentedTest" tests="1" failures="0" errors="0" skipped="0" time="5.422" timestamp="2026-10-20T22:54:39" hostname="localhost">
+  <properties>
+    <property name="device" value="Medium_Phone(AVD) - 17" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="testAdaptiveVideoAudioMux_assertsBothTracksHaveNonZeroSamplesAndDuration" classname="com.novadrop.android.engine.muxer.MediaMuxerUtilInstrumentedTest" time="4.307" />
+</testsuite>

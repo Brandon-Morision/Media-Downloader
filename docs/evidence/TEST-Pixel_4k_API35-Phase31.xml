@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" tests="3" failures="0" errors="0" skipped="0" time="424.65" timestamp="2026-10-22T14:04:20" hostname="localhost">
+  <properties>
+    <property name="device" value="Pixel_4k_API35(AVD) - 15" />
+    <property name="flavor" value="spike" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="testC_01_ffmpeg_merge_bestvideo_bestaudio" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="28.931" />
+  <testcase name="testC_02_ffmpeg_audio_extraction_mp3_and_m4a" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="39.153" />
+  <testcase name="testC_03_ffmpeg_hls_stream_download_and_merge" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="354.792" />
+</testsuite>

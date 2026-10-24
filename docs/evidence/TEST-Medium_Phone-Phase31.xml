@@ -1,0 +1,39 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" tests="13" failures="2" errors="0" skipped="0" time="1592.444" timestamp="2026-10-22T04:24:30" hostname="localhost">
+  <properties>
+    <property name="device" value="Medium_Phone(AVD) - 17" />
+    <property name="flavor" value="spike" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="testB1_01_realDownload_vimeoCreativeCommons" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="52.866">
+    <failure>java.lang.AssertionError: Vimeo download failed: WARNING: Your yt-dlp version (2025.11.12) is older than 90 days!
+It is strongly recommended to always use the latest version.
+Run "yt-dlp --update" or "yt-dlp -U" to update.
+To suppress this warning, add --no-update to your command/config.
+WARNING: [vimeo] The extractor is attempting impersonation, but no impersonate target is available. If you encounter errors, then see  https://github.com/yt-dlp/yt-dlp#impersonation  for information on installing the required dependencies
+ERROR: [vimeo] 76979871: The web client only works when logged-in. Use --cookies, --cookies-from-browser, --username and --password, --netrc-cmd, or --netrc (vimeo) to provide account credentials. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies
+
+at org.junit.Assert.fail(Assert.java:89)
+at com.novadrop.android.spike.Phase31EvidenceInstrumentedTest.testB1_01_realDownload_vimeoCreativeCommons(Phase31EvidenceInstrumentedTest.kt:99)
+</failure>
+  </testcase>
+  <testcase name="testB1_02_realDownload_redditPublicVideo" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="15.626" />
+  <testcase name="testB1_03_realDownload_tiktokPublicVideo" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="40.014" />
+  <testcase name="testB2_ytdlp_unauthenticated_failures_exactText" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="62.762" />
+  <testcase name="testB3_01_gallerydl_realDownload_safebooru" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="11.306" />
+  <testcase name="testB3_02_gallerydl_20images_meminfoSampling" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="40.831" />
+  <testcase name="testB3_03_gallerydl_killMidDownload_andLeftoverCheck" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="2.755" />
+  <testcase name="testC_01_ffmpeg_merge_bestvideo_bestaudio" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="31.556" />
+  <testcase name="testC_02_ffmpeg_audio_extraction_mp3_and_m4a" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="46.086" />
+  <testcase name="testC_03_ffmpeg_hls_stream_download_and_merge" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="435.216" />
+  <testcase name="testD_pattern_b_prototype_directUrl_and_okhttp" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="3.244">
+    <failure>java.lang.AssertionError: First half should return 206 Partial Content expected:&lt;206&gt; but was:&lt;200&gt;
+at org.junit.Assert.fail(Assert.java:89)
+at org.junit.Assert.failNotEquals(Assert.java:835)
+at org.junit.Assert.assertEquals(Assert.java:120)
+at com.novadrop.android.spike.Phase31EvidenceInstrumentedTest.testD_pattern_b_prototype_directUrl_and_okhttp(Phase31EvidenceInstrumentedTest.kt:471)
+</failure>
+  </testcase>
+  <testcase name="testF_cookies_sentinel_logcatGrep_and_permissions" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="11.009" />
+  <testcase name="testG_aria2c_5_iteration_benchmark" classname="com.novadrop.android.spike.Phase31EvidenceInstrumentedTest" time="836.087" />
+</testsuite>

@@ -89,15 +89,63 @@ class SpikeForegroundService : Service() {
     }
 
     private fun executeReleaseSanityCheck() {
-        Log.i(TAG, "=== Starting Release Sanity Check ===")
+        Log.i(TAG, "=== Starting SpikeRelease Real Workloads Execution ===")
         val ytdlpInitTime = SpikeManager.initYoutubeDL(this)
         Log.i(TAG, "YoutubeDL.init duration: ${ytdlpInitTime}ms, version: ${SpikeManager.getYtDlpVersion(this)}")
         val ffmpegResult = SpikeManager.initFFmpeg(this)
         Log.i(TAG, "FFmpeg.init result: $ffmpegResult")
         val ariaResult = SpikeManager.initAria2c(this)
         Log.i(TAG, "Aria2c.init result: $ariaResult")
-        val gdlResult = SpikeManager.executeGalleryDl(this, listOf("--version"))
-        Log.i(TAG, "Gallery-dl exitCode: ${gdlResult.exitCode}, stdout: ${gdlResult.stdout.trim()}")
+
+        // 1. One real yt-dlp download
+        val ytdlpDir = File(cacheDir, "spike_release_ytdlp").apply { mkdirs() }
+        val ytdlpTarget = File(ytdlpDir, "real_dl.bin")
+        if (ytdlpTarget.exists()) ytdlpTarget.delete()
+        val ytdlpReq = YoutubeDLRequest("https://speed.cloudflare.com/__down?bytes=1000000")
+        ytdlpReq.addOption("-o", ytdlpTarget.absolutePath)
+        val ytStart = System.currentTimeMillis()
+        try {
+            val resp = SpikeManager.executeYtDlp(ytdlpReq)
+            val ytDur = System.currentTimeMillis() - ytStart
+            Log.i(TAG, "spikeRelease yt-dlp download: exitCode=${resp.exitCode}, duration=${ytDur}ms, size=${ytdlpTarget.length()} bytes")
+        } catch (e: Exception) {
+            Log.e(TAG, "spikeRelease yt-dlp download failed: ${e.message}")
+        }
+
+        // 2. One real gallery-dl download (not -j)
+        val gdlDir = File(cacheDir, "spike_release_gdl").apply { mkdirs() }
+        gdlDir.listFiles()?.forEach { it.deleteRecursively() }
+        val gdlStart = System.currentTimeMillis()
+        val gdlResult = SpikeManager.executeGalleryDl(
+            this,
+            listOf("-d", gdlDir.absolutePath, "https://safebooru.org/index.php?page=post&s=view&id=4000000")
+        )
+        val gdlDur = System.currentTimeMillis() - gdlStart
+        val gdlFiles = gdlDir.walkTopDown().filter { it.isFile && it.length() > 0 }.toList()
+        Log.i(TAG, "spikeRelease gallery-dl download: exitCode=${gdlResult.exitCode}, duration=${gdlDur}ms, filesCount=${gdlFiles.size}")
+        gdlFiles.forEach {
+            Log.i(TAG, "  Downloaded image: ${it.name}, size=${it.length()} bytes")
+        }
+
+        // 3. One real FFmpeg merge (YouTube bestvideo+bestaudio)
+        if (ffmpegResult.isSuccess) {
+            val ffDir = File(cacheDir, "spike_release_ffmpeg").apply { mkdirs() }
+            val ffTarget = File(ffDir, "merged_zoo.mp4")
+            if (ffTarget.exists()) ffTarget.delete()
+            val ffReq = YoutubeDLRequest("https://youtu.be/jNQXAC9IVRw")
+            ffReq.addOption("-f", "bv*[vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]/best")
+            ffReq.addOption("--merge-output-format", "mp4")
+            ffReq.addOption("-o", ffTarget.absolutePath)
+            val ffStart = System.currentTimeMillis()
+            try {
+                val resp = SpikeManager.executeYtDlp(ffReq)
+                val ffDur = System.currentTimeMillis() - ffStart
+                Log.i(TAG, "spikeRelease FFmpeg merge: exitCode=${resp.exitCode}, duration=${ffDur}ms, size=${ffTarget.length()} bytes")
+            } catch (e: Exception) {
+                Log.e(TAG, "spikeRelease FFmpeg merge failed: ${e.message}")
+            }
+        }
+        Log.i(TAG, "=== Finished SpikeRelease Real Workloads Execution ===")
     }
 
     private fun executeDozeDownload() {

@@ -150,14 +150,14 @@ object SpikeManager {
     }
 
     /**
-     * Executes gallery-dl as a subprocess inside the bundled Python environment.
+     * Spawns gallery-dl as a subprocess inside the bundled Python environment.
      */
-    fun executeGalleryDl(
+    fun startGalleryDlProcess(
         context: Context,
         args: List<String>,
         envExtra: Map<String, String> = emptyMap(),
         overrideGalleryDlWhl: File? = null
-    ): GalleryDlResult {
+    ): Process {
         initYoutubeDL(context)
         val wheels = setupGalleryDl(context)
 
@@ -206,8 +206,20 @@ object SpikeManager {
             putAll(envExtra)
         }
 
+        return pb.start()
+    }
+
+    /**
+     * Executes gallery-dl as a subprocess inside the bundled Python environment.
+     */
+    fun executeGalleryDl(
+        context: Context,
+        args: List<String>,
+        envExtra: Map<String, String> = emptyMap(),
+        overrideGalleryDlWhl: File? = null
+    ): GalleryDlResult {
         val start = System.currentTimeMillis()
-        val process = pb.start()
+        val process = startGalleryDlProcess(context, args, envExtra, overrideGalleryDlWhl)
 
         val stdout = process.inputStream.bufferedReader().readText()
         val stderr = process.errorStream.bufferedReader().readText()
