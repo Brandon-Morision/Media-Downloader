@@ -11,6 +11,9 @@ import com.novadrop.android.playback.PlaybackManager
 import com.novadrop.android.service.NotificationHelper
 
 import com.novadrop.android.engine.newpipe.NewPipeDownloaderImpl
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import org.schabi.newpipe.extractor.NewPipe
 import java.util.concurrent.TimeUnit
@@ -50,9 +53,24 @@ class NovaDropApp : Application() {
         NewPipe.init(NewPipeDownloaderImpl(okHttpClient))
 
         database = NovaDropDatabase.getInstance(this)
-        extractorEngine = NativeExtractorEngine(this, okHttpClient)
+        extractorEngine = com.novadrop.android.engine.router.EngineProvider.createEngine(this, okHttpClient)
         downloadRepository = DownloadRepositoryImpl(this, database.downloadJobDao(), extractorEngine)
         preferencesRepository = UserPreferencesRepository(this)
         playbackManager = PlaybackManager.getInstance(this)
+
+        // Process-kill recovery sweep: recover any stale running/preparing jobs interrupted by OS termination
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                val activeJobs = database.downloadJobDao().getActiveJobs()
+                for (job in activeJobs) {
+                    database.downloadJobDao().updateJob(
+                        job.copy(
+                            state = com.novadrop.android.core.model.DownloadState.FAILED.name,
+                            errorMessage = "Interrupted by system process termination"
+                        )
+                    )
+                }
+            } catch (_: Throwable) {}
+        }
     }
 }

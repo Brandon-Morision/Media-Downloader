@@ -20,8 +20,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import com.novadrop.android.core.model.UserPreferences
+import com.novadrop.android.core.util.CookiesManager
+import com.novadrop.android.core.util.EngineInfoProvider
 import com.novadrop.android.ui.theme.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -35,8 +41,26 @@ fun SettingsScreen(
     onSetNightOwl: (Boolean, String, String, String) -> Unit,
     onSetNotificationsEnabled: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var expandedSection by remember { mutableStateOf<String?>("downloads") }
     var showTermsDialog by remember { mutableStateOf(false) }
+
+    var engineVersions by remember { mutableStateOf(EngineInfoProvider.getEngineVersions(context)) }
+    var hasCookies by remember { mutableStateOf(CookiesManager.hasCookies(context)) }
+    var cookiesSizeBytes by remember { mutableStateOf(CookiesManager.getCookiesSizeBytes(context)) }
+    var isUpdatingEngines by remember { mutableStateOf(false) }
+    var engineUpdateMessage by remember { mutableStateOf<String?>(null) }
+
+    val cookiePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val result = CookiesManager.importCookies(context, uri)
+            if (result.isSuccess) {
+                hasCookies = true
+                cookiesSizeBytes = result.getOrNull() ?: 0L
+            }
+        }
+    }
 
     val themes = listOf(
         "ocean" to ("Ocean Blue" to OceanBlue),
@@ -334,7 +358,120 @@ fun SettingsScreen(
             }
         }
 
-        // 8. About & Legal
+        // 8. Engines & Credentials Section
+        item {
+            SettingsAccordionCard(
+                title = "Media Engines & Authentication",
+                subtitle = "Engine versions, OTA updates & cookies.txt",
+                icon = Icons.Default.Tune,
+                isExpanded = expandedSection == "engines",
+                onToggle = { expandedSection = if (expandedSection == "engines") null else "engines" }
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Configured Media Engines", fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("• YouTube Engine: ${engineVersions.newPipeVersion}", fontSize = 12.sp)
+                        Text("• Gallery Engine: ${engineVersions.galleryDlVersion}", fontSize = 12.sp)
+                        Text("• FFmpeg Status: ${engineVersions.ffmpegStatus}", fontSize = 12.sp)
+                        Text("• yt-dlp Engine: ${engineVersions.ytDlpVersion}", fontSize = 12.sp)
+                    }
+
+                    if (engineVersions.isPersonalFlavor) {
+                        OutlinedButton(
+                            onClick = {
+                                if (!isUpdatingEngines) {
+                                    isUpdatingEngines = true
+                                    engineUpdateMessage = "Updating yt-dlp..."
+                                    coroutineScope.launch {
+                                        val result = EngineInfoProvider.updateEngines(context)
+                                        isUpdatingEngines = false
+                                        engineUpdateMessage = result.fold(
+                                            onSuccess = { it },
+                                            onFailure = { it.message ?: "Update failed" }
+                                        )
+                                        engineVersions = EngineInfoProvider.getEngineVersions(context)
+                                    }
+                                }
+                            },
+                            enabled = !isUpdatingEngines,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (isUpdatingEngines) "Updating..." else "Update Engines (OTA)")
+                        }
+
+                        engineUpdateMessage?.let { msg ->
+                            Text(
+                                text = msg,
+                                fontSize = 11.sp,
+                                color = if (msg.contains("failed", ignoreCase = true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = SurfaceBorder)
+
+                    Text("Authentication Cookies (cookies.txt)", fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                    Text(
+                        "Enables extraction for sites requiring authentication (X, Instagram, Pixiv). Stored securely with mode 600 in app-private storage. Values are never logged.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (hasCookies) "Cookies Active ($cookiesSizeBytes bytes)" else "No cookies imported",
+                            fontSize = 12.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                            color = if (hasCookies) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (hasCookies) {
+                                OutlinedButton(
+                                    onClick = {
+                                        CookiesManager.deleteCookies(context)
+                                        hasCookies = false
+                                        cookiesSizeBytes = 0L
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Text("Delete", fontSize = 11.sp)
+                                }
+                            }
+
+                            Button(
+                                onClick = {
+                                    cookiePickerLauncher.launch(arrayOf("text/*", "*/*"))
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(if (hasCookies) "Replace" else "Import cookies.txt", fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 9. About & Legal
         item {
             SettingsAccordionCard(
                 title = "About & Legal",

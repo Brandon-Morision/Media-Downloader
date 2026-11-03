@@ -28,6 +28,14 @@ android {
             dimension = "engine"
             isDefault = true
         }
+        create("personal") {
+            dimension = "engine"
+            applicationIdSuffix = ".personal"
+            matchingFallbacks += listOf("standard")
+            ndk {
+                abiFilters += listOf("arm64-v8a")
+            }
+        }
         create("spike") {
             dimension = "engine"
             applicationIdSuffix = ".spike"
@@ -57,6 +65,9 @@ android {
         getByName("spike") {
             manifest.srcFile("src/spike/AndroidManifest.xml")
         }
+        getByName("personal") {
+            manifest.srcFile("src/personal/AndroidManifest.xml")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
@@ -85,6 +96,10 @@ dependencies {
     "spikeImplementation"("io.github.junkfood02.youtubedl-android:library:$youtubedlAndroidVersion")
     "spikeImplementation"("io.github.junkfood02.youtubedl-android:ffmpeg:$youtubedlAndroidVersion")
     "spikeImplementation"("io.github.junkfood02.youtubedl-android:aria2c:$youtubedlAndroidVersion")
+
+    // Isolated dependencies for personal flavor (library + ffmpeg, aria2c removed per Phase 4.0):
+    "personalImplementation"("io.github.junkfood02.youtubedl-android:library:$youtubedlAndroidVersion")
+    "personalImplementation"("io.github.junkfood02.youtubedl-android:ffmpeg:$youtubedlAndroidVersion")
     // AndroidX Core & Lifecycle
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")

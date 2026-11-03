@@ -55,6 +55,7 @@ class NativeExtractorEngine(
 
     private val activeCalls = ConcurrentHashMap<String, Call>()
     private val pausedJobs = ConcurrentHashMap<String, JobPauseState>()
+    private val cancelledJobs = ConcurrentHashMap.newKeySet<String>()
 
     override fun canHandle(url: String): Boolean {
         return Validators.validateUrl(url)
@@ -414,18 +415,25 @@ class NativeExtractorEngine(
         onProgress: (progress: Float, downloadedBytes: Long, totalBytes: Long, speedFormatted: String, etaFormatted: String) -> Unit
     ): Result<List<DownloadedFileInfo>> = withContext(Dispatchers.IO) {
         val jobId = job.id
+        if (cancelledJobs.contains(jobId)) {
+            return@withContext Result.failure(java.util.concurrent.CancellationException("Job was cancelled"))
+        }
         val lowerUrl = job.url.lowercase(Locale.ROOT)
 
         try {
             if (lowerUrl.contains("youtube.com") || lowerUrl.contains("youtu.be")) {
-                return@withContext downloadYouTubeMedia(job, onProgress)
+                downloadYouTubeMedia(job, onProgress)
             } else {
-                return@withContext downloadDirectMedia(job, onProgress)
+                downloadDirectMedia(job, onProgress)
             }
         } catch (e: Exception) {
             activeCalls.remove(jobId)
             pausedJobs.remove(jobId)
             Result.failure(e)
+        } finally {
+            cancelledJobs.remove(jobId)
+            activeCalls.remove(jobId)
+            pausedJobs.remove(jobId)
         }
     }
 
@@ -442,6 +450,9 @@ class NativeExtractorEngine(
     ): Result<List<DownloadedFileInfo>> {
         val jobId = job.id
         val streamInfo = StreamInfo.getInfo(ServiceList.YouTube, job.url)
+        if (cancelledJobs.contains(jobId)) {
+            return Result.failure(java.util.concurrent.CancellationException("Job was cancelled"))
+        }
         val isAudioOnly = job.selectedFormat.startsWith("audio", ignoreCase = true) ||
                 job.selectedFormat.contains("mp3", ignoreCase = true) ||
                 job.selectedFormat.contains("m4a", ignoreCase = true) ||
@@ -619,6 +630,9 @@ class NativeExtractorEngine(
         onProgress: (progress: Float, downloadedBytes: Long, totalBytes: Long, speedFormatted: String, etaFormatted: String) -> Unit
     ): Result<List<DownloadedFileInfo>> {
         val jobId = job.id
+        if (cancelledJobs.contains(jobId)) {
+            return Result.failure(java.util.concurrent.CancellationException("Job was cancelled"))
+        }
         val directStreamUrl = resolveDirectStreamUrl(job.url, job.selectedFormat)
             ?: return Result.failure(IllegalStateException("Could not resolve authentic media stream for ${job.url}. No sample fallback will be substituted."))
 
@@ -673,6 +687,10 @@ class NativeExtractorEngine(
         progressEnd: Float,
         onProgress: (progress: Float, downloadedBytes: Long, totalBytes: Long, speedFormatted: String, etaFormatted: String) -> Unit
     ): Result<Unit> {
+        if (cancelledJobs.contains(jobId)) {
+            return Result.failure(java.util.concurrent.CancellationException("Job was cancelled"))
+        }
+
         val request = Request.Builder()
             .url(streamUrl)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
@@ -707,6 +725,9 @@ class NativeExtractorEngine(
 
         try {
             while (inputStream.read(buffer).also { read = it } != -1) {
+                if (cancelledJobs.contains(jobId)) {
+                    throw java.util.concurrent.CancellationException("Job was cancelled")
+                }
                 synchronized(pauseState.lock) {
                     while (pauseState.isPaused) {
                         pauseState.lock.wait()
@@ -751,6 +772,7 @@ class NativeExtractorEngine(
     }
 
     override fun cancel(jobId: String) {
+        cancelledJobs.add(jobId)
         activeCalls[jobId]?.cancel()
         activeCalls.remove(jobId)
         val state = pausedJobs.remove(jobId)
@@ -820,7 +842,8 @@ class NativeExtractorEngine(
         if (sourceUrl.endsWith(".mp4", true) || sourceUrl.endsWith(".mp3", true) ||
             sourceUrl.endsWith(".png", true) || sourceUrl.endsWith(".jpg", true) ||
             sourceUrl.endsWith(".jpeg", true) || sourceUrl.endsWith(".webp", true) ||
-            sourceUrl.endsWith(".webm", true) || sourceUrl.endsWith(".m4a", true)
+            sourceUrl.endsWith(".webm", true) || sourceUrl.endsWith(".m4a", true) ||
+            sourceUrl.contains("speed.cloudflare.com/__down")
         ) {
             return sourceUrl
         }
@@ -873,6 +896,29 @@ class NativeExtractorEngine(
                     val json = JSONObject(resp.body?.string() ?: "{}")
                     val fileUrl = json.optString("file_url", json.optString("large_file_url"))
                     if (fileUrl.isNotBlank()) return fileUrl
+                }
+            } catch (_: Exception) {}
+        }
+
+        if (lower.contains("safebooru.org") && sourceUrl.contains("id=")) {
+            try {
+                val uri = Uri.parse(sourceUrl)
+                val postId = uri.getQueryParameter("id")
+                if (!postId.isNullOrBlank()) {
+                    val api = "https://safebooru.org/index.php?page=dapi&s=post&q=index&id=$postId&json=1"
+                    val req = Request.Builder().url(api).header("User-Agent", "NovaDrop/0.5.2").build()
+                    val resp = client.newCall(req).execute()
+                    if (resp.isSuccessful) {
+                        val body = resp.body?.string() ?: ""
+                        if (body.startsWith("[")) {
+                            val array = JSONArray(body)
+                            if (array.length() > 0) {
+                                val post = array.getJSONObject(0)
+                                val fileUrl = post.optString("file_url")
+                                if (fileUrl.isNotBlank()) return fileUrl
+                            }
+                        }
+                    }
                 }
             } catch (_: Exception) {}
         }
