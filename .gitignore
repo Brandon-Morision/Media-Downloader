@@ -42,18 +42,11 @@ Thumbs.db
 # Scratch / test scratchpad
 scratch/
 
-# Android build & local files
-android/.gradle/
-android/local.properties
-android/.idea/
-android/.kotlin/
-android/.artifacts/
-android/build/
-android/*/build/
 *.apk
 *.aab
 *.keystore
 *.jks
 *.hprof
-android/.cxx/
-android/captures/
+
+# Android project separation
+/android/
