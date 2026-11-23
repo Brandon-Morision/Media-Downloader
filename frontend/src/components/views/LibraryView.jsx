@@ -387,7 +387,7 @@ export default function LibraryView({
             <p className="text-sm font-semibold text-slate-300">
               {isLoading ? 'Scanning media folder...' : 'No media found in Library'}
             </p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-400">
               {isLoading
                 ? 'Discovering videos, music, and images...'
                 : search
