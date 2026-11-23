@@ -2463,7 +2463,7 @@ class Api:
         return {"ok": True, "searching": True}
 
     # ── link preview (thumbnail/title for a pasted URL, before it's queued) ──
-    def preview_link(self, url: str, request_id: str = "") -> dict:
+    def preview_link(self, url: str, request_id: str = "", tool_override: str = "") -> dict:
         """
         Best-effort metadata preview for a pasted link — title, thumbnail,
         duration/channel for video, or a representative image + item count
@@ -2477,170 +2477,221 @@ class Api:
             return {"ok": False, "error": "Invalid URL"}
 
         def run():
-            from media_downloader import resolve_tool_path, CREATE_NO_WINDOW, _ytdlp_extra_headers
+            from media_downloader import (
+                resolve_tool_path,
+                CREATE_NO_WINDOW,
+                _ytdlp_extra_headers,
+                _is_unsupported_url_error,
+            )
             import subprocess, json as _json
             import urllib.parse as _urlparse
 
-            tool = detect_tool(url)
-            result = {"ok": False}
-            try:
-                if tool == "yt-dlp":
-                    ytdlp = resolve_tool_path("yt-dlp")
-                    # Same extra headers the real download uses (see
-                    # _ytdlp_extra_headers) — without these, a site that
-                    # needs them just to be reachable would fail this
-                    # metadata-only probe even though the actual download
-                    # works fine, making preview look broken for exactly
-                    # the sites that need it least to look that way.
-                    cmd = [ytdlp, "--dump-single-json", "--no-warnings", "--no-playlist"]
-                    cmd += _ytdlp_extra_headers(url)
-                    cmd.append(url)
-                    proc = subprocess.run(
-                        cmd, capture_output=True, text=True, timeout=20, creationflags=CREATE_NO_WINDOW,
-                    )
+            def _try_ytdlp(target_url: str):
+                ytdlp = resolve_tool_path("yt-dlp")
+                # Same extra headers the real download uses (see
+                # _ytdlp_extra_headers) — without these, a site that
+                # needs them just to be reachable would fail this
+                # metadata-only probe even though the actual download
+                # works fine, making preview look broken for exactly
+                # the sites that need it least to look that way.
+                cmd = [ytdlp, "--dump-single-json", "--no-warnings", "--no-playlist"]
+                cmd += _ytdlp_extra_headers(target_url)
+                cmd.append(target_url)
+                proc = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=20, creationflags=CREATE_NO_WINDOW,
+                )
+                if proc.returncode != 0:
+                    combined_err = (proc.stderr or "") + "\n" + (proc.stdout or "")
+                    is_unsupported = _is_unsupported_url_error(combined_err)
+                    return None, is_unsupported
+
+                try:
                     info = _json.loads(proc.stdout)
-                    if info.get("_type") == "playlist" and info.get("entries"):
-                        first = (info.get("entries") or [{}])[0] or {}
-                        title = "Playlist: " + (info.get("title") or first.get("title") or "")
-                        thumbs = first.get("thumbnails") or []
-                        thumb = first.get("thumbnail") or (thumbs[-1].get("url") if thumbs else "")
-                        channel = first.get("channel") or first.get("uploader") or ""
-                        duration = first.get("duration")
-                        views = first.get("view_count")
-                        description = first.get("description") or ""
-                    else:
-                        title = info.get("title") or ""
-                        thumbs = info.get("thumbnails") or []
-                        thumb = info.get("thumbnail") or (thumbs[-1].get("url") if thumbs else "")
-                        channel = info.get("channel") or info.get("uploader") or ""
-                        duration = info.get("duration")
-                        views = info.get("view_count")
-                        description = info.get("description") or ""
+                except Exception:
+                    return None, False
 
-                    available_qualities = []
-                    formats = info.get("formats") or []
-                    if formats:
-                        video_heights = set()
-                        format_sizes = {}
-                        has_audio = False
-                        for f in formats:
-                            h = f.get("height")
-                            vc = f.get("vcodec")
-                            ac = f.get("acodec")
-                            fs = f.get("filesize") or f.get("filesize_approx")
-                            if h and vc and vc != "none":
-                                try:
-                                    ih = int(h)
-                                    video_heights.add(ih)
-                                    if fs and (ih not in format_sizes or fs > format_sizes[ih]):
-                                        format_sizes[ih] = fs
-                                except (ValueError, TypeError):
-                                    pass
-                            if ac and ac != "none":
-                                has_audio = True
+                if info.get("_type") == "playlist" and info.get("entries"):
+                    first = (info.get("entries") or [{}])[0] or {}
+                    title = "Playlist: " + (info.get("title") or first.get("title") or "")
+                    thumbs = first.get("thumbnails") or []
+                    thumb = first.get("thumbnail") or (thumbs[-1].get("url") if thumbs else "")
+                    channel = first.get("channel") or first.get("uploader") or ""
+                    duration = first.get("duration")
+                    views = first.get("view_count")
+                    description = first.get("description") or ""
+                else:
+                    title = info.get("title") or ""
+                    thumbs = info.get("thumbnails") or []
+                    thumb = info.get("thumbnail") or (thumbs[-1].get("url") if thumbs else "")
+                    channel = info.get("channel") or info.get("uploader") or ""
+                    duration = info.get("duration")
+                    views = info.get("view_count")
+                    description = info.get("description") or ""
 
-                        known_res = [
-                            (2160, "2160p", "4K (Ultra HD)"),
-                            (1440, "1440p", "1440p (QHD)"),
-                            (1080, "1080p", "1080p (Full HD)"),
-                            (720, "720p", "720p (HD)"),
-                            (480, "480p", "480p (SD)"),
-                            (360, "360p", "360p"),
-                        ]
-                        for target_h, fmt_key, label in known_res:
-                            matching = [h for h in video_heights if abs(h - target_h) <= 20]
-                            if matching:
-                                match_h = matching[0]
-                                size_bytes = format_sizes.get(match_h)
-                                available_qualities.append({
-                                    "id": fmt_key,
-                                    "label": label,
-                                    "height": match_h,
-                                    "type": "video",
-                                    "ext": "MP4",
-                                    "size_bytes": size_bytes,
-                                })
-                        if not available_qualities and video_heights:
-                            max_h = max(video_heights)
+                available_qualities = []
+                formats = info.get("formats") or []
+                if formats:
+                    video_heights = set()
+                    format_sizes = {}
+                    has_audio = False
+                    for f in formats:
+                        h = f.get("height")
+                        vc = f.get("vcodec")
+                        ac = f.get("acodec")
+                        fs = f.get("filesize") or f.get("filesize_approx")
+                        if h and vc and vc != "none":
+                            try:
+                                ih = int(h)
+                                video_heights.add(ih)
+                                if fs and (ih not in format_sizes or fs > format_sizes[ih]):
+                                    format_sizes[ih] = fs
+                            except (ValueError, TypeError):
+                                pass
+                        if ac and ac != "none":
+                            has_audio = True
+
+                    known_res = [
+                        (2160, "2160p", "4K (Ultra HD)"),
+                        (1440, "1440p", "1440p (QHD)"),
+                        (1080, "1080p", "1080p (Full HD)"),
+                        (720, "720p", "720p (HD)"),
+                        (480, "480p", "480p (SD)"),
+                        (360, "360p", "360p"),
+                    ]
+                    for target_h, fmt_key, label in known_res:
+                        matching = [h for h in video_heights if abs(h - target_h) <= 20]
+                        if matching:
+                            match_h = matching[0]
+                            size_bytes = format_sizes.get(match_h)
                             available_qualities.append({
-                                "id": f"{max_h}p",
-                                "label": f"{max_h}p",
-                                "height": max_h,
+                                "id": fmt_key,
+                                "label": label,
+                                "height": match_h,
                                 "type": "video",
                                 "ext": "MP4",
-                                "size_bytes": format_sizes.get(max_h),
+                                "size_bytes": size_bytes,
                             })
+                    if not available_qualities and video_heights:
+                        max_h = max(video_heights)
+                        available_qualities.append({
+                            "id": f"{max_h}p",
+                            "label": f"{max_h}p",
+                            "height": max_h,
+                            "type": "video",
+                            "ext": "MP4",
+                            "size_bytes": format_sizes.get(max_h),
+                        })
 
-                        if has_audio:
-                            available_qualities.append({"id": "mp3", "label": "MP3", "type": "audio", "ext": "MP3"})
-                            available_qualities.append({"id": "m4a", "label": "M4A", "type": "audio", "ext": "M4A"})
+                    if has_audio:
+                        available_qualities.append({"id": "mp3", "label": "MP3", "type": "audio", "ext": "MP3"})
+                        available_qualities.append({"id": "m4a", "label": "M4A", "type": "audio", "ext": "M4A"})
 
-                    is_playlist = (
-                        info.get("_type") == "playlist"
-                        or bool(info.get("entries"))
-                        or "list=" in url.lower()
-                        or "/playlist" in url.lower()
-                        or "/sets/" in url.lower()
-                        or "/album" in url.lower()
+                is_playlist = (
+                    info.get("_type") == "playlist"
+                    or bool(info.get("entries"))
+                    or "list=" in target_url.lower()
+                    or "/playlist" in target_url.lower()
+                    or "/sets/" in target_url.lower()
+                    or "/album" in target_url.lower()
+                )
+                playlist_count = len(info.get("entries") or []) if info.get("entries") else None
+
+                return {
+                    "ok": True, "tool": "yt-dlp", "title": title,
+                    "thumbnail": thumb, "channel": channel, "duration": duration,
+                    "views": views, "description": description[:180] if description else "",
+                    "available_qualities": available_qualities,
+                    "is_playlist": is_playlist,
+                    "playlist_count": playlist_count,
+                    "url": target_url,
+                }, False
+
+            def _try_gallerydl(target_url: str):
+                gallerydl = resolve_tool_path("gallery-dl")
+                cmd = [gallerydl, "--range", "1-2", "-o", "retries=0", "-j", "--no-input", target_url]
+                thumb = None
+                count = 0
+                try:
+                    proc = subprocess.run(
+                        cmd,
+                        capture_output=True, text=True, timeout=6, creationflags=CREATE_NO_WINDOW,
                     )
-                    playlist_count = len(info.get("entries") or []) if info.get("entries") else None
+                    if proc.returncode != 0:
+                        combined_err = (proc.stderr or "") + "\n" + (proc.stdout or "")
+                        is_unsupported = _is_unsupported_url_error(combined_err)
+                        return None, is_unsupported
 
-                    result = {
-                        "ok": True, "tool": "yt-dlp", "title": title,
-                        "thumbnail": thumb, "channel": channel, "duration": duration,
-                        "views": views, "description": description[:180] if description else "",
-                        "available_qualities": available_qualities,
-                        "is_playlist": is_playlist,
-                        "playlist_count": playlist_count,
-                        "url": url,
-                    }
+                    parsed_items = []
+                    for line in proc.stdout.splitlines():
+                        line = line.strip()
+                        if line:
+                            try:
+                                parsed_items.append(_json.loads(line))
+                            except Exception:
+                                pass
+                    if parsed_items:
+                        thumb, count = _extract_gallery_preview(parsed_items)
+                except Exception as ge:
+                    logger.warning(f"Gallery preview probe warning for {target_url}: {ge}")
+                    return None, False
+
+                host = _urlparse.urlparse(target_url).hostname or target_url
+                path_parts = [p for p in _urlparse.urlparse(target_url).path.split("/") if p]
+                title_hint = f"{host} (Gallery)"
+                if len(path_parts) >= 2 and path_parts[0] in ("users", "u", "user", "r", "channel", "c"):
+                    title_hint = f"{path_parts[1]} on {host}"
+                elif path_parts:
+                    title_hint = f"{path_parts[-1]} on {host}"
+
+                return {
+                    "ok": True,
+                    "tool": "gallery-dl",
+                    "type": "gallery",
+                    "title": title_hint,
+                    "thumbnail": thumb or "",
+                    "count": count or 0,
+                    "url": target_url,
+                }, False
+
+            primary_tool = tool_override if tool_override in ("gallery-dl", "yt-dlp") else detect_tool(url)
+            result = None
+            try:
+                if primary_tool == "yt-dlp":
+                    res, is_unsupported = _try_ytdlp(url)
+                    if res is not None:
+                        result = res
+                    elif is_unsupported:
+                        logger.info(f"Link preview: yt-dlp reported unsupported URL for {url}. Attempting fallback with gallery-dl...")
+                        res_fallback, _ = _try_gallerydl(url)
+                        if res_fallback is not None:
+                            result = res_fallback
                 else:
-                    gallerydl = resolve_tool_path("gallery-dl")
-                    cmd = [gallerydl, "--range", "1-2", "-o", "retries=0", "-j", "--no-input", url]
-                    thumb = None
-                    count = 0
-                    try:
-                        proc = subprocess.run(
-                            cmd,
-                            capture_output=True, text=True, timeout=6, creationflags=CREATE_NO_WINDOW,
-                        )
-                        parsed_items = []
-                        for line in proc.stdout.splitlines():
-                            line = line.strip()
-                            if line:
-                                try:
-                                    parsed_items.append(_json.loads(line))
-                                except Exception:
-                                    pass
-                        if parsed_items:
-                            thumb, count = _extract_gallery_preview(parsed_items)
-                    except Exception as ge:
-                        logger.warning(f"Gallery preview probe warning for {url}: {ge}")
+                    res, is_unsupported = _try_gallerydl(url)
+                    if res is not None:
+                        result = res
+                    elif is_unsupported:
+                        logger.info(f"Link preview: gallery-dl reported unsupported URL for {url}. Attempting fallback with yt-dlp...")
+                        res_fallback, _ = _try_ytdlp(url)
+                        if res_fallback is not None:
+                            result = res_fallback
 
+                if result is None:
                     host = _urlparse.urlparse(url).hostname or url
-                    path_parts = [p for p in _urlparse.urlparse(url).path.split("/") if p]
-                    title_hint = f"{host} (Gallery)"
-                    if len(path_parts) >= 2 and path_parts[0] in ("users", "u", "user", "r", "channel", "c"):
-                        title_hint = f"{path_parts[1]} on {host}"
-                    elif path_parts:
-                        title_hint = f"{path_parts[-1]} on {host}"
-
                     result = {
                         "ok": True,
-                        "tool": "gallery-dl",
-                        "type": "gallery",
-                        "title": title_hint,
-                        "thumbnail": thumb or "",
-                        "count": count or 0,
+                        "tool": primary_tool,
+                        "type": "gallery" if primary_tool == "gallery-dl" else "video",
+                        "title": host,
+                        "thumbnail": "",
                         "url": url,
+                        "fallback": True,
                     }
             except subprocess.TimeoutExpired:
                 host = _urlparse.urlparse(url).hostname or url
-                tool = detect_tool(url)
                 result = {
                     "ok": True,
-                    "tool": tool,
-                    "type": "gallery" if tool == "gallery-dl" else "video",
+                    "tool": primary_tool,
+                    "type": "gallery" if primary_tool == "gallery-dl" else "video",
                     "title": host,
                     "thumbnail": "",
                     "url": url,
@@ -2649,17 +2700,17 @@ class Api:
             except Exception as e:
                 logger.warning(f"Link preview exception for {url}: {e}")
                 host = _urlparse.urlparse(url).hostname or url
-                tool = detect_tool(url)
                 result = {
                     "ok": True,
-                    "tool": tool,
-                    "type": "gallery" if tool == "gallery-dl" else "video",
+                    "tool": primary_tool,
+                    "type": "gallery" if primary_tool == "gallery-dl" else "video",
                     "title": host,
                     "thumbnail": "",
                     "url": url,
                     "fallback": True,
                 }
 
+            self._last_preview_result = result
             self._push_js(f"window.onLinkPreview?.({_js(request_id)}, {_js(result)})")
 
         threading.Thread(target=run, daemon=True).start()
