@@ -38,9 +38,13 @@ YTDLP_SITES = [
     "twitch.tv", "pornhub.com", "xvideos.com", "xhamster.com",
     "xnxx.com", "spankbang.com", "dailymotion.com", "bilibili.com",
     "1flex.org",  # HLS streaming (requires direct m3u8 URL)
+    "soundcloud.com", "bandcamp.com", "mixcloud.com",
 ]
 
 SITE_NOTES = {
+    "soundcloud.com": "yt-dlp      |  tracks, albums, playlists",
+    "bandcamp.com":   "yt-dlp      |  tracks and albums",
+    "mixcloud.com":   "yt-dlp      |  shows and mixes",
     "redgifs.com":    "gallery-dl  |  images + GIFs + video",
     "reddit.com":     "gallery-dl  |  subreddits, posts, users",
     "imgur.com":      "gallery-dl  |  albums and images",
@@ -1330,7 +1334,14 @@ def _parse_progress_line(job: DownloadJob, line: str, limit: int):
         pass
 
 
-def download_from_ui(url: str, cfg: dict, tool_override: str = "", on_line=None, on_progress=None, job_id: str = None) -> dict:
+def _is_unsupported_url_error(text: str) -> bool:
+    if not text:
+        return False
+    lowered = text.lower()
+    return any(phrase in lowered for phrase in ("unsupported url", "no suitable extractor", "no extractor found"))
+
+
+def download_from_ui(url: str, cfg: dict, tool_override: str = "", on_line=None, on_progress=None, job_id: str = None, allow_fallback: bool = True) -> dict:
     """
     Run a download triggered from the desktop UI. Blocking — call this
     from a background thread (see start_download_async in app.py).
@@ -1344,6 +1355,8 @@ def download_from_ui(url: str, cfg: dict, tool_override: str = "", on_line=None,
                      with {items_done, current_file, state}
         job_id: optional pre-generated id (so the caller can register/poll
                 the job before this function returns)
+        allow_fallback: retry once with alternate engine if unsupported URL error occurs
+
 
     Returns:
         dict with keys: ok, tool, command, output_dir, error, job_id, state
@@ -1419,6 +1432,7 @@ def download_from_ui(url: str, cfg: dict, tool_override: str = "", on_line=None,
         limit = cfg.get("limit", 0) or 0
         last_line = ""       # last non-empty output line, any kind
         last_error_line = "" # last line that looks like an actual error message
+        has_unsupported_url_error = False
 
         for line in process.stdout:
             line = line.rstrip("\n")
@@ -1430,10 +1444,13 @@ def download_from_ui(url: str, cfg: dict, tool_override: str = "", on_line=None,
             stripped = line.strip()
             if stripped:
                 last_line = stripped
+                lowered_line = stripped.lower()
+                if any(phrase in lowered_line for phrase in ("unsupported url", "no suitable extractor", "no extractor found")):
+                    has_unsupported_url_error = True
                 # yt-dlp/gallery-dl both prefix real failures with "ERROR:";
                 # keep the most recent one specifically, since a run can log
                 # many harmless warnings/info lines after the actual failure.
-                if "error" in stripped.lower():
+                if "error" in lowered_line:
                     last_error_line = stripped
             with job.lock:
                 _parse_progress_line(job, line, limit)
@@ -1489,10 +1506,57 @@ def download_from_ui(url: str, cfg: dict, tool_override: str = "", on_line=None,
                 else:
                     detail = f"Download stopped or interrupted (exit code {process.returncode})"
 
-            job.error = f"{detail} (exit code {process.returncode})" if detail and "exit code" not in detail else (detail or f"Exited with code {process.returncode}")
+            original_error = f"{detail} (exit code {process.returncode})" if detail and "exit code" not in detail else (detail or f"Exited with code {process.returncode}")
+            job.error = original_error
             logger.error(f"Download job {job_id} failed: {job.error}")
             _scan_output_dir_for_files(job, output_dir)
             job.finished_at = time.time()
+
+            # Engine fallback: if unsupported URL, retry once with the other engine
+            is_unsupported = has_unsupported_url_error or _is_unsupported_url_error(job.error)
+            if allow_fallback and is_unsupported:
+                fallback_tool = "yt-dlp" if tool == "gallery-dl" else "gallery-dl"
+                if check_installed(fallback_tool):
+                    logger.info(
+                        f"Download job {job_id}: {tool} reported unsupported URL. "
+                        f"Attempting fallback retry with {fallback_tool}..."
+                    )
+                    if on_line:
+                        try:
+                            on_line(f"[{tool}] Unsupported URL. Retrying with {fallback_tool}...")
+                        except Exception:
+                            pass
+                    if netrc_info:
+                        _restore_netrc(netrc_info)
+                        netrc_info = None
+
+                    fallback_result = download_from_ui(
+                        url,
+                        cfg,
+                        tool_override=fallback_tool,
+                        on_line=on_line,
+                        on_progress=on_progress,
+                        job_id=job_id,
+                        allow_fallback=False,
+                    )
+                    if fallback_result.get("ok"):
+                        return fallback_result
+
+                    # Fallback also failed: make sure original error is reported clearly
+                    fallback_err = fallback_result.get("error", "Unknown error")
+                    combined_error = f"{original_error} (Fallback {fallback_tool} failed: {fallback_err})"
+                    job.error = combined_error
+                    logger.error(f"Download job {job_id} failed after fallback: {combined_error}")
+                    return {
+                        "ok": False,
+                        "tool": tool,
+                        "command": cmd_str,
+                        "output_dir": output_dir,
+                        "error": combined_error,
+                        "job_id": job_id,
+                        "state": "error",
+                        "files": job.files,
+                    }
 
             # Detect rate limits (e.g. exit code 4, Tumblr/Twitter reset times, 429)
             rate_limit_info = None
