@@ -379,6 +379,22 @@ export const api = {
     return v['app'];
   },
 
+  async getAppInfo() {
+    if (!isDesktopApp()) {
+      return { name: 'NovaDrop', version: '0.5.2' };
+    }
+    try {
+      if (window.pywebview?.api?.get_app_info) {
+        return await window.pywebview.api.get_app_info();
+      }
+      const v = await this.getInstalledVersions();
+      if (v?.app) return { name: 'NovaDrop', version: v.app };
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
   async checkUpdates() {
     if (!isDesktopApp()) return { ok: true, checking: true, mock: true };
     return window.pywebview.api.check_updates_async();

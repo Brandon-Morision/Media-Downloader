@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Download, Library, Compass, Settings, Moon, Menu } from 'lucide-react';
 import novadropIcon from '../assets/novadrop-icon.png';
+import { api } from '../lib/api';
 
 export default function NavigationRail({ currentView, setView, activeCount, libraryCount, nightOwlEnabled, hasUpdate }) {
   const [clickCount, setClickCount] = useState({});
@@ -8,6 +9,21 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
     typeof window !== 'undefined' ? window.innerWidth : 1200
   );
   const [manualCollapsed, setManualCollapsed] = useState(null); // null = follow auto, boolean = user override
+  const [appVersion, setAppVersion] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    api.getAppInfo().then((info) => {
+      if (mounted && info?.version) {
+        setAppVersion(info.version);
+      }
+    }).catch(() => {
+      if (mounted) setAppVersion(null);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -244,7 +260,9 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
                   <Moon className="w-3.5 h-3.5 animate-pulse" />
                 </div>
               )}
-              <span className="text-[10px] font-mono text-slate-500 tracking-wider">v0.5.0</span>
+              {appVersion && (
+                <span className="text-[10px] font-mono text-slate-400 tracking-wider">v{appVersion}</span>
+              )}
             </div>
           </div>
         ) : (
