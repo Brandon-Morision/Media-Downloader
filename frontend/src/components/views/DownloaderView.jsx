@@ -3,7 +3,7 @@ import {
   Download, Play, Pause, X, RotateCcw, Folder, Image,
   ChevronDown, ChevronUp, Trash2, Search, CheckCircle2,
   AlertCircle, AlertTriangle, XCircle, Clock, Sparkles, ListMusic,
-  Film, Music, ExternalLink, Layers, ListVideo, Bell
+  Film, Music, ExternalLink, Layers, ListVideo, Bell, Moon
 } from 'lucide-react';
 import {
   fmtBytes, fmtDate, toolLabel,
@@ -330,6 +330,24 @@ export default function DownloaderView({
               >
                 {isQueuePaused ? <Play className="w-3.5 h-3.5 fill-current text-amber-400" /> : <Pause className="w-3.5 h-3.5" />}
                 <span>{isQueuePaused ? 'Resume Queue' : 'Pause Queue'}</span>
+              </button>
+            )}
+
+            {onOpenNightOwlModal && (
+              <button
+                type="button"
+                onClick={onOpenNightOwlModal}
+                className={`text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                  nightOwlEnabled ? 'text-indigo-400 hover:text-indigo-300' : 'text-slate-400 hover:text-indigo-400'
+                }`}
+                title="Configure Night-Owl download scheduler"
+                aria-label="Configure Night-Owl download scheduler"
+              >
+                <Moon className="w-3.5 h-3.5" />
+                <span>Night-Owl</span>
+                {nightOwlEnabled && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                )}
               </button>
             )}
 
