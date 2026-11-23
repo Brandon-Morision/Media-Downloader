@@ -11,6 +11,7 @@ import VideoDownloadModal from './components/modals/VideoDownloadModal';
 import GalleryModal from './components/modals/GalleryModal';
 import PlaylistInspectorModal from './components/modals/PlaylistInspectorModal';
 import NightOwlModal from './components/modals/NightOwlModal';
+import BatchPasteModal from './components/modals/BatchPasteModal';
 import ShutdownWarningModal from './components/modals/ShutdownWarningModal';
 import { Toast, ClipboardToast } from './components/toasts/Toast';
 import { api, waitForApi } from './lib/api';
@@ -37,6 +38,7 @@ export default function App() {
   const [playlistModal, setPlaylistModal] = useState({ isOpen: false, data: null, isLoading: false, error: '' });
   const [isQueuePaused, setIsQueuePaused] = useState(false);
   const [nightOwlModalOpen, setNightOwlModalOpen] = useState(false);
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [nightOwlSettings, setNightOwlSettings] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('md_night_owl') || '{}');
@@ -514,6 +516,15 @@ export default function App() {
     }
   };
 
+  const handleBatchSubmit = ({ urls, config }) => {
+    if (!urls || urls.length === 0) return;
+    for (const u of urls) {
+      handleAddDownload(u, { ...config });
+    }
+    setCurrentView('downloader');
+    showToast(`Added ${urls.length} download${urls.length === 1 ? '' : 's'} to queue`);
+  };
+
   const handleCancelDownload = async (id) => {
     const item = downloads.find((i) => i.id === id);
     if (!item) return;
@@ -779,6 +790,7 @@ export default function App() {
               defaultFormat={defaultFormat}
               onShowToast={showToast}
               onRefreshHistory={loadHistory}
+              onOpenBatchModal={() => setBatchModalOpen(true)}
             />
           )}
 
@@ -868,6 +880,15 @@ export default function App() {
           onClose={() => setNightOwlModalOpen(false)}
           nightOwlSettings={nightOwlSettings}
           onSaveSettings={handleSaveNightOwlSettings}
+        />
+      )}
+
+      {batchModalOpen && (
+        <BatchPasteModal
+          isOpen={batchModalOpen}
+          onClose={() => setBatchModalOpen(false)}
+          outputDir={outputDir}
+          onBatchSubmit={handleBatchSubmit}
         />
       )}
 

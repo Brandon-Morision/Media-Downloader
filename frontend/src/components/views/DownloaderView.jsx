@@ -69,6 +69,7 @@ export default function DownloaderView({
   defaultFormat,
   onShowToast,
   onRefreshHistory,
+  onOpenBatchModal,
 }) {
   // Queue state
   const [queueTab, setQueueTab] = useState('all'); // all | active | completed | failed | cancelled | scheduled
@@ -296,6 +297,18 @@ export default function DownloaderView({
 
           {/* Right Action: Sync History & Clear Current Tab */}
           <div className="flex items-center gap-2">
+            {onOpenBatchModal && (
+              <button
+                type="button"
+                onClick={onOpenBatchModal}
+                className="px-2.5 py-1 rounded-lg bg-surface-2 hover:bg-surface-3 text-slate-300 hover:text-white border border-border-subtle transition-all active:scale-[0.98] motion-reduce:active:scale-100 flex items-center gap-1.5 text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-acc/60"
+                title="Batch download multiple URLs"
+                aria-label="Open batch download modal"
+              >
+                <Layers className="w-3.5 h-3.5 text-brand-acc" />
+                <span>Batch</span>
+              </button>
+            )}
             {onRefreshHistory && (
               <button
                 type="button"
