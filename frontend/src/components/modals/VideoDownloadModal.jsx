@@ -40,14 +40,17 @@ export default function VideoDownloadModal({
         <div className="flex items-center justify-between pb-2 border-b border-border-subtle">
           <div className="flex items-center gap-2">
             <div className="w-5 h-5 rounded-md bg-brand-acc flex items-center justify-center text-slate-950 font-black text-xs">
-              V
+              {selectedFormat === 'audio' ? 'A' : 'V'}
             </div>
-            <span className="font-bold text-sm text-slate-100">Video Download</span>
+            <span className="font-bold text-sm text-slate-100">
+              {selectedFormat === 'audio' ? 'Audio Download' : 'Video Download'}
+            </span>
           </div>
 
           <button
             onClick={onClose}
             className="p-1 rounded-lg text-slate-400 hover:text-white transition-colors"
+            aria-label="Close modal"
           >
             <X className="w-4 h-4" />
           </button>

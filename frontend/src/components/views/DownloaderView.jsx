@@ -155,10 +155,11 @@ export default function DownloaderView({
             <h2 className="text-xl font-extrabold text-slate-100 tracking-tight">Downloads</h2>
 
             {/* Filter Pills */}
-            <div className="flex items-center gap-1 bg-surface-2 border border-border-subtle p-1 rounded-xl overflow-x-auto">
+            <div role="group" aria-label="Filter downloads by status" className="flex items-center gap-1 bg-surface-2 border border-border-subtle p-1 rounded-xl overflow-x-auto">
               <button
                 type="button"
                 onClick={() => setQueueTab('all')}
+                aria-pressed={queueTab === 'all'}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                   queueTab === 'all'
                     ? 'bg-brand-acc text-slate-950 shadow-sm'
@@ -178,6 +179,7 @@ export default function DownloaderView({
               <button
                 type="button"
                 onClick={() => setQueueTab('active')}
+                aria-pressed={queueTab === 'active'}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                   queueTab === 'active'
                     ? 'bg-brand-acc text-slate-950 shadow-sm'
@@ -197,6 +199,7 @@ export default function DownloaderView({
               <button
                 type="button"
                 onClick={() => setQueueTab('completed')}
+                aria-pressed={queueTab === 'completed'}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                   queueTab === 'completed'
                     ? 'bg-brand-acc text-slate-950 shadow-sm'
@@ -216,6 +219,7 @@ export default function DownloaderView({
               <button
                 type="button"
                 onClick={() => setQueueTab('failed')}
+                aria-pressed={queueTab === 'failed'}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                   queueTab === 'failed'
                     ? 'bg-rose-500 text-white shadow-sm font-bold'
@@ -235,6 +239,7 @@ export default function DownloaderView({
               <button
                 type="button"
                 onClick={() => setQueueTab('cancelled')}
+                aria-pressed={queueTab === 'cancelled'}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                   queueTab === 'cancelled'
                     ? 'bg-amber-500 text-slate-950 shadow-sm font-bold'
@@ -255,6 +260,7 @@ export default function DownloaderView({
                 <button
                   type="button"
                   onClick={() => setQueueTab('scheduled')}
+                  aria-pressed={queueTab === 'scheduled'}
                   className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                     queueTab === 'scheduled'
                       ? 'bg-amber-500 text-slate-950 shadow-sm font-bold'
@@ -280,6 +286,7 @@ export default function DownloaderView({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search downloads…"
+                aria-label="Filter downloads"
                 className="w-full h-8 pl-8 pr-7 rounded-lg bg-surface-2 border border-border-subtle text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-acc focus:ring-1 focus:ring-brand-acc transition-all"
               />
               {searchQuery && (
@@ -288,6 +295,7 @@ export default function DownloaderView({
                   onClick={() => setSearchQuery('')}
                   className="absolute right-2 text-slate-400 hover:text-white transition-colors"
                   title="Clear filter"
+                  aria-label="Clear filter"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -440,6 +448,7 @@ export default function DownloaderView({
                               onClick={() => api.openUrlExternal(item.url)}
                               className="text-slate-500 hover:text-brand-acc transition-colors p-0.5 shrink-0"
                               title="Open source link in browser"
+                              aria-label="Open source link in browser"
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
                             </button>
@@ -489,6 +498,7 @@ export default function DownloaderView({
                               onClick={() => handleCancelScheduled(item.jobId || item.id, item.id)}
                               className="p-2 rounded-xl bg-surface-2 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
                               title="Cancel scheduled download"
+                              aria-label="Cancel scheduled download"
                             >
                               <X className="w-4 h-4" />
                             </button>
@@ -502,6 +512,7 @@ export default function DownloaderView({
                                     onClick={() => onMoveItemUp(item.id)}
                                     className="p-1.5 rounded-lg bg-surface-2 hover:bg-surface-3 text-slate-400 hover:text-slate-200 transition-colors"
                                     title="Move up in queue"
+                                    aria-label="Move up in queue"
                                   >
                                     <ChevronUp className="w-3.5 h-3.5" />
                                   </button>
@@ -511,6 +522,7 @@ export default function DownloaderView({
                                     onClick={() => onMoveItemDown(item.id)}
                                     className="p-1.5 rounded-lg bg-surface-2 hover:bg-surface-3 text-slate-400 hover:text-slate-200 transition-colors"
                                     title="Move down in queue"
+                                    aria-label="Move down in queue"
                                   >
                                     <ChevronDown className="w-3.5 h-3.5" />
                                   </button>
@@ -523,6 +535,7 @@ export default function DownloaderView({
                                 onClick={() => onResumeDownload(item.jobId)}
                                 className="p-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 hover:text-amber-300 transition-colors"
                                 title="Resume download"
+                                aria-label="Resume download"
                               >
                                 <Play className="w-4 h-4 fill-current" />
                               </button>
@@ -532,6 +545,7 @@ export default function DownloaderView({
                                 disabled={!item.jobId || item.state === 'pending'}
                                 className="p-2 rounded-xl bg-surface-2 hover:bg-surface-3 text-slate-300 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                                 title={item.jobId ? 'Pause download' : 'Waiting to start…'}
+                                aria-label={item.jobId ? 'Pause download' : 'Waiting to start'}
                               >
                                 <Pause className="w-4 h-4" />
                               </button>
@@ -541,6 +555,7 @@ export default function DownloaderView({
                               onClick={() => onCancelDownload(item.id)}
                               className="p-2 rounded-xl bg-surface-2 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
                               title="Cancel"
+                              aria-label="Cancel download"
                             >
                               <X className="w-4 h-4" />
                             </button>
@@ -806,6 +821,7 @@ export default function DownloaderView({
                             onClick={() => onOpenPlayer(playable, item.filename)}
                             className="p-2 rounded-xl bg-surface-2 hover:bg-brand-dim text-brand-acc transition-colors"
                             title="Play downloaded media"
+                            aria-label="Play downloaded media"
                           >
                             <Play className="w-4 h-4 fill-current" />
                           </button>
@@ -814,6 +830,7 @@ export default function DownloaderView({
                             onClick={() => onOpenGallery(item)}
                             className="p-2 rounded-xl bg-surface-2 hover:bg-brand-dim text-brand-acc transition-colors"
                             title="View gallery images"
+                            aria-label="View gallery images"
                           >
                             <Image className="w-4 h-4" />
                           </button>
@@ -822,6 +839,7 @@ export default function DownloaderView({
                             onClick={() => api.openFile(filePath)}
                             className="p-2 rounded-xl bg-surface-2 hover:bg-brand-dim text-slate-300 hover:text-brand-acc transition-colors"
                             title="Open file"
+                            aria-label="Open file"
                           >
                             <Play className="w-4 h-4 fill-current" />
                           </button>
@@ -837,6 +855,7 @@ export default function DownloaderView({
                           }}
                           className="p-2 rounded-xl bg-surface-2 hover:bg-surface-3 text-slate-400 hover:text-white transition-colors"
                           title="Open containing folder"
+                          aria-label="Open containing folder"
                         >
                           <Folder className="w-4 h-4" />
                         </button>
@@ -848,6 +867,7 @@ export default function DownloaderView({
                             onClick={() => api.openUrlExternal(item.url)}
                             className="p-2 rounded-xl bg-surface-2 hover:bg-surface-3 text-slate-400 hover:text-white transition-colors"
                             title="Open download link in browser"
+                            aria-label="Open download link in browser"
                           >
                             <ExternalLink className="w-4 h-4" />
                           </button>
@@ -858,6 +878,7 @@ export default function DownloaderView({
                           onClick={() => onDeleteDownload(item.id)}
                           className="p-2 rounded-xl bg-surface-2 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
                           title="Remove from history"
+                          aria-label="Remove from history"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
