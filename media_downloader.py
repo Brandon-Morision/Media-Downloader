@@ -476,8 +476,9 @@ def _missing_tool_advice(tool: str) -> str:
 
 def check_installed(tool: str) -> bool:
     try:
+        version_flag = "-version" if tool in ("ffmpeg", "ffprobe") else "--version"
         subprocess.run(
-            [resolve_tool_path(tool), "--version"],
+            [resolve_tool_path(tool), version_flag],
             capture_output=True,
             check=True,
             creationflags=CREATE_NO_WINDOW,
