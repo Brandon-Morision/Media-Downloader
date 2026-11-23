@@ -41,7 +41,7 @@ SolidCompression                  = yes
 ; Force a real UAC elevation prompt — without this, code 5 / access
 ; denied can occur when writing to HKLM even with admin specified.
 PrivilegesRequired                = admin
-PrivilegesRequiredOverridesAllowed = commandline
+PrivilegesRequiredOverridesAllowed = dialog
 MinVersion                        = 10.0.17134
 WizardStyle                       = modern
 WizardImageFile                   = build_assets\wizard.bmp,build_assets\wizard-2x.bmp
@@ -93,11 +93,10 @@ Type: filesandordirs; Name: "{app}"
 ; the extension. No developer mode, no user prompt needed.
 ; ─────────────────────────────────────────────────────────────────
 [Registry]
-; App Paths — written to HKCU so it never needs admin rights.
-; This lets Windows find MediaDownloader.exe by name without
-; requiring elevation for this specific key.
-Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{#AppExeName}"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExeName}"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{#AppExeName}"; ValueType: string; ValueName: "Path"; ValueData: "{app}"; Flags: uninsdeletekey
+; App Paths — written to HKA so it maps to HKLM in all-users / admin mode
+; and HKCU in current-user mode, matching the selected install scope.
+Root: HKA; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{#AppExeName}"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExeName}"; Flags: uninsdeletekey
+Root: HKA; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{#AppExeName}"; ValueType: string; ValueName: "Path"; ValueData: "{app}"; Flags: uninsdeletekey
 
 ; Chrome extension force-install — written to HKLM\Policies.
 ; Requires the admin elevation we already requested above.
@@ -135,7 +134,7 @@ begin
   if CurStep = ssDone then
   begin
     Msg := 'The browser extension has been registered.' + #13#10 + #13#10 + 'Restart Chrome or Edge and it will appear in your toolbar automatically.' + #13#10 + #13#10 + 'No developer mode or manual installation needed.';
-    if IsTaskSelected('chromeext') or IsTaskSelected('edgeext') then
+    if WizardIsTaskSelected('chromeext') or WizardIsTaskSelected('edgeext') then
       MsgBox(Msg, mbInformation, MB_OK);
   end;
 end;
