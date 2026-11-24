@@ -200,7 +200,7 @@ export default function SettingsView({
         if (res.any_update) {
           onShowToast('New updates found!');
         } else {
-          onShowToast('All engines and app are up to date');
+          onShowToast('All download components and app are up to date');
         }
       } else {
         setEngineStates((prev) => ({
@@ -454,7 +454,7 @@ export default function SettingsView({
         ffmpeg: { ...prev.ffmpeg, checking: true, error: null },
       }));
       setAppState((prev) => ({ ...prev, checking: true, error: null }));
-      onShowToast('Checking all extractor engines and application updates…');
+      onShowToast('Checking all download components and application updates…');
       await api.checkForUpdates();
     } catch (e) {
       setIsCheckingAll(false);
@@ -559,7 +559,7 @@ export default function SettingsView({
     try {
       await waitForApi();
       setIsAutoUpdatingAll(true);
-      setAutoUpdateStatusMsg('Scanning for engine updates…');
+      setAutoUpdateStatusMsg('Scanning for component updates…');
       onShowToast('Updating download components…');
       await api.autoUpdateAllEngines();
     } catch (_e) {
@@ -1982,7 +1982,7 @@ export default function SettingsView({
                   <span className="text-brand-acc">4.</span> Third-Party Open Source Engines
                 </h3>
                 <p className="text-slate-400">
-                  NovaDrop interacts with independent open-source projects including <strong className="text-slate-200">yt-dlp</strong> (The Unlicense), <strong className="text-slate-200">gallery-dl</strong> (GPL-2.0), and <strong className="text-slate-200">FFmpeg</strong> (LGPL-2.1+/GPL). These components remain subject to their respective upstream licenses.
+                  NovaDrop interacts with independent open-source projects including <strong className="text-slate-200">yt-dlp</strong> (The Unlicense), <strong className="text-slate-200">gallery-dl</strong> (GPL-2.0), and <strong className="text-slate-200">FFmpeg</strong> (GPL-3.0, built with --enable-gpl --enable-version3). These components remain subject to their respective upstream licenses.
                 </p>
               </div>
 

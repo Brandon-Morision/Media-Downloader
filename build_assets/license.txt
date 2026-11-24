@@ -70,7 +70,7 @@ You expressly agree NOT to use the Software to:
 NovaDrop utilizes and interacts with independent open-source tools:
 - yt-dlp:       Dedicated to the Public Domain under The Unlicense
 - gallery-dl:   Licensed under GNU General Public License v2 (GPL-2.0)
-- FFmpeg:       Licensed under GNU LGPL v2.1+ / GPL
+- FFmpeg:       Licensed under GNU General Public License v3 (GPL-3.0 for included binary build)
 These engines remain independent works subject to their respective open-source
 licenses. Source code and license texts for these tools are available from their
 respective official repositories.

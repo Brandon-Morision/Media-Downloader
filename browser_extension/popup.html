@@ -314,7 +314,8 @@ async function init() {
       toolDetected = detectTool(currentUrl);
 
       if (toolDetected) {
-        badgeWrap.innerHTML = `<span class="badge supported">✓ Supported · ${toolDetected}</span>`;
+        const typeLabel = toolDetected === "gallery-dl" ? "Collection" : "Video";
+        badgeWrap.innerHTML = `<span class="badge supported">✓ Supported · ${typeLabel}</span>`;
       } else if (currentUrl.startsWith("http")) {
         badgeWrap.innerHTML = `<span class="badge generic">Media Page · Auto-detect</span>`;
       }

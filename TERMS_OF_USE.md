@@ -49,7 +49,7 @@ You agree that you will **NOT** use the Software to:
 NovaDrop interfaces with and leverages independent open-source media engines:
 - **yt-dlp:** Distributed under The Unlicense (Public Domain dedication).
 - **gallery-dl:** Distributed under the GNU General Public License v2 (GPL-2.0).
-- **FFmpeg:** Distributed under the GNU Lesser General Public License v2.1+ (LGPL-2.1+) and GPL.
+- **FFmpeg:** Distributed under the GNU Lesser General Public License v2.1+ (LGPL-2.1+) / GNU General Public License v3 (GPL-3.0 for included binary build).
 
 Each engine is an independent software project subject to its own respective license agreement. NovaDrop's inclusion of or interaction with these engines does not alter their licensing terms. Upstream engine source code and repositories are accessible directly from their respective project maintainers.
 
