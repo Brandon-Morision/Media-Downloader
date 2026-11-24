@@ -46,7 +46,7 @@ export default function HeaderBar({ currentView, themeAccent, setThemeAccent, ou
         {/* Open Output Folder */}
         <button
           onClick={handleOpenFolder}
-          className="h-7 px-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-slate-300 hover:text-white border border-border-subtle text-xs flex items-center gap-1.5 transition-colors"
+          className="h-7 px-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-slate-300 hover:text-white border border-border-subtle text-xs flex items-center gap-1.5 transition-colors active:scale-[0.97] duration-150"
           title={`Open output directory: ${outputDir || 'Downloads'}`}
         >
           <Folder className="w-3.5 h-3.5 text-slate-400" />
@@ -59,7 +59,7 @@ export default function HeaderBar({ currentView, themeAccent, setThemeAccent, ou
             <button
               key={theme.id}
               onClick={() => setThemeAccent(theme.id)}
-              className="w-6 h-6 min-w-[24px] min-h-[24px] flex items-center justify-center rounded-full transition-transform group"
+              className="w-6 h-6 min-w-[24px] min-h-[24px] flex items-center justify-center rounded-full transition-transform active:scale-[0.97] duration-150 group"
               title={`Switch to ${theme.label} theme`}
               aria-label={`Switch to ${theme.label} theme`}
             >

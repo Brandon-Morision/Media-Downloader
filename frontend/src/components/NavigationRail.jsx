@@ -104,7 +104,7 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
           key={item.id}
           onClick={() => handleNavClick(item.id)}
           title={item.label}
-          className={`relative w-9 h-9 mx-auto rounded-lg flex items-center justify-center transition-all duration-200 group text-sm font-medium ${
+          className={`relative w-9 h-9 mx-auto rounded-lg flex items-center justify-center transition-colors active:scale-[0.97] duration-150 group text-sm font-medium ${
             isActive
               ? 'bg-brand-dim text-brand-acc font-semibold border border-brand-border/70 shadow-sm'
               : 'text-slate-400 hover:text-slate-200 hover:bg-surface-2 border border-transparent'
@@ -148,7 +148,7 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
         key={item.id}
         onClick={() => handleNavClick(item.id)}
         title={item.label}
-        className={`relative w-full h-10 pl-3.5 pr-3 rounded-xl flex items-center justify-between transition-all duration-200 group text-sm font-medium ${
+        className={`relative w-full h-10 pl-3.5 pr-3 rounded-xl flex items-center justify-between transition-colors active:scale-[0.97] duration-150 group text-sm font-medium ${
           isActive
             ? 'bg-brand-dim text-brand-acc font-semibold border border-brand-border/70 shadow-sm'
             : 'text-slate-400 hover:text-slate-200 hover:bg-surface-2 border border-transparent'
@@ -200,7 +200,7 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
         <div className="flex flex-col items-center gap-2 mb-3">
           <button
             onClick={toggleCollapsed}
-            className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-surface-2 transition-colors cursor-pointer"
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-surface-2 transition-colors active:scale-[0.97] duration-150 cursor-pointer"
             title="Expand Navigation Pane"
           >
             <Menu className="w-4 h-4" strokeWidth={1.85} />
@@ -232,7 +232,7 @@ export default function NavigationRail({ currentView, setView, activeCount, libr
 
           <button
             onClick={toggleCollapsed}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-surface-2 transition-colors shrink-0 cursor-pointer"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-surface-2 transition-colors active:scale-[0.97] duration-150 shrink-0 cursor-pointer"
             title="Collapse Navigation Pane"
           >
             <Menu className="w-4 h-4" />

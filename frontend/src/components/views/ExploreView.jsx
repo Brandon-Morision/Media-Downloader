@@ -498,7 +498,7 @@ export default function ExploreView({
                 <button
                   type="button"
                   onClick={handleStartDownloadFromAnalysis}
-                  className="w-full h-12 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-glow transition-transform active:scale-[0.99] mt-2"
+                  className="w-full h-12 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-glow transition-transform active:scale-[0.97] mt-2"
                 >
                   <Download className="w-4 h-4" />
                   <span>Download Gallery with gallery-dl</span>
@@ -654,7 +654,7 @@ export default function ExploreView({
                 <button
                   type="button"
                   onClick={handleStartDownloadFromAnalysis}
-                  className="w-full h-12 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-glow transition-transform active:scale-[0.99] mt-2"
+                  className="w-full h-12 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-glow transition-transform active:scale-[0.97] mt-2"
                 >
                   <Download className="w-4 h-4" />
                   <span>
