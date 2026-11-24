@@ -379,18 +379,38 @@ export default function LibraryView({
       <div key={filter + String(search)} className="flex flex-col gap-6 animate-tab-enter">
 
 
+      {/* ── LOADING SKELETON GRID ── */}
+      {isLoading && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {[...Array(12)].map((_, i) => (
+            <div
+              key={i}
+              className="bg-surface-1 border border-border-subtle rounded-2xl overflow-hidden flex flex-col animate-pulse shadow-sm"
+            >
+              <div className="aspect-[16/11] sm:aspect-[4/3] w-full bg-surface-3" />
+              <div className="p-3 flex flex-col gap-2">
+                <div className="h-3.5 bg-surface-3 rounded w-3/4" />
+                <div className="h-2.5 bg-surface-3 rounded w-1/2" />
+                <div className="flex items-center gap-1.5 pt-1">
+                  <div className="h-4 bg-surface-3 rounded w-10" />
+                  <div className="h-4 bg-surface-3 rounded w-8" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── EMPTY STATE ── */}
-      {filteredItems.length === 0 && (
+      {!isLoading && filteredItems.length === 0 && (
         <div className="py-20 border border-dashed border-border-subtle rounded-2xl flex flex-col items-center justify-center text-slate-500 gap-3">
           <Folder className="w-10 h-10 opacity-30 text-brand-acc" />
           <div className="flex flex-col items-center gap-1">
             <p className="text-sm font-semibold text-slate-300">
-              {isLoading ? 'Scanning media folder...' : 'No media found in Library'}
+              No media found in Library
             </p>
             <p className="text-xs text-slate-400">
-              {isLoading
-                ? 'Discovering videos, music, and images...'
-                : search
+              {search
                 ? `No items matched "${search}"`
                 : 'Videos, music, and images in your media folder will appear here.'}
             </p>
@@ -407,7 +427,7 @@ export default function LibraryView({
       )}
 
       {/* ── MEDIA CARDS VIEW ── */}
-      {filteredItems.length > 0 && viewMode === 'grid' && (
+      {!isLoading && filteredItems.length > 0 && viewMode === 'grid' && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {filteredItems.map((item) => {
             const info = getBundleInfo(item);
@@ -592,7 +612,7 @@ export default function LibraryView({
       )}
 
       {/* ── LIST VIEW ── */}
-      {filteredItems.length > 0 && viewMode === 'list' && (
+      {!isLoading && filteredItems.length > 0 && viewMode === 'list' && (
         <div className="flex flex-col gap-2">
           {filteredItems.map((item) => {
             const info = getBundleInfo(item);
