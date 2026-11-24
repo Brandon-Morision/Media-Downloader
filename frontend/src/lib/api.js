@@ -181,6 +181,23 @@ export const api = {
     return window.pywebview.api.clear_history();
   },
 
+  async getRecentClearedAt() {
+    await waitForApi(6000);
+    if (!isDesktopApp()) {
+      const val = localStorage.getItem('md_recent_cleared_at');
+      return { ok: true, recent_cleared_at: val ? Number(val) : 0 };
+    }
+    return window.pywebview.api.get_recent_cleared_at?.() || { ok: true, recent_cleared_at: 0 };
+  },
+
+  async setRecentClearedAt(timestamp) {
+    if (!isDesktopApp()) {
+      localStorage.setItem('md_recent_cleared_at', String(timestamp));
+      return { ok: true, recent_cleared_at: timestamp };
+    }
+    return window.pywebview.api.set_recent_cleared_at?.(timestamp) || { ok: true, recent_cleared_at: timestamp };
+  },
+
   async scanMediaLibrary(rootDir = "") {
     await waitForApi(6000);
     if (!isDesktopApp()) {

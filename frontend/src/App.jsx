@@ -29,6 +29,7 @@ export default function App() {
   const [downloads, setDownloads] = useState([]);
   const [libraryItems, setLibraryItems] = useState([]);
   const [isLibraryLoading, setIsLibraryLoading] = useState(false);
+  const [recentClearedAt, setRecentClearedAt] = useState(0);
 
   // Modals state
   const [playerModal, setPlayerModal] = useState({ isOpen: false, files: [], title: '' });
@@ -234,9 +235,20 @@ export default function App() {
     loadHistory();
     loadLibrary();
 
+    const loadRecentClearedAt = async () => {
+      try {
+        const res = await api.getRecentClearedAt();
+        if (res?.ok && typeof res.recent_cleared_at === 'number') {
+          setRecentClearedAt(res.recent_cleared_at);
+        }
+      } catch {}
+    };
+    loadRecentClearedAt();
+
     const onReady = () => {
       loadHistory();
       loadLibrary();
+      loadRecentClearedAt();
     };
     window.addEventListener('pywebviewready', onReady);
 
@@ -250,7 +262,7 @@ export default function App() {
             setOutputDir(defaultOut);
             localStorage.setItem('md_output_folder', defaultOut);
           }
-        } catch (e) {}
+        } catch {}
       }
     }
     initOutputDir();
@@ -323,30 +335,51 @@ export default function App() {
     };
 
     window.onDownloadDone = (jobId, ok, error, outputDir, files, historyId, thumbUrl) => {
-      setDownloads((prev) =>
-        prev.map((item) => {
-          if (item.jobId === jobId) {
-            const hasFiles = files && files.length > 0;
-            return {
-              ...item,
-              state: ok ? 'done' : (error === 'Cancelled by user.' || item.state === 'cancelled') ? 'cancelled' : 'error',
-              error: ok ? '' : error,
-              progressPercent: ok ? 100 : item.progressPercent,
-              outputDir: outputDir || item.outputDir,
-              files: hasFiles ? files : item.files,
-              filename: (hasFiles && files.length === 1 && files[0]?.name)
-                ? files[0].name
-                : (hasFiles && files.length > 1 && (!item.filename || item.filename === item.url))
-                  ? `${files.length} files`
-                  : item.filename,
-              historyId: historyId || item.historyId,
-              thumbnail: thumbUrl || item.thumbnail || '',
-              finishedAt: Date.now(),
-            };
-          }
-          return item;
-        })
-      );
+      setDownloads((prev) => {
+        const found = prev.some((item) => item.jobId === jobId);
+        if (found) {
+          return prev.map((item) => {
+            if (item.jobId === jobId) {
+              const hasFiles = files && files.length > 0;
+              return {
+                ...item,
+                state: ok ? 'done' : (error === 'Cancelled by user.' || item.state === 'cancelled') ? 'cancelled' : 'error',
+                error: ok ? '' : error,
+                progressPercent: ok ? 100 : item.progressPercent,
+                outputDir: outputDir || item.outputDir,
+                files: hasFiles ? files : item.files,
+                filename: (hasFiles && files.length === 1 && files[0]?.name)
+                  ? files[0].name
+                  : (hasFiles && files.length > 1 && (!item.filename || item.filename === item.url))
+                    ? `${files.length} files`
+                    : item.filename,
+                historyId: historyId || item.historyId,
+                thumbnail: thumbUrl || item.thumbnail || '',
+                finishedAt: Date.now(),
+              };
+            }
+            return item;
+          });
+        }
+
+        const hasFiles = files && files.length > 0;
+        const fname = (hasFiles && files[0]?.name) || 'Freshly Completed Video.mp4';
+        const newItem = {
+          id: historyId || jobId || `done-${Date.now()}`,
+          historyId: historyId || jobId,
+          jobId,
+          url: '',
+          filename: fname,
+          state: ok ? 'done' : 'error',
+          error: ok ? '' : error,
+          progressPercent: ok ? 100 : 0,
+          outputDir: outputDir || '',
+          files: hasFiles ? files : [],
+          thumbnail: thumbUrl || '',
+          finishedAt: Date.now(),
+        };
+        return [newItem, ...prev];
+      });
 
       // Refresh media library when download completes successfully
       if (ok) {
@@ -366,7 +399,7 @@ export default function App() {
       }, 500);
     };
 
-    window.onClipboardUrlDetected = (url, title) => {
+    window.onClipboardUrlDetected = (url, _title) => {
       if (clipAutostart) {
         handleAddDownload(url, { format: defaultFormat });
         showToast('Auto-download started from clipboard');
@@ -400,7 +433,7 @@ export default function App() {
       showToast(`Link received from browser: ${title || url}`);
     };
 
-    window.onDownloadScheduled = (jobId, targetTimestamp, resetTimeStr, title) => {
+    window.onDownloadScheduled = (jobId, targetTimestamp, resetTimeStr, _title) => {
       setDownloads((prev) =>
         prev.map((item) => {
           if (item.jobId === jobId) {
@@ -577,7 +610,7 @@ export default function App() {
         );
         showToast(res?.error || 'Could not pause download', false);
       }
-    } catch (e) {
+    } catch {
       // Rollback on error
       setDownloads((prev) =>
         prev.map((i) => (i.jobId === jobId ? { ...i, state: 'running' } : i))
@@ -601,7 +634,7 @@ export default function App() {
         );
         showToast(res?.error || 'Could not resume download', false);
       }
-    } catch (e) {
+    } catch {
       // Rollback on error
       setDownloads((prev) =>
         prev.map((i) => (i.jobId === jobId ? { ...i, state: 'paused' } : i))
@@ -645,6 +678,30 @@ export default function App() {
     setDownloads((prev) => prev.filter((i) => i.state !== 'pending'));
     showToast('Cleared waiting queue');
   };
+
+  const handleClearRecent = useCallback(async () => {
+    const now = Date.now();
+    setRecentClearedAt(now);
+    try {
+      await api.setRecentClearedAt(now);
+    } catch (err) {
+      console.error('Failed to persist recentClearedAt:', err);
+    }
+    showToast('Recent downloads cleared from home', true, {
+      action: {
+        label: 'Undo',
+        onClick: async () => {
+          setRecentClearedAt(0);
+          try {
+            await api.setRecentClearedAt(0);
+          } catch (err) {
+            console.error('Failed to reset recentClearedAt:', err);
+          }
+        },
+      },
+      duration: 5000,
+    });
+  }, [showToast]);
 
   const handleInspectPlaylist = async (url) => {
     setPlaylistModal({ isOpen: true, data: null, isLoading: true, error: '' });
@@ -785,7 +842,9 @@ export default function App() {
               onOpenGallery={handleOpenGallery}
               onSwitchToLibrary={() => setCurrentView('library')}
               onSwitchToDownloader={() => setCurrentView('downloader')}
-              downloads={libraryItems.length > 0 ? libraryItems : downloads}
+              downloads={downloads}
+              recentClearedAt={recentClearedAt}
+              onClearRecent={handleClearRecent}
               onShowToast={showToast}
             />
           )}

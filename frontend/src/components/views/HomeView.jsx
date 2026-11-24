@@ -207,6 +207,8 @@ export default function HomeView({
   onSwitchToLibrary: _onSwitchToLibrary,
   onSwitchToDownloader,
   downloads = [],
+  recentClearedAt = 0,
+  onClearRecent,
 }) {
   const [urlInput, setUrlInput] = useState('');
   const [isStuck, setIsStuck] = useState(false); // is the search bar pinned to the top?
@@ -285,7 +287,9 @@ export default function HomeView({
 
   /* ── Data ─────────────────────────────────────────────────────────────── */
 
-  const doneDownloads = downloads.filter((d) => d.state === 'done');
+  const doneDownloads = downloads.filter(
+    (d) => d.state === 'done' && (!recentClearedAt || (d.finishedAt || 0) > recentClearedAt)
+  );
   const recentItems = doneDownloads.slice(0, gridLimit);
   const displayItems =
     recentItems.length > 0 ? recentItems : (SHOW_SAMPLE_ITEMS_WHEN_EMPTY ? SAMPLE_ITEMS.slice(0, gridLimit) : []);
@@ -446,6 +450,17 @@ export default function HomeView({
           </h2>
 
           <div className="flex items-center gap-2">
+            {displayItems.length > 0 && onClearRecent && (
+              <button
+                type="button"
+                onClick={onClearRecent}
+                className="text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-surface-2 px-2.5 py-1.5 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-acc/60"
+                aria-label="Clear recent downloads from home"
+              >
+                Clear recent
+              </button>
+            )}
+
             {hasMoreThanGrid && (
               <button
                 type="button"

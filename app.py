@@ -636,6 +636,45 @@ def _stop_bridge_server():
         logger.info("Bridge server stopped and port released")
 
 
+# ── persistent app configuration ──
+_CONFIG_LOCK = threading.Lock()
+
+def _config_path() -> str:
+    base = os.path.join(os.path.expanduser("~"), ".media_downloader")
+    os.makedirs(base, exist_ok=True)
+    return os.path.join(base, "config.json")
+
+def _load_app_config() -> dict:
+    with _CONFIG_LOCK:
+        path = _config_path()
+        if not os.path.isfile(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except Exception as e:
+            logger.warning(f"Failed to load app config from {path}: {e}")
+            return {}
+
+def _save_app_config(cfg: dict) -> None:
+    with _CONFIG_LOCK:
+        path = _config_path()
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+        os.replace(tmp, path)
+
+def _get_config_val(key: str, default=None):
+    cfg = _load_app_config()
+    return cfg.get(key, default)
+
+def _set_config_val(key: str, val):
+    cfg = _load_app_config()
+    cfg[key] = val
+    _save_app_config(cfg)
+
+
 class Api:
     """
     Methods on this class are callable from JS as pywebview.api.<name>(...).
@@ -723,6 +762,26 @@ class Api:
     def get_bridge_info(self) -> dict:
         """Return the local server port and session token for the extension."""
         return {"port": BRIDGE_PORT, "token": BRIDGE_TOKEN}
+
+    # ── recent downloads clear filter ──
+    def get_recent_cleared_at(self) -> dict:
+        """Return the persisted timestamp when recent downloads were cleared from home."""
+        try:
+            ts = _get_config_val("recent_cleared_at", 0)
+            return {"ok": True, "recent_cleared_at": ts}
+        except Exception as e:
+            logger.error(f"Failed to get recent_cleared_at: {e}")
+            return {"ok": False, "error": str(e), "recent_cleared_at": 0}
+
+    def set_recent_cleared_at(self, timestamp: float) -> dict:
+        """Persist timestamp when recent downloads were cleared from home."""
+        try:
+            ts = float(timestamp) if timestamp else 0
+            _set_config_val("recent_cleared_at", ts)
+            return {"ok": True, "recent_cleared_at": ts}
+        except Exception as e:
+            logger.error(f"Failed to set recent_cleared_at: {e}")
+            return {"ok": False, "error": str(e)}
 
     # ── version information ──
     def get_app_info(self) -> dict:

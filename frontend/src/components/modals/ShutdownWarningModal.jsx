@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Power, AlertTriangle, X } from 'lucide-react';
+import { Power } from 'lucide-react';
 import { api } from '../../lib/api';
 
 export default function ShutdownWarningModal({ isOpen, onClose, remainingSeconds = 30 }) {

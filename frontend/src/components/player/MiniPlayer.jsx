@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Maximize2, X, Music, Film } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Maximize2, X, Music } from 'lucide-react';
 
 /**
  * Floating mini-player widget shown when the full player is minimized.
