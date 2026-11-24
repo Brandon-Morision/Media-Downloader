@@ -274,12 +274,28 @@
 }
 
 /* Reduced motion accessibility */
+@keyframes view-enter-reduced {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fluent-gear,
   .animate-fluent-download,
   .animate-fluent-library,
-  .animate-fluent-home {
+  .animate-fluent-home,
+  .animate-vinyl-spin,
+  .animate-vinyl-spin-fast,
+  .eq-bar-1,
+  .eq-bar-2,
+  .eq-bar-3,
+  .animate-tab-enter {
     animation: none !important;
+  }
+
+  .animate-view-enter {
+    animation: view-enter-reduced 0.15s ease-out both !important;
+    transform: none !important;
   }
 }
 
