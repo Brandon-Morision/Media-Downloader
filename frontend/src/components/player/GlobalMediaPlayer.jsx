@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward,
-  Volume2, VolumeX, Maximize2, Minimize2, X, Music, Film,
-  Repeat, Shuffle, Heart, ArrowLeft, MoreHorizontal, Check, ListMusic, ListVideo,
+  Volume2, VolumeX, Maximize2, Minimize2, X, Film,
+  Repeat, Repeat1, Shuffle, ArrowLeft, Check, ListMusic,
   AlertCircle, ExternalLink
 } from 'lucide-react';
 import { AUDIO_EXT } from '../../lib/formatters';
@@ -85,9 +85,14 @@ export default function GlobalMediaPlayer({
     return saved !== null ? parseFloat(saved) : 1;
   });
   const [isMuted, setIsMuted] = useState(false);
-  const [isLooping, setIsLooping] = useState(false);
+  const [repeatMode, setRepeatMode] = useState(() => {
+    try {
+      return localStorage.getItem('md_player_repeat') || 'off';
+    } catch {
+      return 'off';
+    }
+  }); // 'off' | 'all' | 'one'
   const [isShuffling, setIsShuffling] = useState(false);
-  const [isLiked, setIsLiked] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -265,6 +270,39 @@ export default function GlobalMediaPlayer({
     }
   }, [currentIndex, currentTime, safeFiles.length]);
 
+  const handleTrackEnded = useCallback(() => {
+    if (repeatMode === 'one') {
+      if (mediaRef.current) {
+        mediaRef.current.currentTime = 0;
+        mediaRef.current.play().catch(() => {});
+        setIsPlaying(true);
+      }
+      return;
+    }
+    if (isShuffling && safeFiles.length > 1) {
+      let nextIdx = Math.floor(Math.random() * safeFiles.length);
+      if (nextIdx === currentIndex) nextIdx = (currentIndex + 1) % safeFiles.length;
+      setCurrentIndex(nextIdx);
+    } else if (currentIndex < safeFiles.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+    } else if (repeatMode === 'all') {
+      if (safeFiles.length === 1) {
+        if (mediaRef.current) {
+          mediaRef.current.currentTime = 0;
+          mediaRef.current.play().catch(() => {});
+          setIsPlaying(true);
+        }
+      } else {
+        setCurrentIndex(0);
+      }
+    } else {
+      setIsPlaying(false);
+      if (mediaRef.current) {
+        mediaRef.current.pause();
+      }
+    }
+  }, [currentIndex, isShuffling, repeatMode, safeFiles.length]);
+
   const handleNext = useCallback(() => {
     if (isShuffling && safeFiles.length > 1) {
       let nextIdx = Math.floor(Math.random() * safeFiles.length);
@@ -272,10 +310,18 @@ export default function GlobalMediaPlayer({
       setCurrentIndex(nextIdx);
     } else if (currentIndex < safeFiles.length - 1) {
       setCurrentIndex(currentIndex + 1);
-    } else if (isLooping) {
-      setCurrentIndex(0);
+    } else if (repeatMode === 'all' || repeatMode === 'one') {
+      if (safeFiles.length === 1) {
+        if (mediaRef.current) {
+          mediaRef.current.currentTime = 0;
+          mediaRef.current.play().catch(() => {});
+          setIsPlaying(true);
+        }
+      } else {
+        setCurrentIndex(0);
+      }
     }
-  }, [currentIndex, isShuffling, isLooping, safeFiles.length]);
+  }, [currentIndex, isShuffling, repeatMode, safeFiles.length]);
 
   const handleRewind10 = useCallback(() => {
     if (mediaRef.current) {
@@ -291,7 +337,15 @@ export default function GlobalMediaPlayer({
     }
   }, [duration]);
 
-  const toggleLoop = () => setIsLooping((prev) => !prev);
+  const toggleRepeat = useCallback(() => {
+    setRepeatMode((prev) => {
+      const next = prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off';
+      try {
+        localStorage.setItem('md_player_repeat', next);
+      } catch {}
+      return next;
+    });
+  }, []);
   const toggleShuffle = () => setIsShuffling((prev) => !prev);
   const toggleMute = () => setIsMuted((prev) => !prev);
 
@@ -610,6 +664,9 @@ export default function GlobalMediaPlayer({
       } else if (e.key === 'm' || e.key === 'M') {
         e.preventDefault();
         toggleMute();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        toggleRepeat();
       } else if (e.key === 'f' || e.key === 'F') {
         e.preventDefault();
         toggleFullscreen();
@@ -670,6 +727,8 @@ export default function GlobalMediaPlayer({
         currentTime={currentTime}
         duration={duration}
         mediaRef={mediaRef}
+        repeatMode={repeatMode}
+        onToggleRepeat={toggleRepeat}
         onTogglePlay={togglePlay}
         onPrev={handlePrev}
         onNext={handleNext}
@@ -802,7 +861,7 @@ export default function GlobalMediaPlayer({
                   onDurationChange={() => mediaRef.current && setDuration(mediaRef.current.duration)}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
-                  onEnded={handleNext}
+                  onEnded={handleTrackEnded}
                   onError={() => setPlaybackError('Playback error: Unable to decode audio stream.')}
                 />
                 <AudioVisualizer
@@ -835,7 +894,7 @@ export default function GlobalMediaPlayer({
                   onDurationChange={() => mediaRef.current && setDuration(mediaRef.current.duration)}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
-                  onEnded={handleNext}
+                  onEnded={handleTrackEnded}
                   onError={() => setPlaybackError('Playback error: Unable to play video.')}
                   playsInline
                 />
@@ -1045,15 +1104,27 @@ export default function GlobalMediaPlayer({
                 {/* 7. Repeat / Loop */}
                 <button
                   type="button"
-                  onClick={toggleLoop}
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
-                    isLooping
-                      ? 'text-brand-acc bg-brand-acc/10'
+                  onClick={toggleRepeat}
+                  aria-label={`Repeat: ${repeatMode}`}
+                  aria-pressed={repeatMode !== 'off'}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 ${
+                    repeatMode !== 'off'
+                      ? 'text-brand-acc bg-brand-acc/15 border border-brand-acc/30 shadow-[0_0_12px_rgba(0,229,153,0.25)]'
                       : 'text-slate-400 hover:text-white hover:bg-white/10'
                   }`}
-                  title={isLooping ? 'Repeat On' : 'Repeat Off'}
+                  title={
+                    repeatMode === 'one'
+                      ? 'Repeat: one (Click to turn off repeat)'
+                      : repeatMode === 'all'
+                      ? 'Repeat: all (Click to repeat current track)'
+                      : 'Repeat: off (Click to repeat all)'
+                  }
                 >
-                  <Repeat className="w-4 h-4" />
+                  {repeatMode === 'one' ? (
+                    <Repeat1 className="w-4 h-4" />
+                  ) : (
+                    <Repeat className="w-4 h-4" />
+                  )}
                 </button>
               </div>
 

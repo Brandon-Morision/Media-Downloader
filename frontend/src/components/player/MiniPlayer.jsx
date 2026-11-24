@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Maximize2, X, Music } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Maximize2, X, Music, Repeat, Repeat1 } from 'lucide-react';
 
 /**
  * Floating mini-player widget shown when the full player is minimized.
@@ -20,6 +20,8 @@ export default function MiniPlayer({
   currentTime,
   duration,
   mediaRef,        // shared ref to the <audio> / <video> element
+  repeatMode = 'off',
+  onToggleRepeat,
   onTogglePlay,
   onPrev,
   onNext,
@@ -202,6 +204,28 @@ export default function MiniPlayer({
             </button>
           )}
 
+          {onToggleRepeat && (
+            <button
+              onClick={onToggleRepeat}
+              className={`p-1 rounded-full transition-all active:scale-95 ${
+                repeatMode !== 'off'
+                  ? 'text-brand-acc bg-brand-acc/15'
+                  : 'text-slate-400 hover:text-white hover:bg-surface-3'
+              }`}
+              title={
+                repeatMode === 'one'
+                  ? 'Repeat: one (Click to turn off)'
+                  : repeatMode === 'all'
+                  ? 'Repeat: all (Click to repeat current track)'
+                  : 'Repeat: off (Click to repeat all)'
+              }
+              aria-label={`Repeat: ${repeatMode}`}
+              aria-pressed={repeatMode !== 'off'}
+            >
+              {repeatMode === 'one' ? <Repeat1 className="w-3.5 h-3.5" /> : <Repeat className="w-3.5 h-3.5" />}
+            </button>
+          )}
+
           <div className="w-[1px] h-4 bg-white/10 mx-0.5" />
 
           <button
@@ -332,6 +356,28 @@ export default function MiniPlayer({
               title="Next video"
             >
               <SkipForward className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {onToggleRepeat && (
+            <button
+              onClick={onToggleRepeat}
+              className={`p-1 rounded-full transition-all active:scale-95 ${
+                repeatMode !== 'off'
+                  ? 'text-brand-acc bg-brand-acc/15'
+                  : 'text-slate-400 hover:text-white hover:bg-surface-3'
+              }`}
+              title={
+                repeatMode === 'one'
+                  ? 'Repeat: one (Click to turn off)'
+                  : repeatMode === 'all'
+                  ? 'Repeat: all (Click to repeat current video)'
+                  : 'Repeat: off (Click to repeat all)'
+              }
+              aria-label={`Repeat: ${repeatMode}`}
+              aria-pressed={repeatMode !== 'off'}
+            >
+              {repeatMode === 'one' ? <Repeat1 className="w-3.5 h-3.5" /> : <Repeat className="w-3.5 h-3.5" />}
             </button>
           )}
 
