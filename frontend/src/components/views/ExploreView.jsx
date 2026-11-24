@@ -734,7 +734,10 @@ export default function ExploreView({
                   return (
                     <div
                       key={r.id || idx}
-                      className="bg-surface-2/80 hover:bg-surface-2 border border-border-subtle hover:border-brand-border/70 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all flex flex-col group"
+                      style={{
+                        animationDelay: `${Math.min(idx, 7) * 40}ms`,
+                      }}
+                      className="animate-card-enter bg-surface-2/80 hover:bg-surface-2 border border-border-subtle hover:border-brand-border/70 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all flex flex-col group motion-reduce:!animate-none"
                     >
                       {/* 16:9 Thumbnail */}
                       <div className="relative aspect-video w-full bg-surface-3 overflow-hidden">

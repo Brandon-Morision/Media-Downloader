@@ -273,6 +273,22 @@
   will-change: transform;
 }
 
+/* Staggered card entrance for list and grid items */
+@keyframes card-stagger-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-card-enter {
+  animation: card-stagger-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* Reduced motion accessibility */
 @keyframes view-enter-reduced {
   from { opacity: 0; }
@@ -289,7 +305,8 @@
   .eq-bar-1,
   .eq-bar-2,
   .eq-bar-3,
-  .animate-tab-enter {
+  .animate-tab-enter,
+  .animate-card-enter {
     animation: none !important;
   }
 
