@@ -415,6 +415,106 @@ def download_file_with_progress(
         raise
 
 
+# ── Deferred Updates Management ───────────────────────────────────────────────
+
+def _get_config_path() -> Path:
+    return USER_DATA_DIR / "config.json"
+
+
+def get_deferred_updates() -> list:
+    """Get list of tool names that have deferred updates pending."""
+    try:
+        p = _get_config_path()
+        if p.is_file():
+            with open(p, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                tools = data.get("deferred_updates", [])
+                if isinstance(tools, list):
+                    return [str(t) for t in tools]
+    except Exception as e:
+        logger.debug(f"Failed to read deferred updates from config: {e}")
+    return []
+
+
+def add_deferred_update(tool_name: str) -> None:
+    """Record a tool name for deferred update when downloads finish."""
+    if tool_name not in ("yt-dlp", "gallery-dl", "ffmpeg"):
+        return
+    try:
+        p = _get_config_path()
+        data = {}
+        if p.is_file():
+            with open(p, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        if not isinstance(data, dict):
+            data = {}
+        tools = data.get("deferred_updates", [])
+        if not isinstance(tools, list):
+            tools = []
+        if tool_name not in tools:
+            tools.append(tool_name)
+        data["deferred_updates"] = tools
+        tmp = str(p) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, str(p))
+        logger.info(f"Persisted deferred update for {tool_name}")
+    except Exception as e:
+        logger.warning(f"Failed to persist deferred update for {tool_name}: {e}")
+
+
+def remove_deferred_update(tool_name: str) -> None:
+    """Remove a tool name from deferred updates."""
+    try:
+        p = _get_config_path()
+        if not p.is_file():
+            return
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return
+        tools = data.get("deferred_updates", [])
+        if isinstance(tools, list) and tool_name in tools:
+            tools = [t for t in tools if t != tool_name]
+            data["deferred_updates"] = tools
+            tmp = str(p) + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp, str(p))
+    except Exception as e:
+        logger.debug(f"Failed to remove deferred update for {tool_name}: {e}")
+
+
+def apply_deferred_updates(on_complete: Optional[Callable[[str, dict], None]] = None) -> list:
+    """
+    Attempt to apply any pending deferred updates whose tools are no longer active.
+    Returns list of results.
+    """
+    pending = get_deferred_updates()
+    if not pending:
+        return []
+
+    from media_downloader import is_tool_active
+    results = []
+    for tool_name in pending:
+        if is_tool_active(tool_name):
+            logger.info(f"Deferred update for {tool_name} still blocked by active downloads")
+            continue
+
+        logger.info(f"Applying deferred update for {tool_name}...")
+        res = update_engine_tool(tool_name)
+        if res.get("ok") or not res.get("deferred"):
+            remove_deferred_update(tool_name)
+        results.append((tool_name, res))
+        if on_complete:
+            try:
+                on_complete(tool_name, res)
+            except Exception as e:
+                logger.debug(f"Deferred update on_complete callback failed: {e}")
+    return results
+
+
 # ── Tool / Engine Updater ─────────────────────────────────────────────────────
 
 def update_engine_tool(
@@ -433,6 +533,7 @@ def update_engine_tool(
         from media_downloader import is_tool_active
         if is_tool_active(tool_name):
             logger.warning(f"Engine update for {tool_name} deferred: tool is actively in use by running downloads")
+            add_deferred_update(tool_name)
             return {
                 "ok": False,
                 "error": f"Cannot update {tool_name} while downloads are active. The update will be applied once current downloads finish.",
@@ -509,6 +610,7 @@ def update_engine_tool(
         # Verify the downloaded binary works
         new_version = get_tool_version(tool_name)
         logger.info(f"Successfully updated {tool_name} to version {new_version} at {target_exe}")
+        remove_deferred_update(tool_name)
 
         return {
             "ok": True,

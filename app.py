@@ -690,6 +690,33 @@ class Api:
         logger.info(f"NovaDrop {get_version_string()} initialized")
         self._recover_interrupted_history()
         self._init_rate_limit_scheduler()
+        self._check_deferred_updates_on_startup()
+
+    def _check_deferred_updates_on_startup(self):
+        """Check for and apply any pending engine updates from a prior session."""
+        def _bg():
+            time.sleep(2.0)
+            with self._jobs_lock:
+                if self._active_job_ids:
+                    return
+            try:
+                import updater
+                updater.apply_deferred_updates(on_complete=self._on_deferred_update_completed)
+            except Exception as e:
+                logger.debug(f"Startup deferred updates check error: {e}")
+
+        threading.Thread(target=_bg, daemon=True).start()
+
+    def _on_deferred_update_completed(self, tool_name: str, res: dict):
+        tool_payload = {
+            "ok": res.get("ok", False),
+            "tool": tool_name,
+            "version": res.get("version"),
+            "error": res.get("error"),
+            "deferred_applied": True,
+        }
+        self._push_js(f"window.onSingleToolUpdateComplete?.({_js(tool_payload)})")
+        self._push_js(f"window.onEngineUpdateComplete?.({_js(res)})")
 
     def _recover_interrupted_history(self):
         """Transition any leftover 'running' downloads from an earlier abnormal app exit to 'cancelled'."""
@@ -859,20 +886,19 @@ class Api:
 
     def update_engine_async(self, tool_name: str) -> dict:
         """Update an extractor or media tool (yt-dlp, gallery-dl, ffmpeg) in background thread."""
-        with self._jobs_lock:
-            if self._active_job_ids:
-                return {
-                    "ok": False,
-                    "error": f"Cannot update {tool_name} while downloads are running. Please finish or cancel active downloads.",
-                }
-
         def on_prog(snapshot: dict):
             self._push_js(f"window.onSingleToolProgress?.({_js({'tool': tool_name, **snapshot})})")
             self._push_js(f"window.onUpdateProgress?.({_js({'type': 'tool', 'tool': tool_name, **snapshot})})")
 
         def run():
             result = updater.update_engine_tool(tool_name, on_progress=on_prog)
-            tool_payload = {"ok": result.get("ok", False), "tool": tool_name, "version": result.get("version"), "error": result.get("error")}
+            tool_payload = {
+                "ok": result.get("ok", False),
+                "tool": tool_name,
+                "version": result.get("version"),
+                "error": result.get("error"),
+                "deferred": result.get("deferred", False),
+            }
             self._push_js(f"window.onSingleToolUpdateComplete?.({_js(tool_payload)})")
             self._push_js(f"window.onEngineUpdateComplete?.({_js(result)})")
 
@@ -1107,6 +1133,15 @@ class Api:
                             taskbar.clear()
                     except Exception:
                         pass
+
+                    def _drain_deferred():
+                        try:
+                            import updater
+                            updater.apply_deferred_updates(on_complete=self._on_deferred_update_completed)
+                        except Exception as e:
+                            logger.debug(f"Queue drain deferred updates failed: {e}")
+
+                    threading.Thread(target=_drain_deferred, daemon=True).start()
 
             status = job_status(job_id)
             files = status.get("files", []) if status.get("ok") else []

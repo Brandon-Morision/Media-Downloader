@@ -974,15 +974,15 @@ def _require_psutil():
 def is_tool_active(tool: str) -> bool:
     """
     Check if any download job is currently running or paused that uses
-    the specified engine tool ('yt-dlp', 'gallery-dl', or 'ffmpeg').
+    the specified engine tool ('yt-dlp', 'gallery-dl', 'ffmpeg', or 'ffprobe').
     """
     with _JOBS_LOCK:
         for job in _JOBS.values():
             if job.state in ("running", "paused"):
-                if tool in ("yt-dlp", "gallery-dl") and job.tool == tool:
+                if job.tool == tool:
                     return True
-                if tool == "ffmpeg" and job.tool == "yt-dlp":
-                    # yt-dlp uses ffmpeg for format postprocessing and muxing
+                if tool in ("ffmpeg", "ffprobe") and job.tool == "yt-dlp":
+                    # yt-dlp uses ffmpeg and ffprobe for format postprocessing, probing, and muxing
                     return True
     return False
 
