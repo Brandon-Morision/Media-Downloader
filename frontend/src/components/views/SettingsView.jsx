@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Folder, Palette, Sliders, Wrench, RefreshCw, Check,
   DownloadCloud, ArrowUpCircle, ExternalLink, ShieldCheck, Box,
@@ -144,6 +144,9 @@ export default function SettingsView({
   // Player fullscreen exit behavior preferences
   const [playerAudioExit, setPlayerAudioExit] = useState(() => localStorage.getItem('md_player_audio_exit') || 'mini');
   const [playerVideoExit, setPlayerVideoExit] = useState(() => localStorage.getItem('md_player_video_exit') || 'ask');
+
+  const handleUpdateSingleEngineRef = useRef(null);
+  const handleAutoUpdateAllRef = useRef(null);
 
   useEffect(() => {
     const handlePlayerSettingsChanged = () => {
@@ -293,10 +296,18 @@ export default function SettingsView({
           if (res.version) {
             setVersions((prev) => ({ ...prev, [tool]: res.version }));
           }
-          onShowToast(`${tool} updated successfully to v${res.version}!`);
+          onShowToast('Download components updated to latest version', true, { duration: 3000 });
           loadVersions();
+        } else if (res.deferred || (res.error && res.error.toLowerCase().includes('active'))) {
+          onShowToast('Update scheduled — will apply when downloads finish', true, { duration: 4000 });
         } else {
-          onShowToast(`Failed to update ${tool}: ${res.error}`, false);
+          onShowToast("Couldn't update download components", false, {
+            action: {
+              label: 'Retry',
+              onClick: () => handleUpdateSingleEngineRef.current?.(tool),
+            },
+            duration: 0,
+          });
         }
       }
     };
@@ -339,9 +350,17 @@ export default function SettingsView({
         setAutoUpdateStatusMsg(data.message || (data.status === 'error' ? 'Auto-update failed' : 'All updates complete'));
         loadVersions();
         if (data.status === 'completed') {
-          onShowToast('Engines auto-update complete!');
+          onShowToast('Download components updated to latest version', true, { duration: 3000 });
+        } else if (data.deferred) {
+          onShowToast('Update scheduled — will apply when downloads finish', true, { duration: 4000 });
         } else {
-          onShowToast(data.error || 'Auto-update failed', false);
+          onShowToast("Couldn't update download components", false, {
+            action: {
+              label: 'Retry',
+              onClick: () => handleAutoUpdateAllRef.current?.(),
+            },
+            duration: 0,
+          });
         }
       } else if (data.message) {
         setAutoUpdateStatusMsg(data.message);
@@ -474,16 +493,23 @@ export default function SettingsView({
         ...prev,
         [tool]: { ...prev[tool], updating: true, error: null },
       }));
-      onShowToast(`Starting update for ${tool}…`);
+      onShowToast('Updating download components…');
       await api.updateSingleTool(tool);
     } catch (e) {
       setEngineStates((prev) => ({
         ...prev,
         [tool]: { ...prev[tool], updating: false, error: e.message },
       }));
-      onShowToast(`Failed to update ${tool}: ${e.message}`, false);
+      onShowToast("Couldn't update download components", false, {
+        action: {
+          label: 'Retry',
+          onClick: () => handleUpdateSingleEngineRef.current?.(tool),
+        },
+        duration: 0,
+      });
     }
   };
+  handleUpdateSingleEngineRef.current = handleUpdateSingleEngine;
 
   const handleCheckApp = async () => {
     try {
@@ -534,13 +560,20 @@ export default function SettingsView({
       await waitForApi();
       setIsAutoUpdatingAll(true);
       setAutoUpdateStatusMsg('Scanning for engine updates…');
-      onShowToast('Automated updater running in background…');
+      onShowToast('Updating download components…');
       await api.autoUpdateAllEngines();
-    } catch (e) {
+    } catch (_e) {
       setIsAutoUpdatingAll(false);
-      onShowToast(`Auto-update failed: ${e.message}`, false);
+      onShowToast("Couldn't update download components", false, {
+        action: {
+          label: 'Retry',
+          onClick: () => handleAutoUpdateAllRef.current?.(),
+        },
+        duration: 0,
+      });
     }
   };
+  handleAutoUpdateAllRef.current = handleAutoUpdateAll;
 
   const toggleSection = (id) => {
     setActiveSection((prev) => (prev === id ? null : id));

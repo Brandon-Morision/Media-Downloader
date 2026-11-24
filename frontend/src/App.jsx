@@ -7,7 +7,6 @@ import ExploreView from './components/views/ExploreView';
 import LibraryView from './components/views/LibraryView';
 import SettingsView from './components/views/SettingsView';
 import GlobalMediaPlayer from './components/player/GlobalMediaPlayer';
-import VideoDownloadModal from './components/modals/VideoDownloadModal';
 import GalleryModal from './components/modals/GalleryModal';
 import PlaylistInspectorModal from './components/modals/PlaylistInspectorModal';
 import NightOwlModal from './components/modals/NightOwlModal';
@@ -30,7 +29,6 @@ export default function App() {
   const [downloads, setDownloads] = useState([]);
   const [libraryItems, setLibraryItems] = useState([]);
   const [isLibraryLoading, setIsLibraryLoading] = useState(false);
-  const [activeJobId, setActiveJobId] = useState(null);
 
   // Modals state
   const [playerModal, setPlayerModal] = useState({ isOpen: false, files: [], title: '' });
@@ -49,9 +47,28 @@ export default function App() {
   const [shutdownModal, setShutdownModal] = useState({ isOpen: false, remainingSeconds: 30 });
 
   // Notifications
-  const [toast, setToast] = useState({ message: '', isSuccess: true });
+  const [toast, setToast] = useState({ message: '', isSuccess: true, action: null, duration: 3000 });
   const [clipboardUrl, setClipboardUrl] = useState(null);
   const [hasUpdate, setHasUpdate] = useState(false);
+  const engineUpdateNotifiedRef = useRef(false);
+
+  const showToast = useCallback((message, isSuccess = true, options = {}) => {
+    if (typeof isSuccess === 'object' && isSuccess !== null) {
+      setToast({
+        message,
+        isSuccess: isSuccess.isSuccess ?? true,
+        action: isSuccess.action || null,
+        duration: isSuccess.duration !== undefined ? isSuccess.duration : 3000,
+      });
+      return;
+    }
+    setToast({
+      message,
+      isSuccess: Boolean(isSuccess),
+      action: options.action || null,
+      duration: options.duration !== undefined ? options.duration : 3000,
+    });
+  }, []);
 
   // Search Explore state
   const [searchResults, setSearchResults] = useState([]);
@@ -70,11 +87,23 @@ export default function App() {
       if (payload?.any_update) {
         setHasUpdate(true);
       }
+      if (payload?.tools_update && !engineUpdateNotifiedRef.current) {
+        engineUpdateNotifiedRef.current = true;
+        showToast('Download components update available', true, {
+          action: {
+            label: 'Update now',
+            onClick: () => {
+              setCurrentView('settings');
+            },
+          },
+          duration: 6000,
+        });
+      }
       if (typeof prevHandler === 'function') {
         prevHandler(payload);
       }
     };
-  }, []);
+  }, [showToast]);
 
   // Apply theme data attribute
   useEffect(() => {
@@ -98,10 +127,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('md_current_view', currentView);
   }, [currentView]);
-
-  const showToast = useCallback((message, isSuccess = true) => {
-    setToast({ message, isSuccess });
-  }, []);
 
   // ── Load history from backend ──
   const loadHistory = useCallback(async () => {
@@ -904,7 +929,9 @@ export default function App() {
       <Toast
         message={toast.message}
         isSuccess={toast.isSuccess}
-        onClose={() => setToast({ message: '', isSuccess: true })}
+        action={toast.action}
+        duration={toast.duration}
+        onClose={() => setToast({ message: '', isSuccess: true, action: null, duration: 3000 })}
       />
 
       {/* Clipboard Detector Toast */}
