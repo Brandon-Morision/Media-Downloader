@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  ArrowLeft, ChevronLeft, ChevronRight, Image as ImageIcon, ImageOff, Folder,
+  X, ChevronLeft, ChevronRight, Image as ImageIcon, ImageOff, Folder,
   Heart, Info, MoreHorizontal, ZoomIn, ZoomOut, RotateCw, RotateCcw, Expand, Shrink,
   Scan, Database, Calendar, MapPin, User, Send, Check, Copy, ExternalLink, Film, Play,
 } from 'lucide-react';
@@ -126,6 +126,8 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
   const [videoThumbs, setVideoThumbs] = useState({});
   const videoRef = useRef(null);
   const thumbRefs = useRef([]);
+  const shellRef = useRef(null);
+  const openerRef = useRef(null);
 
   // View state: mode 'fit' scales the image to the stage, 'custom' uses `scale`.
   const [view, setView] = useState({ mode: 'fit', scale: 1, pan: { x: 0, y: 0 }, rotation: 0 });
@@ -340,10 +342,36 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
     });
   };
 
+  const handleClose = () => {
+    onClose();
+    if (openerRef.current && typeof openerRef.current.focus === 'function') {
+      openerRef.current.focus();
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      openerRef.current = document.activeElement;
+      requestAnimationFrame(() => {
+        if (shellRef.current) {
+          shellRef.current.focus();
+        }
+      });
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (openerRef.current && typeof openerRef.current.focus === 'function') {
+        openerRef.current.focus();
+      }
+    };
+  }, []);
+
   // Always read the latest handlers from here, so listeners below stay stable
   const actionsRef = useRef({});
   actionsRef.current = {
-    onClose, handlePrev, handleNext, zoomIn, zoomOut, toFit, toActualSize, rotate,
+    onClose: handleClose, handleClose, handlePrev, handleNext, zoomIn, zoomOut, toFit, toActualSize, rotate,
     toggleVideo, handleWheel, isFit, isCurVideo, showMoreMenu,
     closeMenu: () => setShowMoreMenu(false),
     toggleDetails: () => setShowDetails((s) => !s),
@@ -373,8 +401,7 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
       if (e.key === 'Escape') {
         e.preventDefault();
         if (a.showMoreMenu) a.closeMenu();
-        else if (!a.isFit) a.toFit();
-        else a.onClose();
+        else a.handleClose();
       } else if (e.code === 'Space') {
         if (a.isCurVideo) { e.preventDefault(); a.toggleVideo(); }
       } else if (e.key === 'ArrowLeft') { e.preventDefault(); a.handlePrev(); }
@@ -496,24 +523,19 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
       className={`fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center select-none animate-fade-in motion-reduce:!animate-none ${
         isMaximized ? 'p-0' : 'p-2 sm:p-6'
       }`}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose(); }}
     >
       {/* ── WINDOW SHELL ── */}
       <div
-        className={`bg-[#0a0f1d]/95 backdrop-blur-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden animate-scale-in motion-reduce:!animate-none ${
+        ref={shellRef}
+        tabIndex={-1}
+        className={`bg-[#0a0f1d]/95 backdrop-blur-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden animate-scale-in motion-reduce:!animate-none outline-none ${
           isMaximized ? 'w-full h-full rounded-none border-0' : 'w-full max-w-7xl h-[90vh] rounded-3xl border border-white/10'
         }`}
       >
         {/* ── HEADER ── */}
         <header className="h-14 px-4 sm:px-5 bg-[#0e1628]/80 border-b border-white/5 flex items-center justify-between shrink-0 relative z-30">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex flex-col items-center">
-              <IconButton title="Back (Esc)" onClick={onClose}>
-                <ArrowLeft className="w-[18px] h-[18px]" />
-              </IconButton>
-              <div className="w-5 h-0.5 bg-sky-400 rounded-full shadow-[0_0_8px_rgba(56,189,248,0.9)] -mt-0.5" />
-            </div>
-
+          <div className="flex items-center min-w-0">
             <div className="flex flex-col min-w-0">
               <span className="text-sm font-semibold text-slate-100 truncate tracking-tight">{filename}</span>
               <span className="text-xs text-slate-400 truncate">{subtitle}</span>
@@ -570,6 +592,18 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
                 </>
               )}
             </div>
+
+            <Divider />
+
+            <button
+              type="button"
+              onClick={handleClose}
+              aria-label="Close gallery viewer"
+              title="Close (Esc)"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 active:bg-white/15 active:scale-95 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
         </header>
 
@@ -585,7 +619,7 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-3 pb-3 pt-1 flex flex-col items-center gap-2.5 scrollbar-thin">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pt-1 pb-4 flex flex-col items-center gap-2.5 [scrollbar-gutter:stable]">
                 {files.map((file, i) => {
                   const isVid = isVideoFile(file.name);
                   const u = isVid ? (videoThumbs[file.path] || urls[file.path]) : (urls[file.path] || file.path);
@@ -619,6 +653,7 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
                     </button>
                   );
                 })}
+                <div className="h-4 w-full shrink-0" aria-hidden="true" />
               </div>
             </aside>
           )}
