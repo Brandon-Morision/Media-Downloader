@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Film, Music, Play, X, Download, Folder } from 'lucide-react';
+import { Film, Music, Play, X, Download } from 'lucide-react';
 import { fmtBytes } from '../../lib/formatters';
 
 export default function VideoDownloadModal({
@@ -17,17 +17,24 @@ export default function VideoDownloadModal({
 
   const qualityOptions = (data.available_qualities && data.available_qualities.length > 0)
     ? data.available_qualities.filter((q) => (selectedFormat === 'video' ? q.type === 'video' : q.type === 'audio'))
-    : [
-        { id: '1080p', label: '1080p (Full HD)', ext: 'MP4', size_bytes: 25800000 },
-        { id: '720p', label: '720p (HD)', ext: 'MP4', size_bytes: 14900000 },
-        { id: '480p', label: '480p (SD)', ext: 'MP4', size_bytes: 8500000 },
-        { id: '360p', label: '360p', ext: 'MP4', size_bytes: 5800000 },
-      ];
+    : selectedFormat === 'audio'
+      ? [
+          { id: 'mp3', label: 'MP3 Audio (High Quality)', ext: 'MP3', size_bytes: 5000000 },
+          { id: 'm4a', label: 'M4A Audio (Apple AAC)', ext: 'M4A', size_bytes: 4500000 },
+        ]
+      : [
+          { id: '1080p', label: '1080p (Full HD)', ext: 'MP4', size_bytes: 25800000 },
+          { id: '720p', label: '720p (HD)', ext: 'MP4', size_bytes: 14900000 },
+          { id: '480p', label: '480p (SD)', ext: 'MP4', size_bytes: 8500000 },
+          { id: '360p', label: '360p', ext: 'MP4', size_bytes: 5800000 },
+        ];
 
   const handleDownloadClick = () => {
+    const isAudio = selectedFormat === 'audio';
+    const chosenFormat = isAudio ? (selectedQuality || 'mp3') : (selectedQuality || 'mp4');
     onStartDownload(data.url, {
-      format: selectedFormat === 'audio' ? 'mp3' : (selectedQuality || 'mp4'),
-      quality: selectedQuality.replace('p', ''),
+      format: chosenFormat,
+      quality: isAudio ? 'best' : selectedQuality.replace('p', ''),
       title: data.title,
     });
     onClose();
@@ -90,7 +97,12 @@ export default function VideoDownloadModal({
           <span className="text-xs font-semibold text-slate-300">Select Format</span>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setSelectedFormat('video')}
+              onClick={() => {
+                setSelectedFormat('video');
+                if (selectedQuality === 'mp3' || selectedQuality === 'm4a') {
+                  setSelectedQuality('1080p');
+                }
+              }}
               className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
                 selectedFormat === 'video'
                   ? 'bg-brand-acc text-slate-950 shadow-glow font-bold'
@@ -101,7 +113,12 @@ export default function VideoDownloadModal({
               <span>MP4 (Video)</span>
             </button>
             <button
-              onClick={() => setSelectedFormat('audio')}
+              onClick={() => {
+                setSelectedFormat('audio');
+                if (selectedQuality !== 'mp3' && selectedQuality !== 'm4a') {
+                  setSelectedQuality('mp3');
+                }
+              }}
               className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
                 selectedFormat === 'audio'
                   ? 'bg-brand-acc text-slate-950 shadow-glow font-bold'
@@ -109,7 +126,7 @@ export default function VideoDownloadModal({
               }`}
             >
               <Music className="w-3.5 h-3.5" />
-              <span>MP3 (Audio)</span>
+              <span>Audio</span>
             </button>
           </div>
         </div>
@@ -174,10 +191,12 @@ export default function VideoDownloadModal({
         {/* Big Emerald Download CTA */}
         <button
           onClick={handleDownloadClick}
-          className="w-full h-11 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-glow transition-transform active:scale-[0.99] mt-1"
+          className="w-full h-11 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-glow transition-transform active:scale-[0.97] mt-1"
         >
           <Download className="w-4 h-4" />
-          <span>Download</span>
+          <span>
+            Download {selectedFormat === 'audio' ? `Audio (${(selectedQuality || 'mp3').toUpperCase()})` : `${selectedQuality} Video`}
+          </span>
         </button>
       </div>
     </div>

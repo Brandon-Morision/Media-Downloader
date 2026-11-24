@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Search, Compass, Download, Play, Clock, Sparkles, AlertCircle,
+  Search, Compass, Download, Play, Sparkles, AlertCircle,
   ExternalLink, Film, Music, X, Check, ShieldCheck, ArrowRight,
-  Image, Layers
+  Image
 } from 'lucide-react';
 import {
   fmtViews, fmtDuration, fmtBytes,
@@ -209,7 +209,7 @@ export default function ExploreView({
       let qualityOption = selectedQualityId ? selectedQualityId.replace('p', '') : 'best';
 
       if (selectedFormatType === 'audio') {
-        formatOption = 'mp3';
+        formatOption = (selectedQualityId || 'mp3').toLowerCase();
         qualityOption = 'best';
       }
 
@@ -231,10 +231,8 @@ export default function ExploreView({
     ? analyzedData.available_qualities.filter((q) => q.type === selectedFormatType)
     : selectedFormatType === 'audio'
       ? [
-          { id: '320k', label: '320 kbps (Best)', ext: 'MP3' },
-          { id: '256k', label: '256 kbps', ext: 'MP3' },
-          { id: '192k', label: '192 kbps', ext: 'MP3' },
-          { id: '128k', label: '128 kbps', ext: 'MP3' },
+          { id: 'mp3', label: 'MP3 Audio (High Quality)', ext: 'MP3' },
+          { id: 'm4a', label: 'M4A Audio (Apple AAC)', ext: 'M4A' },
         ]
       : [
           { id: '1080p', label: '1080p (Full HD)', ext: 'MP4' },
@@ -579,7 +577,12 @@ export default function ExploreView({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setSelectedFormatType('video')}
+                      onClick={() => {
+                        setSelectedFormatType('video');
+                        if (selectedQualityId === 'mp3' || selectedQualityId === 'm4a') {
+                          setSelectedQualityId('1080p');
+                        }
+                      }}
                       className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
                         selectedFormatType === 'video'
                           ? 'bg-brand-acc text-slate-950 shadow-glow font-bold'
@@ -592,7 +595,12 @@ export default function ExploreView({
 
                     <button
                       type="button"
-                      onClick={() => setSelectedFormatType('audio')}
+                      onClick={() => {
+                        setSelectedFormatType('audio');
+                        if (selectedQualityId !== 'mp3' && selectedQualityId !== 'm4a') {
+                          setSelectedQualityId('mp3');
+                        }
+                      }}
                       className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
                         selectedFormatType === 'audio'
                           ? 'bg-brand-acc text-slate-950 shadow-glow font-bold'
@@ -658,7 +666,7 @@ export default function ExploreView({
                 >
                   <Download className="w-4 h-4" />
                   <span>
-                    Download {selectedFormatType === 'audio' ? 'Audio (MP3)' : `${selectedQualityId} Video`}
+                    Download {selectedFormatType === 'audio' ? `Audio (${(selectedQualityId || 'mp3').toUpperCase()})` : `${selectedQualityId} Video`}
                   </span>
                 </button>
               </>
