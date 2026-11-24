@@ -114,40 +114,43 @@
 
 /* Mini Equalizer Dancing Bars */
 @keyframes eq-bounce-1 {
-  0%, 100% { height: 3px; }
-  50% { height: 13px; }
+  0%, 100% { transform: scaleY(0.25); }
+  50% { transform: scaleY(1); }
 }
 @keyframes eq-bounce-2 {
-  0%, 100% { height: 13px; }
-  50% { height: 5px; }
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.35); }
 }
 @keyframes eq-bounce-3 {
-  0%, 100% { height: 7px; }
-  50% { height: 15px; }
+  0%, 100% { transform: scaleY(0.5); }
+  50% { transform: scaleY(1.15); }
 }
 
+.eq-bar-1, .eq-bar-2, .eq-bar-3 {
+  height: 12px;
+  transform-origin: bottom;
+  will-change: transform;
+}
 .eq-bar-1 { animation: eq-bounce-1 0.75s ease-in-out infinite; }
 .eq-bar-2 { animation: eq-bounce-2 0.65s ease-in-out infinite 0.15s; }
 .eq-bar-3 { animation: eq-bounce-3 0.85s ease-in-out infinite 0.3s; }
 
 /* ── View Transition: Windows 11 Media Player-style fluid dissolve ── */
-/* Mimics WinUI3 EntranceThemeTransition: simultaneous fade + micro-scale + blur */
+/* Mimics WinUI3 EntranceThemeTransition: simultaneous fade + micro-scale */
 @keyframes view-enter {
   from {
     opacity: 0;
     transform: scale(0.97);
-    filter: blur(4px);
   }
   to {
     opacity: 1;
     transform: scale(1);
-    filter: blur(0px);
   }
 }
 
 .animate-view-enter {
-  animation: view-enter 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
-  will-change: opacity, transform, filter;
+  animation: view-enter 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: opacity, transform;
 }
 
 /* ── Fade-in utility (shared across inline panels) ── */
@@ -197,7 +200,7 @@
 }
 
 .animate-fluent-gear {
-  animation: fluent-gear-spin 0.58s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: fluent-gear-spin 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform;
 }
 
@@ -221,7 +224,7 @@
 }
 
 .animate-fluent-download {
-  animation: fluent-download-bounce 0.48s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: fluent-download-bounce 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform;
 }
 
@@ -245,7 +248,7 @@
 }
 
 .animate-fluent-library {
-  animation: fluent-library-tilt 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: fluent-library-tilt 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform;
 }
 
@@ -266,7 +269,7 @@
 }
 
 .animate-fluent-home {
-  animation: fluent-home-pop 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: fluent-home-pop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform;
 }
 
