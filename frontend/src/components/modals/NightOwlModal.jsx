@@ -21,7 +21,7 @@ export default function NightOwlModal({ isOpen, onClose, nightOwlSettings, onSav
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-surface-1 rounded-2xl border border-border-highlight/50 shadow-2xl overflow-hidden p-6 flex flex-col gap-5">
+      <div className="w-full max-w-md bg-surface-1 rounded-2xl border border-border-highlight/50 shadow-2xl overflow-hidden p-6 flex flex-col gap-5 animate-scale-in">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
           <div className="flex items-center gap-2.5">

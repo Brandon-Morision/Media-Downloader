@@ -35,7 +35,7 @@ export default function VideoDownloadModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in select-none">
-      <div className="bg-surface-1 border border-white/10 rounded-3xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4">
+      <div className="bg-surface-1 border border-white/10 rounded-3xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4 animate-scale-in">
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-2 border-b border-border-subtle">
           <div className="flex items-center gap-2">

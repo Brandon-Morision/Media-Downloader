@@ -1146,7 +1146,7 @@ export default function GlobalMediaPlayer({
                   {/* Windows 11 Fluent Context Menu */}
                   {showSpeedMenu && !isMinimized && (
                     <div
-                      className="absolute right-0 bottom-11 w-44 bg-[#18191e]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-1.5 flex flex-col gap-1 z-50 text-xs animate-fade-in"
+                      className="absolute right-0 bottom-11 w-44 bg-[#18191e]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-1.5 flex flex-col gap-1 z-50 text-xs animate-fade-in origin-bottom-right"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">

@@ -529,7 +529,7 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
               {showMoreMenu && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMoreMenu(false)} />
-                  <div className="absolute right-0 top-11 w-52 bg-[#101726] border border-white/10 rounded-2xl shadow-2xl p-1.5 z-50 text-xs text-slate-200 animate-fadeIn">
+                  <div className="absolute right-0 top-11 w-52 bg-[#101726] border border-white/10 rounded-2xl shadow-2xl p-1.5 z-50 text-xs text-slate-200 animate-fadeIn origin-top-right">
                     <button
                       onClick={copyPath}
                       className="w-full px-3 py-2 rounded-xl text-left hover:bg-white/10 flex items-center gap-2.5 transition-colors"
