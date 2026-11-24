@@ -22,7 +22,11 @@ let savedScrollTop = 0;
 // Set to true while developing to see sample cards when the library is empty.
 const SHOW_SAMPLE_ITEMS_WHEN_EMPTY = false;
 
-const RECENT_LIMIT = 8;
+const CARD_MIN_WIDTH = 200;
+const CARD_GAP = 20;
+const CARD_ROW_HEIGHT = 220;
+const MIN_ITEMS = 4;
+const MAX_ITEMS = 24;
 
 // Soft fade for the glass layer behind the pinned search bar: solid under the
 // bar, dissolving over the last 28px, so there is no hard edge or border line.
@@ -118,7 +122,7 @@ function RecentCard({ item, onOpenPlayer, onOpenGallery }) {
       aria-label={canOpen ? `Open ${item.filename}` : undefined}
       onClick={open}
       onKeyDown={onKeyDown}
-      className={`group relative flex flex-col overflow-hidden rounded-2xl bg-surface-1 border border-border-subtle shadow-sm outline-none transition-[transform,box-shadow,border-color,background-color] duration-200 ${
+      className={`group relative flex flex-col overflow-hidden rounded-2xl bg-surface-1 border border-border-subtle shadow-sm outline-none transition-[transform,box-shadow,border-color,background-color] duration-200 animate-card-fade-in motion-reduce:!animate-none ${
         canOpen
           ? 'cursor-pointer hover:bg-surface-2 hover:border-border hover:-translate-y-1 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-brand-acc/60'
           : 'cursor-default'
@@ -200,16 +204,18 @@ export default function HomeView({
   onAnalyzeUrl,
   onOpenPlayer,
   onOpenGallery,
-  onSwitchToLibrary,
+  onSwitchToLibrary: _onSwitchToLibrary,
   onSwitchToDownloader,
   downloads = [],
 }) {
   const [urlInput, setUrlInput] = useState('');
   const [isStuck, setIsStuck] = useState(false); // is the search bar pinned to the top?
+  const [gridLimit, setGridLimit] = useState(8);
 
   const scrollRef = useRef(null);
   const sentinelRef = useRef(null);
   const inputRef = useRef(null);
+  const recentSectionRef = useRef(null);
 
   /* ── Scroll behaviour ─────────────────────────────────────────────────── */
 
@@ -235,11 +241,56 @@ export default function HomeView({
     return () => io.disconnect();
   }, []);
 
+  /* ── Responsive Grid Capacity ────────────────────────────────────────── */
+
+  useEffect(() => {
+    const el = recentSectionRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+
+    let timer = null;
+
+    const calculateGrid = () => {
+      const width = el.clientWidth;
+      if (!width) return;
+
+      const cols = Math.max(1, Math.floor((width + CARD_GAP) / (CARD_MIN_WIDTH + CARD_GAP)));
+      const viewportHeight = scrollRef.current?.clientHeight || window.innerHeight || 800;
+      const gridOffset = el.offsetTop || 360;
+      const availableHeight = Math.max(CARD_ROW_HEIGHT, viewportHeight - gridOffset - 88);
+
+      const rows = Math.max(1, Math.round(availableHeight / CARD_ROW_HEIGHT));
+
+      const minRows = Math.max(1, Math.ceil(MIN_ITEMS / cols));
+      const maxRows = Math.max(minRows, Math.floor(MAX_ITEMS / cols));
+      const effectiveRows = Math.min(maxRows, Math.max(minRows, rows));
+      const limit = cols * effectiveRows;
+
+      setGridLimit(limit);
+    };
+
+    calculateGrid();
+
+    const observer = new ResizeObserver(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(calculateGrid, 180);
+    });
+
+    observer.observe(el);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, []);
+
   /* ── Data ─────────────────────────────────────────────────────────────── */
 
-  const recentItems = downloads.filter((d) => d.state === 'done').slice(0, RECENT_LIMIT);
+  const doneDownloads = downloads.filter((d) => d.state === 'done');
+  const recentItems = doneDownloads.slice(0, gridLimit);
   const displayItems =
-    recentItems.length > 0 ? recentItems : (SHOW_SAMPLE_ITEMS_WHEN_EMPTY ? SAMPLE_ITEMS : []);
+    recentItems.length > 0 ? recentItems : (SHOW_SAMPLE_ITEMS_WHEN_EMPTY ? SAMPLE_ITEMS.slice(0, gridLimit) : []);
+  const totalDoneCount = doneDownloads.length;
+  const hasMoreThanGrid = totalDoneCount > displayItems.length;
 
   /* ── Handlers ─────────────────────────────────────────────────────────── */
 
@@ -383,7 +434,7 @@ export default function HomeView({
       </section>
 
       {/* ── RECENT DOWNLOADS ── */}
-      <section className="shrink-0 px-8 pt-8 pb-10">
+      <section ref={recentSectionRef} className="shrink-0 px-8 pt-8 pb-10">
         <div className="flex items-center justify-between gap-4 mb-4">
           <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2.5">
             <span>Recent downloads</span>
@@ -394,14 +445,19 @@ export default function HomeView({
             )}
           </h2>
 
-          <button
-            type="button"
-            onClick={onSwitchToLibrary}
-            className="text-xs font-semibold text-brand-acc hover:bg-surface-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-acc/60"
-          >
-            <span>View all</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {hasMoreThanGrid && (
+              <button
+                type="button"
+                onClick={onSwitchToDownloader}
+                className="text-xs font-semibold text-brand-acc hover:bg-surface-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-acc/60"
+                aria-label={`View all ${totalDoneCount} downloads`}
+              >
+                <span>View all ({totalDoneCount})</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {displayItems.length === 0 ? (
@@ -426,7 +482,7 @@ export default function HomeView({
         ) : (
           <div
             className="grid gap-5"
-            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}
+            style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${CARD_MIN_WIDTH}px, 1fr))` }}
           >
             {displayItems.map((item) => (
               <RecentCard

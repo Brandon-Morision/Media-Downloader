@@ -289,6 +289,20 @@
   animation: card-stagger-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* Smooth fade-in for dynamic grid cards without layout jumps */
+@keyframes card-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-card-fade-in {
+  animation: card-fade-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* Reduced motion accessibility */
 @keyframes view-enter-reduced {
   from { opacity: 0; }
@@ -306,7 +320,8 @@
   .eq-bar-2,
   .eq-bar-3,
   .animate-tab-enter,
-  .animate-card-enter {
+  .animate-card-enter,
+  .animate-card-fade-in {
     animation: none !important;
   }
 
