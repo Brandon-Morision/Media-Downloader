@@ -82,6 +82,8 @@ const Divider = () => <span className="w-px h-5 bg-white/10 mx-1.5 shrink-0" />;
    GALLERY MODAL
 ════════════════════════════════════════════════════════════════════════════ */
 
+let sessionPhotoMaximized = true;
+
 export default function GalleryModal({ isOpen, onClose, downloadItem }) {
   const outDir = downloadItem?.outputDir ? downloadItem.outputDir.replace(/[/\\]+$/, '') : '';
 
@@ -116,7 +118,8 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
   // Layout & panels
   const [showDetails, setShowDetails] = useState(false);
   const [activeTab, setActiveTab] = useState('details'); // 'details' | 'notes'
-  const [isMaximized, setIsMaximized] = useState(false);
+  const initialIsVideo = isVideoFile(files[0]?.name || downloadItem?.filename);
+  const [isMaximized, setIsMaximized] = useState(!initialIsVideo ? sessionPhotoMaximized : false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [copiedPath, setCopiedPath] = useState(false);
@@ -327,6 +330,16 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
     return () => ro.disconnect();
   }, [isOpen, downloadItem?.id]);
 
+  const toggleMaximize = () => {
+    setIsMaximized((m) => {
+      const next = !m;
+      if (!isCurVideo) {
+        sessionPhotoMaximized = next;
+      }
+      return next;
+    });
+  };
+
   // Always read the latest handlers from here, so listeners below stay stable
   const actionsRef = useRef({});
   actionsRef.current = {
@@ -334,7 +347,7 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
     toggleVideo, handleWheel, isFit, isCurVideo, showMoreMenu,
     closeMenu: () => setShowMoreMenu(false),
     toggleDetails: () => setShowDetails((s) => !s),
-    toggleMaximize: () => setIsMaximized((m) => !m),
+    toggleMaximize,
   };
 
   // Wheel must be a non-passive native listener, otherwise preventDefault() is ignored
@@ -480,15 +493,15 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center select-none animate-fadeIn ${
+      className={`fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center select-none animate-fade-in motion-reduce:!animate-none ${
         isMaximized ? 'p-0' : 'p-2 sm:p-6'
       }`}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* ── WINDOW SHELL ── */}
       <div
-        className={`bg-[#0a0f1d]/95 backdrop-blur-2xl border border-white/10 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden transition-all duration-200 ${
-          isMaximized ? 'w-full h-full rounded-none' : 'w-full max-w-7xl h-[90vh] rounded-3xl'
+        className={`bg-[#0a0f1d]/95 backdrop-blur-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden animate-scale-in motion-reduce:!animate-none ${
+          isMaximized ? 'w-full h-full rounded-none border-0' : 'w-full max-w-7xl h-[90vh] rounded-3xl border border-white/10'
         }`}
       >
         {/* ── HEADER ── */}
@@ -721,7 +734,7 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
                     <Divider />
                     <IconButton
                       title={isMaximized ? 'Restore window (F)' : 'Fill window (F)'}
-                      onClick={() => setIsMaximized((m) => !m)}
+                      onClick={toggleMaximize}
                     >
                       {isMaximized ? <Shrink className="w-[18px] h-[18px]" /> : <Expand className="w-[18px] h-[18px]" />}
                     </IconButton>
@@ -756,7 +769,7 @@ export default function GalleryModal({ isOpen, onClose, downloadItem }) {
 
                     <IconButton
                       title={isMaximized ? 'Restore window (F)' : 'Fill window (F)'}
-                      onClick={() => setIsMaximized((m) => !m)}
+                      onClick={toggleMaximize}
                     >
                       {isMaximized ? <Shrink className="w-[18px] h-[18px]" /> : <Expand className="w-[18px] h-[18px]" />}
                     </IconButton>
