@@ -401,9 +401,7 @@ def download_file_with_progress(
                             "total_bytes": total_bytes,
                         })
 
-        # Atomic replacement
-        if dest_file.exists():
-            dest_file.unlink()
+        # Atomic replacement: os.replace atomically replaces destination without pre-unlinking
         tmp_file.replace(dest_file)
         return True
 
@@ -430,6 +428,19 @@ def update_engine_tool(
     if tool_name not in ("yt-dlp", "gallery-dl", "ffmpeg"):
         return {"ok": False, "error": f"Unsupported tool: {tool_name}"}
 
+    # Check for active downloads utilizing this engine before initiating update
+    try:
+        from media_downloader import is_tool_active
+        if is_tool_active(tool_name):
+            logger.warning(f"Engine update for {tool_name} deferred: tool is actively in use by running downloads")
+            return {
+                "ok": False,
+                "error": f"Cannot update {tool_name} while downloads are active. The update will be applied once current downloads finish.",
+                "deferred": True,
+            }
+    except Exception as e:
+        logger.debug(f"Could not verify active tool state: {e}")
+
     with _UPDATE_LOCK:
         logger.info(f"Initiating update for engine tool: {tool_name}")
         if tool_name == "yt-dlp":
@@ -450,29 +461,38 @@ def update_engine_tool(
                 tmp_zip = TEMP_UPDATES_DIR / "ffmpeg_download.zip"
                 download_file_with_progress(asset_url, tmp_zip, on_progress=on_progress)
 
-                extracted_any = False
-                with zipfile.ZipFile(tmp_zip, 'r') as zf:
-                    for member in zf.namelist():
-                        base_name = os.path.basename(member).lower()
-                        if base_name in ("ffmpeg.exe", "ffprobe.exe", "ffplay.exe"):
-                            target_file = USER_TOOLS_DIR / os.path.basename(member)
-                            if target_file.exists():
-                                try:
-                                    target_file.unlink()
-                                except PermissionError:
-                                    raise PermissionError(f"File {target_file.name} is currently in use.")
-                            with zf.open(member) as src, open(target_file, "wb") as dst:
-                                shutil.copyfileobj(src, dst)
-                            extracted_any = True
-
+                extracted_temps = []
                 try:
-                    if tmp_zip.exists():
-                        tmp_zip.unlink()
-                except Exception:
-                    pass
+                    with zipfile.ZipFile(tmp_zip, 'r') as zf:
+                        for member in zf.namelist():
+                            base_name = os.path.basename(member).lower()
+                            if base_name in ("ffmpeg.exe", "ffprobe.exe", "ffplay.exe"):
+                                target_file = USER_TOOLS_DIR / os.path.basename(member)
+                                tmp_target = USER_TOOLS_DIR / f"{os.path.basename(member)}_{int(time.time())}.tmp"
+                                with zf.open(member) as src, open(tmp_target, "wb") as dst:
+                                    shutil.copyfileobj(src, dst)
+                                extracted_temps.append((tmp_target, target_file))
 
-                if not extracted_any:
-                    return {"ok": False, "error": "Could not find ffmpeg.exe inside the downloaded archive."}
+                    if not extracted_temps:
+                        return {"ok": False, "error": "Could not find ffmpeg.exe inside the downloaded archive."}
+
+                    # Atomically swap extracted binaries once archive extraction is completely successful
+                    for tmp_target, target_file in extracted_temps:
+                        tmp_target.replace(target_file)
+
+                finally:
+                    # Clean up any leftover temporary extraction files on failure
+                    for tmp_target, _ in extracted_temps:
+                        if tmp_target.exists():
+                            try:
+                                tmp_target.unlink()
+                            except Exception:
+                                pass
+                    if tmp_zip.exists():
+                        try:
+                            tmp_zip.unlink()
+                        except Exception:
+                            pass
             else:
                 download_file_with_progress(asset_url, target_exe, on_progress=on_progress)
 

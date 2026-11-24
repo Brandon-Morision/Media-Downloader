@@ -971,6 +971,22 @@ def _require_psutil():
         )
 
 
+def is_tool_active(tool: str) -> bool:
+    """
+    Check if any download job is currently running or paused that uses
+    the specified engine tool ('yt-dlp', 'gallery-dl', or 'ffmpeg').
+    """
+    with _JOBS_LOCK:
+        for job in _JOBS.values():
+            if job.state in ("running", "paused"):
+                if tool in ("yt-dlp", "gallery-dl") and job.tool == tool:
+                    return True
+                if tool == "ffmpeg" and job.tool == "yt-dlp":
+                    # yt-dlp uses ffmpeg for format postprocessing and muxing
+                    return True
+    return False
+
+
 def _wait_for_process_attached(job: DownloadJob, timeout: float = 3.0) -> bool:
     """
     start_download_async kicks off a background thread that creates the
