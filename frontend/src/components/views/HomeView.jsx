@@ -287,9 +287,13 @@ export default function HomeView({
 
   /* ── Data ─────────────────────────────────────────────────────────────── */
 
-  const doneDownloads = downloads.filter(
-    (d) => d.state === 'done' && (!recentClearedAt || (d.finishedAt || 0) > recentClearedAt)
-  );
+  const doneDownloads = downloads.filter((d) => {
+    if (d.state !== 'done') return false;
+    if (!recentClearedAt) return true;
+    const itemMs = (d.finishedAt || 0) > 1e11 ? (d.finishedAt || 0) : (d.finishedAt || 0) * 1000;
+    const clearedMs = recentClearedAt > 1e11 ? recentClearedAt : recentClearedAt * 1000;
+    return itemMs > clearedMs;
+  });
   const recentItems = doneDownloads.slice(0, gridLimit);
   const displayItems =
     recentItems.length > 0 ? recentItems : (SHOW_SAMPLE_ITEMS_WHEN_EMPTY ? SAMPLE_ITEMS.slice(0, gridLimit) : []);

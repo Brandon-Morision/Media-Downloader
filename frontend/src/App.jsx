@@ -680,6 +680,7 @@ export default function App() {
   };
 
   const handleClearRecent = useCallback(async () => {
+    const prevClearedAt = recentClearedAt;
     const now = Date.now();
     setRecentClearedAt(now);
     try {
@@ -691,9 +692,9 @@ export default function App() {
       action: {
         label: 'Undo',
         onClick: async () => {
-          setRecentClearedAt(0);
+          setRecentClearedAt(prevClearedAt);
           try {
-            await api.setRecentClearedAt(0);
+            await api.setRecentClearedAt(prevClearedAt);
           } catch (err) {
             console.error('Failed to reset recentClearedAt:', err);
           }
@@ -701,7 +702,7 @@ export default function App() {
       },
       duration: 5000,
     });
-  }, [showToast]);
+  }, [recentClearedAt, showToast]);
 
   const handleInspectPlaylist = async (url) => {
     setPlaylistModal({ isOpen: true, data: null, isLoading: true, error: '' });
