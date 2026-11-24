@@ -118,7 +118,7 @@ def site_hint(url: str) -> str:
 def auth_hint(url: str) -> str:
     """Return a short nudge toward using cookies for sites known to
     routinely need login, or "" if the URL's host doesn't match any of
-    them. Mirrored client-side in index.html's AUTH_HINT_SITES for
+    them. Mirrored client-side in the frontend for
     instant, no-round-trip feedback in the input card — this backend
     copy exists so anything server-side (previews, future warnings) can
     reuse the same list rather than re-deriving it."""

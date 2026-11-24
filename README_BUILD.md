@@ -46,7 +46,7 @@ Actions' `windows-latest` works well for this).
    - have your installer depend on it (Inno Setup has a WebView2
      dependency snippet in its examples).
    pywebview falls back to the older MSHTML/IE11 renderer if WebView2
-   isn't present, but the UI in `index.html` uses modern CSS/JS that
+   isn't present, but the UI in `frontend/dist/index.html` uses modern CSS/JS that
    won't render correctly there — don't rely on that fallback.
 
 ## Step 1 — Get the tool binaries
@@ -143,18 +143,18 @@ This runs `pyinstaller MediaDownloader.spec` after checking that the
 tool binaries and required Python packages are present. Output lands in:
 
 ```
-dist/MediaDownloader/
-├── MediaDownloader.exe
-├── index.html
+dist/NovaDrop/
+├── NovaDrop.exe
+├── frontend/dist/
 ├── tools/
 │   ├── gallery-dl.exe
 │   └── yt-dlp.exe
 └── _internal/              <- PyInstaller's runtime support files
 ```
 
-Hand the whole `MediaDownloader` folder to users, or wrap it with an
+Hand the whole `NovaDrop` folder to users, or wrap it with an
 installer (see below). Don't ship just the `.exe` on its own — it needs
-`index.html`, `tools/`, and `_internal/` sitting next to it.
+`frontend/dist/`, `tools/`, and `_internal/` sitting next to it.
 
 ## Why `--onedir`, not `--onefile`
 

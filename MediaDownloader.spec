@@ -32,9 +32,6 @@ a = Analysis(
         # (source, dest_dir_relative_to_bundle_root)
         # Modern React UI build bundle if present
         *([(os.path.join(SPEC_DIR, "frontend", "dist"), os.path.join("frontend", "dist"))] if os.path.isdir(os.path.join(SPEC_DIR, "frontend", "dist")) else []),
-        # Legacy frontend fallback: app.py:2958 still references root index.html as a fallback
-        # if frontend/dist/index.html is missing. Bundled conditionally so builds without it don't fail.
-        *([(os.path.join(SPEC_DIR, "index.html"), ".")] if os.path.isfile(os.path.join(SPEC_DIR, "index.html")) else []),
         # Brand icons and notification assets
         *([(os.path.join(SPEC_DIR, "icons"), "icons")] if os.path.isdir(os.path.join(SPEC_DIR, "icons")) else []),
         *([(os.path.join(SPEC_DIR, "build_assets", "icon.ico"), ".")] if os.path.isfile(os.path.join(SPEC_DIR, "build_assets", "icon.ico")) else []),

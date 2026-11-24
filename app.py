@@ -4,7 +4,7 @@ app.py
 ------
 Desktop wrapper for the Media Downloader UI using PyWebView.
 
-Loads index.html in a native window and exposes a Python API object
+Loads frontend/dist/index.html in a native window and exposes a Python API object
 to JavaScript as `pywebview.api`. Supports starting a download in the
 background, pausing/resuming it (OS-level process suspend, via psutil),
 cancelling it, and pushing progress back into the page.
@@ -2997,8 +2997,7 @@ def main():
 
     # Priority:
     # 1. Dev server if VITE_DEV=1
-    # 2. Modern React bundle if frontend/dist/index.html exists
-    # 3. Fallback to index.html
+    # 2. Modern React bundle in frontend/dist/index.html (fail fast if missing)
     if os.environ.get("VITE_DEV") == "1":
         url_target = dev_server_url
         logger.info(f"Loading Vite dev server from {url_target}")
@@ -3006,8 +3005,12 @@ def main():
         url_target = react_dist
         logger.info(f"Loading modern React frontend from {url_target}")
     else:
-        url_target = os.path.join(here, "index.html")
-        logger.info(f"Loading legacy frontend from {url_target}")
+        err_msg = (
+            f"Frontend build not found at '{react_dist}'. "
+            "Please build the React UI before running NovaDrop: cd frontend && npm run build"
+        )
+        logger.error(err_msg)
+        sys.exit(err_msg)
 
     window = webview.create_window(
         "NovaDrop",
