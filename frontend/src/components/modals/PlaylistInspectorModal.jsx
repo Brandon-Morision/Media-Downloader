@@ -173,7 +173,7 @@ export default function PlaylistInspectorModal({
           {isLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
               <div className="w-8 h-8 border-2 border-brand-acc border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs font-mono">Extracting playlist entries via yt-dlp…</span>
+              <span className="text-xs font-mono">Extracting playlist entries…</span>
             </div>
           ) : error ? (
             <div className="flex-1 flex flex-col items-center justify-center py-20 text-rose-400 gap-3">

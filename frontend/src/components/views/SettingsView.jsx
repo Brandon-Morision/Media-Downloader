@@ -1660,6 +1660,69 @@ export default function SettingsView({
                       );
                     })}
                   </div>
+
+                  {/* Third-Party Notices & Open Source Attribution */}
+                  <div className="p-4 rounded-xl bg-surface-2/60 border border-border-subtle/70 flex flex-col gap-2.5 text-xs mt-1">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="font-semibold text-slate-200 flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-brand-acc" />
+                        Third-Party Open Source Components
+                      </span>
+                      <span className="text-[11px] text-slate-400">Respectfully powered by upstream engines</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      NovaDrop orchestrates independent open-source CLI tools to provide robust media extraction. Each component remains subject to its respective upstream license:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                      <div className="p-3 rounded-lg bg-surface-1/60 border border-border-subtle/50 flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-200">yt-dlp</span>
+                          <span className="text-[10px] font-mono text-slate-400">The Unlicense</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">Core media extractor</span>
+                        <button
+                          type="button"
+                          onClick={() => api.openUrlExternal('https://github.com/yt-dlp/yt-dlp')}
+                          className="text-[10px] text-brand-acc hover:underline flex items-center gap-1 mt-1 text-left w-fit"
+                        >
+                          <span>github.com/yt-dlp/yt-dlp</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+
+                      <div className="p-3 rounded-lg bg-surface-1/60 border border-border-subtle/50 flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-200">gallery-dl</span>
+                          <span className="text-[10px] font-mono text-slate-400">GPL-2.0</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">Image board & gallery scraper</span>
+                        <button
+                          type="button"
+                          onClick={() => api.openUrlExternal('https://github.com/mikf/gallery-dl')}
+                          className="text-[10px] text-brand-acc hover:underline flex items-center gap-1 mt-1 text-left w-fit"
+                        >
+                          <span>github.com/mikf/gallery-dl</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+
+                      <div className="p-3 rounded-lg bg-surface-1/60 border border-border-subtle/50 flex flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-200">FFmpeg</span>
+                          <span className="text-[10px] font-mono text-slate-400">LGPL-2.1+ / GPL</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">Muxing & audio transcoding</span>
+                        <button
+                          type="button"
+                          onClick={() => api.openUrlExternal('https://ffmpeg.org')}
+                          className="text-[10px] text-brand-acc hover:underline flex items-center gap-1 mt-1 text-left w-fit"
+                        >
+                          <span>ffmpeg.org</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

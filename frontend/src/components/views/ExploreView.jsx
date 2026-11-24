@@ -431,8 +431,8 @@ export default function ExploreView({
                 <div className="w-8 h-8 border-2 border-brand-acc border-t-transparent rounded-full animate-spin" />
                 <p className="text-xs font-mono">
                   {detectTool(query) === 'gallery-dl'
-                    ? 'Inspecting gallery details with gallery-dl…'
-                    : 'Extracting stream qualities & metadata with yt-dlp…'}
+                    ? 'Inspecting gallery details…'
+                    : 'Extracting stream qualities & metadata…'}
                 </p>
               </div>
             ) : (analyzedData?.tool === 'gallery-dl' || analyzedData?.type === 'gallery') ? (
@@ -453,7 +453,7 @@ export default function ExploreView({
                       </div>
                     )}
                     <div className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold bg-brand-acc text-slate-950 uppercase tracking-wider">
-                      gallery-dl
+                      Collection
                     </div>
                   </div>
 
@@ -470,7 +470,7 @@ export default function ExploreView({
 
                     <div className="p-3 bg-surface-2/70 border border-border-subtle rounded-xl text-xs text-slate-300 leading-relaxed mt-2 flex flex-col gap-1">
                       <p className="text-slate-300">
-                        This link is automatically processed by <strong>gallery-dl</strong>. All original full-resolution media items will be downloaded directly to your media directory.
+                        This link is automatically processed as a <strong>media collection</strong>. All original full-resolution media items will be downloaded directly to your media directory.
                       </p>
                     </div>
 
@@ -499,7 +499,7 @@ export default function ExploreView({
                   className="w-full h-12 rounded-xl bg-brand-acc hover:opacity-95 text-slate-950 font-bold text-sm flex items-center justify-center gap-2 shadow-glow transition-transform active:scale-[0.97] mt-2"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Download Gallery with gallery-dl</span>
+                  <span>Download Media Collection</span>
                 </button>
               </>
             ) : (

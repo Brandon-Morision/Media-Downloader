@@ -153,6 +153,18 @@ export const api = {
               { name: "02.png", path: "C:\\Downloads\\02.png" },
             ],
           },
+          {
+            id: "mock-3",
+            url: "https://unknown-video-host.example.com/watch?v=987",
+            filename: "Unknown Web Video",
+            tool: "yt-dlp",
+            status: "error",
+            error: "ERROR: Unsupported URL: https://unknown-video-host.example.com/watch?v=987 (exit code 1)",
+            log: "ERROR: Unsupported URL: https://unknown-video-host.example.com/watch?v=987\n[generic] Extracting URL...\nERROR: No suitable extractor found",
+            size_bytes: 0,
+            finished_at: (Date.now() - 1800000) / 1000,
+            files: [],
+          },
         ],
       };
     }
@@ -238,7 +250,7 @@ export const api = {
     return window.pywebview.api.pick_folder?.() ?? window.pywebview.api.choose_folder?.();
   },
 
-  async chooseFolder(defaultPath) {
+  async chooseFolder(_defaultPath) {
     return this.pickFolder();
   },
 

@@ -3,7 +3,8 @@ import {
   Download, Play, Pause, X, RotateCcw, Folder, Image,
   ChevronDown, ChevronUp, Trash2, Search, CheckCircle2,
   AlertCircle, AlertTriangle, XCircle, Clock, Sparkles, ListMusic,
-  Film, Music, ExternalLink, Layers, ListVideo, Bell, Moon
+  Film, Music, ExternalLink, Layers, ListVideo, Bell, Moon,
+  Copy, Check
 } from 'lucide-react';
 import {
   fmtBytes, fmtDate, toolLabel,
@@ -74,6 +75,21 @@ export default function DownloaderView({
   // Queue state
   const [queueTab, setQueueTab] = useState('all'); // all | active | completed | failed | cancelled | scheduled
   const [searchQuery, setSearchQuery] = useState('');
+  const [copiedId, setCopiedId] = useState(null);
+
+  const handleCopyErrorDetails = (item) => {
+    const parts = [
+      `URL: ${item.url || 'N/A'}`,
+      `Filename: ${item.filename || 'N/A'}`,
+      `State: ${item.state || 'error'}`,
+      `Error: ${item.error || 'Unknown error'}`,
+      item.log ? `Log Output:\n${item.log}` : '',
+    ].filter(Boolean);
+    navigator.clipboard.writeText(parts.join('\n\n'));
+    setCopiedId(item.id);
+    if (onShowToast) onShowToast('Error details copied to clipboard');
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   // Filter queue items by state
   const scheduledDownloads = downloads.filter((item) => item.state === 'scheduled');
@@ -476,7 +492,7 @@ export default function DownloaderView({
                                   : item.itemsDone > 0
                                     ? `${item.itemsDone} file${item.itemsDone === 1 ? '' : 's'} downloaded`
                                     : item.tool === 'gallery-dl'
-                                      ? 'Gallery extractor running…'
+                                      ? 'Gathering media items…'
                                       : 'Extracting stream…'}
                           </p>
                         )}
@@ -805,6 +821,29 @@ export default function DownloaderView({
 
                       {/* Actions: Retry/Redownload, Play/Gallery, Open Folder, Open Link, Delete */}
                       <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Copy details on failed item */}
+                        {isError && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopyErrorDetails(item)}
+                            className="p-2 rounded-xl bg-surface-2 hover:bg-surface-3 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-medium"
+                            title="Copy error details to clipboard"
+                            aria-label="Copy error details"
+                          >
+                            {copiedId === item.id ? (
+                              <>
+                                <Check className="w-4 h-4 text-emerald-400" />
+                                <span className="hidden sm:inline text-emerald-400">Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-4 h-4 text-slate-400" />
+                                <span className="hidden sm:inline">Copy details</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+
                         {/* Retry / Redownload button */}
                         <button
                           onClick={() => onRetryDownload(item.id)}

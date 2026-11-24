@@ -172,15 +172,18 @@ export function friendlyError(err = "") {
   if (!err) return "Failed";
   const s = String(err).trim();
 
-  // 1. Rate limits with specific reset time (e.g. Tumblr, Twitter)
-  const resetMatch = s.match(/rate limit (?:will )?reset at (\d+:\d+(?::\d+)?(?: [AP]M)?)/i);
-  if (resetMatch) {
-    return `Rate limited by site — resets at ${resetMatch[1]}`;
+  // 1. Unsupported URL / extractor missing
+  if (/unsupported url|no suitable extractor|no extractor found|is not a valid url|unknown url/i.test(s)) {
+    return "This link isn't supported";
   }
 
-  // 2. Generic rate limit patterns
+  // 2. Rate limits with specific reset time (e.g. Tumblr, Twitter)
+  const resetMatch = s.match(/rate limit (?:will )?reset at (\d+:\d+(?::\d+)?(?: [AP]M)?)/i);
+  if (resetMatch) {
+    return `Rate-limited by the host — resets at ${resetMatch[1]}`;
+  }
   if (/429|too many requests|rate limit/i.test(s)) {
-    return "Rate limited by site — please wait before retrying";
+    return "Rate-limited by the host";
   }
 
   // 3. User cancelled
@@ -188,81 +191,67 @@ export function friendlyError(err = "") {
     return "Cancelled by user";
   }
 
-  // 4. Authentication / Sign-in required
-  if (/sign in to confirm you're not a bot|bot check/i.test(s)) {
-    return "Sign in required (YouTube bot check)";
+  // 4. Authentication / Sign-in required / Private content
+  if (/private video|video is private|this video is private|private content/i.test(s)) {
+    return "Private or login-required content";
   }
-  if (/age[- ]restrict|confirm your age/i.test(s)) {
-    return "Age-restricted content — login or cookies required";
+  if (/sign in to confirm you're not a bot|bot check|age[- ]restrict|confirm your age|login|sign in|authentication|registered users|checkpoint/i.test(s)) {
+    return "Private or login-required content";
   }
-  if (/x\.com|twitter/i.test(s) && /login|auth|block anonymous/i.test(s)) {
-    return "X/Twitter requires cookies to view this media";
-  }
-  if (/instagram/i.test(s) && /login|checkpoint/i.test(s)) {
-    return "Instagram requires login for this profile";
-  }
-  if (/login|sign in|authentication|registered users/i.test(s)) {
-    return "Login required for this content (configure in Settings)";
+  if (/403|forbidden|access denied/i.test(s)) {
+    return "Private or login-required content";
   }
 
   // 5. Video / Content availability
-  if (/private video|video is private|this video is private/i.test(s)) {
-    return "This video or content is private";
-  }
   if (/video unavailable|content isn't available|removed/i.test(s)) {
-    return "Content unavailable or removed by author";
+    return "Content unavailable or removed";
   }
   if (/copyright/i.test(s)) {
     return "Removed due to a copyright claim";
   }
-  if (/403|forbidden|access denied/i.test(s)) {
-    return "Access denied (HTTP 403) — cookies may be needed";
-  }
   if (/404|not found/i.test(s)) {
-    return "Page or media not found (HTTP 404)";
+    return "Page or media not found";
   }
 
   // 6. Network issues
-  if (/network|timed? ?out|connection (?:reset|refused)|getaddrinfo|incomplete read/i.test(s)) {
-    return "Network connection lost or timed out";
+  if (/network|timed? ?out|connection (?:reset|refused|aborted)|getaddrinfo|incomplete read|tls|ssl/i.test(s)) {
+    return "Network connection lost";
   }
 
-  // 7. Disk / Permissions
-  if (/no space left|disk full/i.test(s)) {
-    return "Not enough disk space";
-  }
-  if (/permission denied|access is denied/i.test(s)) {
-    return "Permission denied writing to download folder";
+  // 7. Audio conversion / muxing issues
+  if (/audio conversion|postprocessing|conversion failed|ffmpeg/i.test(s)) {
+    return "Audio conversion failed";
   }
 
-  // 8. Rate limits
-  if (/rate limit.*?reset.*?at\s+(\d{1,2}:\d{2}(?::\d{2})?)/i.test(s)) {
-    const m = s.match(/rate limit.*?reset.*?at\s+(\d{1,2}:\d{2}(?::\d{2})?)/i);
-    return `Rate limit resets at ${m[1]} — scheduled`;
-  }
-  if (/rate limit/i.test(s) || /429/i.test(s)) {
-    return "Rate limit reached — scheduled to resume";
+  // 8. Disk / Permissions
+  if (/no space left|disk full|permission denied|access is denied/i.test(s)) {
+    return "Disk full or permission denied";
   }
 
-  // 9. Clean up raw tool CLI noise (e.g. [tumblr][error] Aborting - ...)
+  // 9. Generic tool noise cleanup - strip CLI tool names from display
   let clean = s
     .replace(/^\[.*?\]\[(?:error|warning|info)\]\s*/i, "")
     .replace(/^ERROR:\s*/i, "")
     .replace(/^WARNING:\s*/i, "")
     .replace(/\(exit code \d+\)\s*$/i, "")
+    .replace(/yt-dlp|gallery-dl|ffmpeg/gi, "download engine")
     .trim();
+
+  if (!clean || /download engine failed|exit code|returned non-zero/i.test(clean)) {
+    return "Something went wrong";
+  }
 
   if (clean.length > 55) {
     clean = clean.slice(0, 52) + "…";
   }
-  return clean || "Download failed";
+  return clean || "Something went wrong";
 }
 
 export function isLikelyUrl(text) {
   const s = (text || "").trim();
   if (!s || /\s/.test(s)) return false;
   if (/^https?:\/\//i.test(s)) return true;
-  return /^[a-z0-9-]+(\.[a-z0-9-]+)+([\/?#].*)?$/i.test(s);
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(s);
 }
 
 export function normalizeUrl(text) {
