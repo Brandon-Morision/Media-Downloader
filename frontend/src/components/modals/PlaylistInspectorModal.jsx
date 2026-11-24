@@ -111,7 +111,11 @@ export default function PlaylistInspectorModal({
             </div>
           </div>
 
-          <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-surface-3">
+          <button
+            onClick={onClose}
+            className="w-7 h-7 min-w-[24px] min-h-[24px] flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-surface-3 transition-colors"
+            aria-label="Close modal"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>

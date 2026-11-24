@@ -33,7 +33,11 @@ export default function NightOwlModal({ isOpen, onClose, nightOwlSettings, onSav
               <p className="text-[11px] text-slate-400">Queue heavy downloads for off-peak hours</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
+          <button
+            onClick={onClose}
+            className="w-7 h-7 min-w-[24px] min-h-[24px] flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-surface-3 transition-colors"
+            aria-label="Close modal"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>

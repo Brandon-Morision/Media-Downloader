@@ -54,17 +54,22 @@ export default function HeaderBar({ currentView, themeAccent, setThemeAccent, ou
         </button>
 
         {/* Quick Accent Selector */}
-        <div className="flex items-center bg-surface-2 border border-border-subtle rounded-lg p-1 gap-1">
+        <div className="flex items-center bg-surface-2 border border-border-subtle rounded-lg p-0.5 gap-0.5">
           {ACCENT_OPTIONS.map((theme) => (
             <button
               key={theme.id}
               onClick={() => setThemeAccent(theme.id)}
-              className={`w-3.5 h-3.5 rounded-full transition-transform ${
-                themeAccent === theme.id ? 'scale-125 ring-2 ring-white/70' : 'opacity-60 hover:opacity-100 hover:scale-110'
-              }`}
-              style={{ backgroundColor: theme.color }}
+              className="w-6 h-6 min-w-[24px] min-h-[24px] flex items-center justify-center rounded-full transition-transform group"
               title={`Switch to ${theme.label} theme`}
-            />
+              aria-label={`Switch to ${theme.label} theme`}
+            >
+              <span
+                className={`w-3.5 h-3.5 rounded-full transition-transform ${
+                  themeAccent === theme.id ? 'scale-125 ring-2 ring-white/70' : 'opacity-60 group-hover:opacity-100 group-hover:scale-110'
+                }`}
+                style={{ backgroundColor: theme.color }}
+              />
+            </button>
           ))}
         </div>
 
